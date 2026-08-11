@@ -1,0 +1,80 @@
+:root {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #111;
+  background: #f3f1eb;
+  font-synthesis: none;
+  --paper: #fff;
+  --ink: #111;
+  --muted: #555;
+  --line: #111;
+  --accent: #f2c94c;
+  --danger: #a51d28;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { min-width: 280px; min-height: 100%; background: var(--paper); }
+body { margin: 0; min-height: 100vh; min-height: 100dvh; background: var(--paper); }
+button, input { font: inherit; color: inherit; }
+button { min-height: 44px; border: 2px solid var(--line); border-radius: 10px; background: var(--paper); padding: .65rem 1rem; cursor: pointer; }
+button:hover { background: #f5f5f0; }
+button:focus-visible, input:focus-visible, [role="button"]:focus-visible { outline: 4px solid #3278c6; outline-offset: 3px; }
+button:disabled { color: #777; cursor: not-allowed; }
+input { width: 100%; min-height: 46px; margin-top: .4rem; border: 2px solid var(--line); border-radius: 8px; padding: .65rem .75rem; background: var(--paper); }
+h1, h2, p { margin-top: 0; }
+h1 { font-size: clamp(1.65rem, 5vw, 2.6rem); line-height: 1.15; }
+h2 { font-size: 1.3rem; }
+label { display: block; font-weight: 700; }
+
+.app-shell { min-height: 100vh; min-height: 100dvh; padding: env(safe-area-inset-top) max(1rem, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(1rem, env(safe-area-inset-left)); }
+.topbar { width: min(100%, 960px); min-height: 58px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.brand { border: 0; padding: .4rem 0; font-size: 1.05rem; font-weight: 900; background: transparent; }
+.build-hash { flex: none; border: 1px solid var(--line); border-radius: 999px; padding: .25rem .55rem; font-family: ui-monospace, monospace; font-size: .72rem; background: var(--paper); }
+.panel, .play-layout { width: min(100%, 820px); margin: clamp(1rem, 7vh, 4rem) auto 0; }
+.panel.narrow { max-width: 520px; }
+.eyebrow { margin-bottom: .35rem; color: var(--muted); font-size: .88rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.primary { background: var(--accent); font-weight: 900; }
+.panel > .primary { width: 100%; margin-top: 1rem; }
+.choice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.choice { min-height: 130px; text-align: left; display: flex; flex-direction: column; justify-content: center; gap: .35rem; }
+.choice strong { font-size: 1.2rem; }
+.choice span { color: var(--muted); }
+.join-box { grid-row: span 2; justify-content: flex-start; }
+.join-box button { margin-top: .75rem; }
+.error { margin-top: 1rem; color: var(--danger); font-weight: 800; }
+.game-list { margin-top: 1rem; }
+.game-card { display: flex; justify-content: space-between; gap: 1rem; border: 2px solid var(--line); border-radius: 14px; padding: 1rem; background: var(--paper); }
+.game-card h2 { margin-bottom: .25rem; }
+.people { margin-bottom: .65rem; color: var(--muted); }
+.tags { display: flex; flex-wrap: wrap; gap: .35rem; }
+.tags span { border: 1px solid var(--line); border-radius: 999px; padding: .2rem .55rem; font-size: .8rem; }
+.game-actions { display: flex; flex-direction: column; justify-content: center; gap: .5rem; min-width: 130px; }
+.game-status { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.game-status h1 { margin-bottom: 0; }
+.board { display: block; width: min(100%, 620px); max-height: calc(100dvh - 230px); margin: 1rem auto 0; touch-action: manipulation; }
+.board [role="button"] { cursor: pointer; }
+.piece-shape { dominant-baseline: middle; font-size: 42px; font-weight: 900; fill: var(--ink); pointer-events: none; }
+.piece-number { dominant-baseline: middle; font-size: 21px; font-weight: 900; fill: var(--ink); stroke: var(--paper); stroke-width: 4px; paint-order: stroke; pointer-events: none; }
+.hint { margin: .7rem auto; text-align: center; color: var(--muted); font-size: .9rem; }
+.restart { display: block; margin: .75rem auto; }
+.update-banner { position: fixed; z-index: 10; right: max(1rem, env(safe-area-inset-right)); bottom: max(1rem, env(safe-area-inset-bottom)); left: max(1rem, env(safe-area-inset-left)); display: flex; align-items: center; justify-content: center; gap: 1rem; border: 3px solid var(--line); border-radius: 12px; padding: .75rem; background: var(--accent); box-shadow: 0 5px 0 var(--line); font-weight: 800; }
+
+@media (max-width: 600px) {
+  .choice-grid { grid-template-columns: 1fr; }
+  .join-box { grid-row: auto; }
+  .game-card { flex-direction: column; }
+  .game-actions { min-width: 0; }
+  .game-status { align-items: flex-start; }
+  .board { max-height: none; }
+}
+
+@media (min-width: 850px) and (orientation: landscape) {
+  .play-layout { display: grid; grid-template-columns: minmax(280px, 620px) minmax(180px, 1fr); column-gap: 1.5rem; align-items: center; }
+  .board { grid-row: 1 / span 3; margin: 0; }
+  .game-status, .hint, .restart { grid-column: 2; }
+  .game-status { display: block; }
+  .game-status button { margin-top: 1rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; }
+}

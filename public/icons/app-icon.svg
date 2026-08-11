@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" role="img" aria-label="사목 말 네 개">
+  <rect width="192" height="192" rx="32" fill="#fff" stroke="#111" stroke-width="8"/>
+  <circle cx="48" cy="96" r="25" fill="#f2c94c" stroke="#111" stroke-width="6"/>
+  <circle cx="96" cy="96" r="25" fill="#56a8e8" stroke="#111" stroke-width="6"/>
+  <circle cx="144" cy="96" r="25" fill="#ef767a" stroke="#111" stroke-width="6"/>
+  <circle cx="96" cy="48" r="25" fill="#65b96e" stroke="#111" stroke-width="6"/>
+</svg>

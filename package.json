@@ -1,0 +1,21 @@
+{
+  "name": "samok-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check:terms": "node scripts/check-trademarks.mjs",
+    "build": "npm run check:terms && tsc --noEmit && vite build",
+    "dev": "vite",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "preact": "10.29.8"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2",
+    "vite": "8.2.1",
+    "vitest": "4.1.10"
+  }
+}
