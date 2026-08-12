@@ -6,7 +6,7 @@ STREAM: nollawa-build · v2 · 2026-08-12 (v1 = §14 피드백 처리 확정, �
 **DONE-WHEN**: `nollawa.pages.dev`가 새 빌드를 서빙하고, 검수 결과가 `docs/PLAN.md` §14에 새 행으로 기록된다(완료 행은 되돌리지 않는다 — §14 말미 규정).
 **HOW→** 푸시와 배포는 끝났다(2026-08-12, `8dba34f`). 검수 전 라이브가 새 빌드인지만 확인한다 — **번들 해시가 아니라 내용으로**(Cloudflare가 자기가 빌드하므로 해시는 로컬과 영원히 다르다): `curl -s https://nollawa.pages.dev/assets/$(curl -s https://nollawa.pages.dev/ | grep -o 'index-[A-Za-z0-9_-]*\.js' | head -1) | grep -c "새 판을 시작했습니다"`
 **첫 안건**: "폰과 태블릿으로 붙어서 셋만 봐 주세요 — ①방을 만들고 참여했을 때 로비에 서로가 보이는지 ②왼쪽/오른쪽 열로 팀이 갈리고 팀명이 뜨는지 ③한 팀이 2명 이상일 때 투표가 열리고, 혼자인 팀은 기다림 없이 바로 두는지."
-**ANCHOR**: `4d1acf9` (2026-08-12; tests 71 passed) — 재개 전 `git log 4d1acf9..HEAD --oneline`과 `git status --porcelain`으로 대조.
+**ANCHOR**: `304fb52` (2026-08-12; tests 71 passed) — 재개 전 `git log 304fb52..HEAD --oneline`과 `git status --porcelain`으로 대조.
 
 ---
 
@@ -47,6 +47,6 @@ STREAM: nollawa-build · v2 · 2026-08-12 (v1 = §14 피드백 처리 확정, �
 
 ---
 
-**REALITY CHECK** (시작 직전 1회): `git log 4d1acf9..HEAD --oneline` · `git status --porcelain` · `./node_modules/.bin/vitest run` · `python C:/Users/apple/.collab3/control.py ls --root C:/Localai/boardgames`
+**REALITY CHECK** (시작 직전 1회): `git log 304fb52..HEAD --oneline` · `git status --porcelain` · `./node_modules/.bin/vitest run` · `python C:/Users/apple/.collab3/control.py ls --root C:/Localai/boardgames`
 
 **디스커버리**: 이 파일은 `docs/INDEX.md`의 「인수인계」 표와 `docs/PLAN.md` §8 M0 절 말미에서 가리켜진다. 스트림이 끝나면 같은 파일을 v3으로 교체하고, 다른 스트림 파일은 덮어쓰지 않는다.
