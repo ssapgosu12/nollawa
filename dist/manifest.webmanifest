@@ -1,6 +1,6 @@
 {
-  "name": "사목 놀이터",
-  "short_name": "사목",
+  "name": "Nollawa",
+  "short_name": "Nollawa",
   "description": "두 사람이 네 줄을 먼저 잇는 가벼운 보드게임",
   "lang": "ko",
   "start_url": "./",
