@@ -7,7 +7,7 @@ STREAM: nollawa-build · v1 · 작성 2026-08-12 (앞 세대 `DEPLOY-SESSION-PRO
 **HOW→** 판단 재료 전부가 `C:\Localai\boardgames\docs\PLAN.md` §14에 있다(피드백 4건 전문 + 보류 1건). 구현은 Codex에 위임한다(`psmux-collab` 스킬 §0).
 **첫 안건**: "한 판이 끝나고 '다시 시작'을 지금은 **두 사람이 다 눌러야** 새 판이 열립니다. 한 명만 눌러도 되게 고치는 방법이 둘인데 — ⓐ 아직 안 누른 쪽 화면을 반투명 회색으로 덮고 '플레이어 기다리는 중'을 띄우거나, ⓑ 한 명이 누르면 상대 화면도 같이 초기화 — 어느 쪽으로 갈까요?"
 **권고 순서**(사용자 확정 전 제안): 피드백 4건을 M1(오목·육목·리버시 추가)보다 **먼저**. 이유 한 줄 — M1이 얹을 3종이 지금과 같은 좌석·차례 흐름을 공유하므로, 흐름을 먼저 고쳐야 같은 수정을 네 번 하지 않는다.
-**ANCHOR**: `__HASH__` (2026-08-12; tests 18/18 통과) — 재개 전 `git log __HASH__..HEAD --oneline`과 `git status --porcelain`으로 대조.
+**ANCHOR**: `0bdc580` (2026-08-12; tests 18/18 통과) — 재개 전 `git log 0bdc580..HEAD --oneline`과 `git status --porcelain`으로 대조.
 
 ---
 
@@ -50,6 +50,6 @@ Cloudflare Pages가 `master` push를 감지해 자동 재빌드한다(실측 ~40
 
 ---
 
-**REALITY CHECK** (시작 직전 1회): `git log __HASH__..HEAD --oneline` · `git status --porcelain` · `./node_modules/.bin/vitest run` · `curl -sI https://nollawa.pages.dev | head -1`
+**REALITY CHECK** (시작 직전 1회): `git log 0bdc580..HEAD --oneline` · `git status --porcelain` · `./node_modules/.bin/vitest run` · `curl -sI https://nollawa.pages.dev | head -1`
 
 **디스커버리**: 이 파일은 `docs/PLAN.md` §8 M0 절 말미에서 가리켜진다. 스트림이 끝나면 같은 파일을 v2로 교체하고, 다른 스트림 파일은 덮어쓰지 않는다.
