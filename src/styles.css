@@ -54,6 +54,11 @@ label { display: block; font-weight: 700; }
 .game-actions { display: flex; flex-direction: column; justify-content: center; gap: .5rem; min-width: 130px; }
 .game-status { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .game-status h1 { margin-bottom: 0; }
+.seat-badge { display: flex; align-items: center; gap: .45rem; margin: .65rem 0 0; font-weight: 900; }
+.seat-badge::before { width: 1rem; height: 1rem; border: 2px solid var(--line); border-radius: 50%; background: var(--seat-color, var(--paper)); content: ""; }
+.seat-badge.player-1 { --seat-color: var(--player-1); }
+.seat-badge.player-2 { --seat-color: var(--player-2); }
+.restart-notice { margin: .65rem 0 0; font-weight: 800; }
 .board { display: block; width: min(100%, 620px); max-height: calc(100svh - 230px); margin: 1rem auto 0; touch-action: manipulation; }
 .board [role="button"] { cursor: pointer; }
 .board-background { fill: #fff; stroke: var(--line); }

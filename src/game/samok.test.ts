@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { legalColumns, samok, type Cell, type SamokAction, type SamokState } from './samok';
+import { applyRemoteAction, legalColumns, samok, type Cell, type SamokAction, type SamokState } from './samok';
 
 function play(columns: number[]): SamokState {
   return columns.reduce((state, column) => samok.reduce(state, { type: 'drop', column }), samok.init());
@@ -52,6 +52,29 @@ describe('사목 리듀서', () => {
   it('종료 뒤 상태를 바꾸지 않는다', () => {
     const won = play([0, 0, 1, 1, 2, 2, 3]);
     expect(samok.reduce(won, { type: 'drop', column: 4 })).toBe(won);
+  });
+
+  it('F2: 원격 액션은 배정 좌석의 차례에만 상태를 바꾼다', () => {
+    const initial = samok.init();
+    expect(applyRemoteAction(initial, { type: 'drop', column: 0 }, null)).toBe(initial);
+    expect(applyRemoteAction(initial, { type: 'drop', column: 0 }, 2)).toBe(initial);
+    expect(applyRemoteAction(initial, { type: 'drop', column: 0 }, 1)).not.toBe(initial);
+  });
+
+  it('F3: 종료 가드보다 먼저 재시작하고 이전 선공의 반대 좌석으로 시작한다', () => {
+    const oddMoveWin = play([0, 0, 1, 1, 2, 2, 3]);
+    const restarted = samok.reduce(oddMoveWin, { type: 'restart' });
+    expect(restarted).toEqual({ ...samok.init(), turn: 2 });
+
+    const nextWin = [0, 0, 1, 1, 2, 2, 3]
+      .reduce((state, column) => samok.reduce(state, { type: 'drop', column }), restarted);
+    expect(nextWin.winner).toBe(2);
+    expect(samok.reduce(nextWin, { type: 'restart' }).turn).toBe(1);
+
+    const oldEvenState = play([0, 1, 0, 1, 2, 1, 2, 1]);
+    expect(oldEvenState.moves).toBe(8);
+    expect(samok.reduce(oldEvenState, { type: 'restart' }).turn).toBe(2);
+    expect(samok.reduce(samok.init(), { type: 'restart' })).toEqual(samok.init());
   });
 
   it('완전공개 판도 별도 복사본으로 가린다', () => {

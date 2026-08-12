@@ -1,18 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { requestSamokMove } from './ai/samok-client';
 import { Board } from './components/Board';
-import { samok, type SamokAction, type SamokState } from './game/samok';
+import { applyRemoteAction, samok, type SamokAction, type SamokState, type Seat } from './game/samok';
 import { normalizeRoomCode, reserveRoomCode } from './lobby/room-code';
 import { LoopbackTransport, WebSocketTransport, type Transport } from './transport/transport';
 
 type Screen = 'name' | 'room' | 'games' | 'play';
 type PlayMode = 'local' | 'ai' | 'remote';
+interface ActionActor { id: string; seat: Seat | null }
+interface AcceptedActionSource { actor: ActionActor; action: SamokAction }
 type GameMessage =
-  | { type: 'action'; action: SamokAction }
-  | { type: 'snapshot'; state: SamokState }
-  | { type: 'identity'; id: string; authority: string }
+  | { type: 'action'; action: SamokAction; actor?: ActionActor }
+  | { type: 'snapshot'; state: SamokState; source?: AcceptedActionSource }
+  | { type: 'identity'; id: string; authority: string; seat: Seat | null }
   | { type: 'authority'; authority: string | null };
 const GAMES = [{ name: '사목', people: '2명', tags: ['공용', '멀티', 'AI'], capacity: 2 }];
+
+export function restartNoticeFor(source: AcceptedActionSource | undefined, clientId: string | null, seat: Seat | null): string {
+  return source?.action.type === 'restart' && seat !== null && source.actor.id !== clientId
+    ? '상대가 새 판을 시작했습니다'
+    : '';
+}
 
 function relayUrl(code: string): string {
   const base = import.meta.env.VITE_RELAY_URL ?? `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}`;
@@ -34,8 +42,11 @@ export function App() {
   const [mode, setMode] = useState<PlayMode>('local');
   const [state, setState] = useState(() => samok.init());
   const [connection, setConnection] = useState('준비');
+  const [localSeat, setLocalSeat] = useState<Seat | null>(null);
+  const [restartNotice, setRestartNotice] = useState('');
   const transportRef = useRef<Transport<GameMessage> | null>(null);
   const clientId = useRef<string | null>(null);
+  const localSeatRef = useRef<Seat | null>(null);
   const isAuthority = useRef(false);
   const aiThinking = useRef(false);
   const visibleGames = useMemo(() => GAMES.filter((game) => (
@@ -84,22 +95,35 @@ export function App() {
     transport.onMessage((message) => {
       if (message.type === 'identity') {
         clientId.current = message.id;
+        localSeatRef.current = message.seat;
+        setLocalSeat(message.seat);
         isAuthority.current = message.id === message.authority;
       }
       if (message.type === 'authority') isAuthority.current = clientId.current === message.authority;
       if (message.type === 'action') setState((current) => {
-        const next = samok.reduce(current, message.action);
+        const next = nextMode === 'remote'
+          ? applyRemoteAction(current, message.action, message.actor?.seat ?? null)
+          : samok.reduce(current, message.action);
         if (nextMode === 'remote' && isAuthority.current && next !== current) {
-          queueMicrotask(() => transport.send({ type: 'snapshot', state: next }));
+          const source = message.actor ? { actor: message.actor, action: message.action } : undefined;
+          queueMicrotask(() => transport.send({ type: 'snapshot', state: next, source }));
         }
         return next;
       });
-      if (message.type === 'snapshot') setState(message.state);
+      if (message.type === 'snapshot') {
+        setRestartNotice(restartNoticeFor(message.source, clientId.current, localSeatRef.current));
+        setState(message.state);
+      }
     });
     transport.onPeerChange((count) => setConnection(`${count}명 연결`));
     transportRef.current = transport;
+    clientId.current = null;
+    localSeatRef.current = null;
+    isAuthority.current = false;
     setMode(nextMode);
     setState(samok.init());
+    setLocalSeat(null);
+    setRestartNotice('');
     setScreen('play');
     setConnection('연결 중');
     try {
@@ -113,6 +137,14 @@ export function App() {
   function sendDrop(column: number) {
     try {
       transportRef.current?.send({ type: 'action', action: { type: 'drop', column } });
+    } catch (error) {
+      setConnection(error instanceof Error ? error.message : '전송 실패');
+    }
+  }
+
+  function sendRestart() {
+    try {
+      transportRef.current?.send({ type: 'action', action: { type: 'restart' } });
     } catch (error) {
       setConnection(error instanceof Error ? error.message : '전송 실패');
     }
@@ -170,10 +202,10 @@ export function App() {
       </section>}
 
       {screen === 'play' && <section class="play-layout" aria-labelledby="play-title">
-        <div class="game-status"><div><p class="eyebrow">{connection}</p><h1 id="play-title">{outcome}</h1></div><button onClick={() => setScreen('games')}>게임 목록</button></div>
-        <Board state={state} disabled={samok.terminal(state).ended || (mode === 'ai' && state.turn === 2)} onDrop={sendDrop} />
+        <div class="game-status"><div><p class="eyebrow">{connection}</p><h1 id="play-title">{outcome}</h1>{mode === 'remote' && <p class={`seat-badge ${localSeat ? `player-${localSeat}` : ''}`}>{localSeat ? `내 좌석 ${localSeat}번` : '관전 중 · 좌석 없음'}</p>}{restartNotice && <p class="restart-notice" role="status">{restartNotice}</p>}</div><button onClick={() => setScreen('games')}>게임 목록</button></div>
+        <Board state={state} disabled={samok.terminal(state).ended || (mode === 'ai' && state.turn === 2) || (mode === 'remote' && localSeat !== state.turn)} onDrop={sendDrop} />
         <p class="hint">열을 누르거나 키보드로 선택하세요. ● 1번 · ■ 2번</p>
-        {samok.terminal(state).ended && <button class="primary restart" onClick={() => setState(samok.init())}>다시 시작</button>}
+        {samok.terminal(state).ended && <button class="primary restart" disabled={mode === 'remote' && localSeat === null} onClick={sendRestart}>다시 시작</button>}
       </section>}
       <UpdateBanner />
     </main>

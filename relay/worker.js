@@ -3,6 +3,17 @@ const HEARTBEAT_MS = 20_000;
 const STALE_MS = 60_000;
 const RESERVATION_MS = 30_000;
 
+export function activeWebSockets(sockets) {
+  return sockets.filter((socket) => socket.readyState === 1);
+}
+
+export function lowestFreeSeat(sockets) {
+  const occupied = new Set(sockets.map((socket) => socket.deserializeAttachment()?.seat));
+  if (!occupied.has(1)) return 1;
+  if (!occupied.has(2)) return 2;
+  return null;
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -25,17 +36,18 @@ export class Room {
     const pair = new WebSocketPair();
     const client = pair[0];
     const server = pair[1];
-    const existing = this.state.getWebSockets();
+    const existing = activeWebSockets(this.state.getWebSockets());
     const id = crypto.randomUUID();
+    const seat = lowestFreeSeat(existing);
     this.state.acceptWebSocket(server);
-    server.serializeAttachment({ id, lastSeen: Date.now() });
+    server.serializeAttachment({ id, seat, lastSeen: Date.now() });
     const saved = await this.state.storage.get(['snapshot', 'seq', 'authority']);
-    const sockets = this.state.getWebSockets();
+    const sockets = activeWebSockets(this.state.getWebSockets());
     const activeIds = existing.map((socket) => socket.deserializeAttachment()?.id);
     const savedAuthority = saved.get('authority');
     const authority = savedAuthority && activeIds.includes(savedAuthority) ? savedAuthority : id;
     await this.state.storage.put({ authority, updatedAt: Date.now() });
-    server.send(JSON.stringify({ type: 'identity', id, authority }));
+    server.send(JSON.stringify({ type: 'identity', id, authority, seat }));
     if (saved.has('snapshot')) server.send(JSON.stringify({ type: 'snapshot', state: saved.get('snapshot'), seq: saved.get('seq') ?? 0 }));
     this.broadcast({ type: 'authority', authority });
     this.broadcast({ type: 'peers', count: sockets.length });
@@ -66,17 +78,19 @@ export class Room {
       socket.send(JSON.stringify({ type: 'heartbeat', at: Date.now() }));
       return;
     }
-    const sender = socket.deserializeAttachment()?.id;
+    const attachment = socket.deserializeAttachment() ?? {};
+    const sender = attachment.id;
     const authority = await this.state.storage.get('authority');
     if (message.type === 'action') {
-      const authoritySocket = this.state.getWebSockets().find((candidate) => candidate.deserializeAttachment()?.id === authority);
-      if (authoritySocket) authoritySocket.send(JSON.stringify({ ...message, from: sender }));
+      const authoritySocket = activeWebSockets(this.state.getWebSockets())
+        .find((candidate) => candidate.deserializeAttachment()?.id === authority);
+      if (authoritySocket) authoritySocket.send(JSON.stringify({ ...message, from: sender, actor: { id: sender, seat: attachment.seat ?? null } }));
       return;
     }
     if (message.type === 'snapshot' && message.state !== undefined && sender === authority) {
       const seq = Number(await this.state.storage.get('seq') ?? 0) + 1;
       await this.state.storage.put({ snapshot: message.state, seq, updatedAt: Date.now() });
-      this.broadcast({ type: 'snapshot', state: message.state, seq });
+      this.broadcast({ ...message, type: 'snapshot', state: message.state, seq });
       return;
     }
   }
@@ -86,7 +100,10 @@ export class Room {
     await this.reassignAuthority();
   }
 
-  async webSocketError() {
+  async webSocketError(socket) {
+    const attachment = socket.deserializeAttachment() ?? {};
+    socket.serializeAttachment({ ...attachment, seat: null });
+    socket.close(1011, 'Socket error');
     await this.reassignAuthority();
   }
 
@@ -96,7 +113,7 @@ export class Room {
       const lastSeen = socket.deserializeAttachment()?.lastSeen ?? 0;
       if (now - lastSeen >= STALE_MS) socket.close(4000, 'Stale seat');
     }
-    const sockets = this.state.getWebSockets();
+    const sockets = activeWebSockets(this.state.getWebSockets());
     this.broadcast({ type: 'peers', count: sockets.length });
     if (sockets.length) await this.state.storage.setAlarm(now + HEARTBEAT_MS);
   }
@@ -109,7 +126,7 @@ export class Room {
   }
 
   async reassignAuthority() {
-    const sockets = this.state.getWebSockets();
+    const sockets = activeWebSockets(this.state.getWebSockets());
     const authority = sockets[0]?.deserializeAttachment()?.id ?? null;
     await this.state.storage.put({ authority, updatedAt: Date.now() });
     this.broadcast({ type: 'authority', authority });

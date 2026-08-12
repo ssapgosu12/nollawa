@@ -2,7 +2,7 @@ import type { GameContract } from './contract';
 
 export type Seat = 1 | 2;
 export type Cell = 0 | Seat;
-export type SamokAction = { type: 'drop'; column: number };
+export type SamokAction = { type: 'drop'; column: number } | { type: 'restart' };
 export interface SamokState {
   board: Cell[][];
   turn: Seat;
@@ -44,12 +44,21 @@ export function legalColumns(state: SamokState): number[] {
     .filter((column) => state.board[ROWS - 1]?.[column] === 0);
 }
 
-function init(): SamokState {
-  return { board: emptyBoard(), turn: 1, winner: null, draw: false, moves: 0 };
+function otherSeat(seat: Seat): Seat {
+  return seat === 1 ? 2 : 1;
+}
+
+function init(starter: Seat = 1): SamokState {
+  return { board: emptyBoard(), turn: starter, winner: null, draw: false, moves: 0 };
 }
 
 function reduce(state: SamokState, action: SamokAction): SamokState {
-  if (state.winner || state.draw || action.type !== 'drop'
+  if (action.type === 'restart') {
+    if (!state.winner && !state.draw) return state;
+    const previousStarter = state.moves % 2 === 0 ? state.turn : otherSeat(state.turn);
+    return init(otherSeat(previousStarter));
+  }
+  if (state.winner || state.draw
     || !Number.isInteger(action.column) || action.column < 0 || action.column >= COLUMNS) return state;
   const row = state.board.findIndex((cells) => cells[action.column] === 0);
   if (row < 0) return state;
@@ -60,7 +69,13 @@ function reduce(state: SamokState, action: SamokAction): SamokState {
   const moves = state.moves + 1;
   const winner = hasFour(board, state.turn) ? state.turn : null;
   const draw = winner === null && moves === ROWS * COLUMNS;
-  return { board, turn: state.turn === 1 ? 2 : 1, winner, draw, moves };
+  return { board, turn: otherSeat(state.turn), winner, draw, moves };
+}
+
+export function applyRemoteAction(state: SamokState, action: SamokAction, seat: Seat | null): SamokState {
+  if (seat !== 1 && seat !== 2) return state;
+  if (action.type === 'drop' && seat !== state.turn) return state;
+  return reduce(state, action);
 }
 
 function seatsToAct(state: SamokState): readonly Seat[] {
