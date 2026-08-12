@@ -6,6 +6,51 @@ export interface Transport<Message> {
   close(): void;
 }
 
+const DEVICE_DB = 'nollawa-device';
+const DEVICE_STORE = 'identity';
+const RECONNECT_KEY = 'reconnect-key';
+let reconnectKeyPromise: Promise<string> | null = null;
+
+export function deviceReconnectKey(): Promise<string> {
+  if (reconnectKeyPromise) return reconnectKeyPromise;
+  reconnectKeyPromise = new Promise((resolve) => {
+    const fallback = crypto.randomUUID();
+    if (!globalThis.indexedDB) {
+      resolve(fallback);
+      return;
+    }
+    const open = indexedDB.open(DEVICE_DB, 1);
+    open.onupgradeneeded = () => open.result.createObjectStore(DEVICE_STORE);
+    open.onerror = () => resolve(fallback);
+    open.onsuccess = () => {
+      const database = open.result;
+      const transaction = database.transaction(DEVICE_STORE, 'readwrite');
+      const store = transaction.objectStore(DEVICE_STORE);
+      const read = store.get(RECONNECT_KEY);
+      let value: string = fallback;
+      read.onsuccess = () => {
+        if (typeof read.result === 'string') value = read.result;
+        else store.put(value, RECONNECT_KEY);
+      };
+      transaction.oncomplete = () => {
+        database.close();
+        resolve(value);
+      };
+      transaction.onerror = () => {
+        database.close();
+        resolve(fallback);
+      };
+    };
+  });
+  return reconnectKeyPromise;
+}
+
+export function reconnectUrl(url: string, key: string): string {
+  const endpoint = new URL(url);
+  endpoint.searchParams.set('reconnectKey', key);
+  return endpoint.toString();
+}
+
 export class LoopbackTransport<Message> implements Transport<Message> {
   private messages = new Set<(message: Message) => void>();
   private peers = new Set<(count: number) => void>();
@@ -40,11 +85,11 @@ export class WebSocketTransport<Message> implements Transport<Message> {
   private peers = new Set<(count: number) => void>();
   private heartbeat: number | null = null;
 
-  constructor(private readonly url: string) {}
+  constructor(private readonly url: string, private readonly reconnectKey: string) {}
 
   connect(): Promise<void> {
     return new Promise((resolve, reject) => {
-      const socket = new WebSocket(this.url);
+      const socket = new WebSocket(reconnectUrl(this.url, this.reconnectKey));
       this.socket = socket;
       socket.addEventListener('open', () => {
         this.heartbeat = window.setInterval(() => socket.send(JSON.stringify({ type: 'heartbeat', at: Date.now() })), 20_000);

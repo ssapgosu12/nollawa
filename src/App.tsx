@@ -3,7 +3,7 @@ import { requestSamokMove } from './ai/samok-client';
 import { Board } from './components/Board';
 import { applyRemoteAction, samok, type SamokAction, type SamokState, type Seat } from './game/samok';
 import { normalizeRoomCode, reserveRoomCode } from './lobby/room-code';
-import { LoopbackTransport, WebSocketTransport, type Transport } from './transport/transport';
+import { deviceReconnectKey, LoopbackTransport, WebSocketTransport, type Transport } from './transport/transport';
 
 type Screen = 'name' | 'room' | 'games' | 'play';
 type PlayMode = 'local' | 'ai' | 'remote';
@@ -88,9 +88,10 @@ export function App() {
   }
 
   async function startGame(nextMode: PlayMode) {
+    const reconnectKey = nextMode === 'remote' ? await deviceReconnectKey() : '';
     transportRef.current?.close();
     const transport: Transport<GameMessage> = nextMode === 'remote'
-      ? new WebSocketTransport(relayUrl(roomCode))
+      ? new WebSocketTransport(relayUrl(roomCode), reconnectKey)
       : new LoopbackTransport();
     transport.onMessage((message) => {
       if (message.type === 'identity') {

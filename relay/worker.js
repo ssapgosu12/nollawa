@@ -2,6 +2,7 @@ const ROOM_CODE = /^[A-HJ-KM-NP-Z]{3}-[0-9]{2}$/;
 const HEARTBEAT_MS = 20_000;
 const STALE_MS = 60_000;
 const RESERVATION_MS = 30_000;
+const RECONNECT_KEY = /^[A-Za-z0-9_-]{16,128}$/;
 
 export function activeWebSockets(sockets) {
   return sockets.filter((socket) => socket.readyState === 1);
@@ -31,28 +32,50 @@ export class Room {
   }
 
   async fetch(request) {
+    const reconnectKey = new URL(request.url).searchParams.get('reconnectKey');
     if (request.method === 'POST') return this.reserve();
     if (request.headers.get('Upgrade') !== 'websocket') return new Response('WebSocket required', { status: 426 });
+    if (!reconnectKey || !RECONNECT_KEY.test(reconnectKey)) return new Response('Reconnect key required', { status: 400 });
     const pair = new WebSocketPair();
     const client = pair[0];
     const server = pair[1];
-    const existing = activeWebSockets(this.state.getWebSockets());
-    const id = crypto.randomUUID();
-    const seat = lowestFreeSeat(existing);
-    this.state.acceptWebSocket(server);
-    server.serializeAttachment({ id, seat, lastSeen: Date.now() });
-    const saved = await this.state.storage.get(['snapshot', 'seq', 'authority']);
-    const sockets = activeWebSockets(this.state.getWebSockets());
-    const activeIds = existing.map((socket) => socket.deserializeAttachment()?.id);
-    const savedAuthority = saved.get('authority');
-    const authority = savedAuthority && activeIds.includes(savedAuthority) ? savedAuthority : id;
-    await this.state.storage.put({ authority, updatedAt: Date.now() });
-    server.send(JSON.stringify({ type: 'identity', id, authority, seat }));
-    if (saved.has('snapshot')) server.send(JSON.stringify({ type: 'snapshot', state: saved.get('snapshot'), seq: saved.get('seq') ?? 0 }));
-    this.broadcast({ type: 'authority', authority });
-    this.broadcast({ type: 'peers', count: sockets.length });
-    await this.state.storage.setAlarm(Date.now() + HEARTBEAT_MS);
+    await this.attach(server, reconnectKey);
     return new Response(null, { status: 101, webSocket: client });
+  }
+
+  async attach(server, reconnectKey) {
+    return this.state.blockConcurrencyWhile(async () => {
+      const existing = activeWebSockets(this.state.getWebSockets());
+      const replaced = existing.filter((socket) => socket.deserializeAttachment()?.reconnectKey === reconnectKey);
+      const replacedAttachment = replaced.find((socket) => socket.deserializeAttachment()?.seat != null)?.deserializeAttachment()
+        ?? replaced[0]?.deserializeAttachment() ?? {};
+      const seatHistory = await this.state.storage.get('seatHistory') ?? {};
+      const occupied = new Set(existing.filter((socket) => !replaced.includes(socket))
+        .map((socket) => socket.deserializeAttachment()?.seat));
+      const preferred = [1, 2].find((seat) => seatHistory[seat]?.key === reconnectKey && !occupied.has(seat));
+      const seat = replacedAttachment.seat ?? preferred ?? lowestFreeSeat(existing.filter((socket) => !replaced.includes(socket)));
+      const id = replacedAttachment.id ?? (seat ? seatHistory[seat]?.id : null) ?? crypto.randomUUID();
+      for (const socket of replaced) {
+        const attachment = socket.deserializeAttachment() ?? {};
+        socket.serializeAttachment({ ...attachment, seat: null });
+        socket.close(4001, 'Replaced connection');
+      }
+      if (seat !== null) seatHistory[seat] = { key: reconnectKey, id };
+      this.state.acceptWebSocket(server);
+      server.serializeAttachment({ id, reconnectKey, seat, lastSeen: Date.now() });
+      const saved = await this.state.storage.get(['snapshot', 'seq', 'authority']);
+      const sockets = activeWebSockets(this.state.getWebSockets());
+      const activeIds = sockets.map((socket) => socket.deserializeAttachment()?.id);
+      const savedAuthority = saved.get('authority');
+      const authority = savedAuthority && activeIds.includes(savedAuthority) ? savedAuthority : id;
+      await this.state.storage.put({ authority, seatHistory, updatedAt: Date.now() });
+      server.send(JSON.stringify({ type: 'identity', id, authority, seat }));
+      if (saved.has('snapshot')) server.send(JSON.stringify({ type: 'snapshot', state: saved.get('snapshot'), seq: saved.get('seq') ?? 0 }));
+      this.broadcast({ type: 'authority', authority });
+      this.broadcast({ type: 'peers', count: sockets.length });
+      await this.state.storage.setAlarm(Date.now() + HEARTBEAT_MS);
+      return { id, seat };
+    });
   }
 
   async reserve() {
@@ -95,21 +118,22 @@ export class Room {
     }
   }
 
-  async webSocketClose() {
-    this.broadcast({ type: 'peers', count: this.state.getWebSockets().length });
-    await this.reassignAuthority();
+  async webSocketClose(socket) {
+    const attachment = socket.deserializeAttachment() ?? {};
+    socket.serializeAttachment({ ...attachment, seat: null });
+    await this.reassignAuthority(socket);
   }
 
   async webSocketError(socket) {
     const attachment = socket.deserializeAttachment() ?? {};
     socket.serializeAttachment({ ...attachment, seat: null });
     socket.close(1011, 'Socket error');
-    await this.reassignAuthority();
+    await this.reassignAuthority(socket);
   }
 
   async alarm() {
     const now = Date.now();
-    for (const socket of this.state.getWebSockets()) {
+    for (const socket of activeWebSockets(this.state.getWebSockets())) {
       const lastSeen = socket.deserializeAttachment()?.lastSeen ?? 0;
       if (now - lastSeen >= STALE_MS) socket.close(4000, 'Stale seat');
     }
@@ -120,15 +144,18 @@ export class Room {
 
   broadcast(message) {
     const encoded = JSON.stringify(message);
-    for (const socket of this.state.getWebSockets()) {
+    for (const socket of activeWebSockets(this.state.getWebSockets())) {
       try { socket.send(encoded); } catch { socket.close(1011, 'Send failed'); }
     }
   }
 
-  async reassignAuthority() {
-    const sockets = activeWebSockets(this.state.getWebSockets());
-    const authority = sockets[0]?.deserializeAttachment()?.id ?? null;
+  async reassignAuthority(excludedSocket) {
+    const sockets = activeWebSockets(this.state.getWebSockets()).filter((socket) => socket !== excludedSocket);
+    const ids = sockets.map((socket) => socket.deserializeAttachment()?.id);
+    const savedAuthority = await this.state.storage.get('authority');
+    const authority = savedAuthority && ids.includes(savedAuthority) ? savedAuthority : ids[0] ?? null;
     await this.state.storage.put({ authority, updatedAt: Date.now() });
     this.broadcast({ type: 'authority', authority });
+    this.broadcast({ type: 'peers', count: sockets.length });
   }
 }
