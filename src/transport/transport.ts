@@ -45,9 +45,10 @@ export function deviceReconnectKey(): Promise<string> {
   return reconnectKeyPromise;
 }
 
-export function reconnectUrl(url: string, key: string): string {
+export function reconnectUrl(url: string, key: string, name = ''): string {
   const endpoint = new URL(url);
   endpoint.searchParams.set('reconnectKey', key);
+  if (name) endpoint.searchParams.set('name', name);
   return endpoint.toString();
 }
 
@@ -85,11 +86,11 @@ export class WebSocketTransport<Message> implements Transport<Message> {
   private peers = new Set<(count: number) => void>();
   private heartbeat: number | null = null;
 
-  constructor(private readonly url: string, private readonly reconnectKey: string) {}
+  constructor(private readonly url: string, private readonly reconnectKey: string, private readonly name = '') {}
 
   connect(): Promise<void> {
     return new Promise((resolve, reject) => {
-      const socket = new WebSocket(reconnectUrl(this.url, this.reconnectKey));
+      const socket = new WebSocket(reconnectUrl(this.url, this.reconnectKey, this.name));
       this.socket = socket;
       socket.addEventListener('open', () => {
         this.heartbeat = window.setInterval(() => socket.send(JSON.stringify({ type: 'heartbeat', at: Date.now() })), 20_000);

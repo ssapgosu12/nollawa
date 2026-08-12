@@ -16,4 +16,9 @@ describe('L1: 원격 재연결 키', () => {
     const url = reconnectUrl('wss://relay.example/room/ABC-67', 'device-key-123456');
     expect(url).toBe('wss://relay.example/room/ABC-67?reconnectKey=device-key-123456');
   });
+
+  it('로비 participant 표시 이름을 같은 최초 연결에 인코딩한다', () => {
+    const url = new URL(reconnectUrl('wss://relay.example/room/ABC-67', 'device-key-123456', '나 이름'));
+    expect(url.searchParams.get('name')).toBe('나 이름');
+  });
 });

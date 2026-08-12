@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { activeWebSockets, lowestFreeSeat, Room } from './worker.js';
+import { activeWebSockets, applyRoomCommand, lowestFreeSeat, requiredReady, Room, TEAM_PAIRS, teamSeat } from './worker.js';
 
 function socket(seat, readyState = 1) {
   return { readyState, deserializeAttachment: () => ({ seat }) };
@@ -164,5 +164,123 @@ describe('L1: 릴레이 좌석 수명주기', () => {
 
     expect(forwarded.actor).toEqual({ id: 'sender', seat: 2 });
     expect(forwarded.action).toEqual({ type: 'restart' });
+  });
+});
+
+describe('L3: 권위 있는 여섯 슬롯 snapshot', () => {
+  it('일곱 번째 연결은 참가자 슬롯을 얻지 못하고 snapshot 모집단은 정확히 여섯 명이다', async () => {
+    const { room, values } = roomHarness();
+    const sockets = Array.from({ length: 7 }, (_, index) => relaySocket(`p${index + 1}`));
+    for (const [index, connection] of sockets.entries()) await room.attach(connection, `device-key-person-${index + 1}`, `사람 ${index + 1}`);
+    expect(values.room.participants).toHaveLength(6);
+    expect(values.room.participants.map((person) => person.slot)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(values.room.hostId).toBe(values.room.participants[0].id);
+    expect(values.room.participants[0].name).toBe('사람 1');
+    expect(sockets[6].deserializeAttachment().seat).toBeNull();
+    const snapshot = sockets[6].messages.at(-2).room;
+    expect(snapshot.participants).toHaveLength(6);
+    expect(snapshot.participants[0]).not.toHaveProperty('reconnectKey');
+  });
+});
+
+describe('L4: 방장 권한과 슬롯 이동', () => {
+  it('위조한 비방장 발신자의 모든 방장 명령을 릴레이가 거부한다', async () => {
+    const { room, values } = roomHarness();
+    const host = relaySocket('host');
+    const guest = relaySocket('guest');
+    await room.attach(host, 'device-key-host', '방장');
+    await room.attach(guest, 'device-key-guest', '손님');
+    const before = JSON.stringify(values.room);
+    const hostId = host.deserializeAttachment().id;
+    for (const command of [
+      { command: 'select-game', game: 'forged' }, { command: 'start' },
+      { command: 'kick', target: hostId }, { command: 'promote', target: hostId },
+      { command: 'move', target: hostId, slot: 6 }, { command: 'team-name', team: 1, name: '위조' },
+    ]) await room.webSocketMessage(guest, JSON.stringify({ type: 'room-command', ...command }));
+    expect(JSON.stringify(values.room)).toBe(before);
+    expect(guest.messages.filter((message) => message.type === 'room-error')).toHaveLength(6);
+  });
+
+  it('방장은 선택·시작·추방·위임에 성공하고 비방장 준비도 허용한다', () => {
+    const base = () => ({ code: 'ABC-67', hostId: 'p1', game: 'samok', teamNames: ['콜라', '사이다'], phase: 'lobby', participants: [
+      { id: 'p1', slot: 1, ready: true }, { id: 'p2', slot: 2, ready: true }, { id: 'p3', slot: 3, ready: false },
+    ] });
+    const selected = base();
+    expect(applyRoomCommand(selected, 'p1', { command: 'select-game', game: 'samok-next' })).toBe(true);
+    expect(selected.game).toBe('samok-next');
+    expect(applyRoomCommand(selected, 'p2', { command: 'ready' })).toBe(true);
+    expect(selected.participants[1].ready).toBe(false);
+    const started = base();
+    expect(applyRoomCommand(started, 'p1', { command: 'start' })).toBe(true);
+    expect(started.phase).toBe('play');
+    const kicked = base();
+    expect(applyRoomCommand(kicked, 'p1', { command: 'kick', target: 'p3' })).toBe(true);
+    expect(kicked.participants.map((person) => person.id)).toEqual(['p1', 'p2']);
+    const promoted = base();
+    expect(applyRoomCommand(promoted, 'p1', { command: 'promote', target: 'p2' })).toBe(true);
+    expect(promoted.hostId).toBe('p2');
+  });
+
+  it('빈 슬롯 이동과 점유 슬롯 맞바꾸기는 이동자 전원의 준비를 풀며 대국 중 이동은 거부한다', () => {
+    const room = { hostId: 'p1', phase: 'lobby', participants: [
+      { id: 'p1', slot: 1, ready: true }, { id: 'p2', slot: 2, ready: true }, { id: 'p3', slot: 4, ready: true },
+    ] };
+    expect(applyRoomCommand(room, 'p1', { command: 'move', target: 'p1', slot: 3 })).toBe(true);
+    expect(room.participants[0]).toMatchObject({ slot: 3, ready: false });
+    room.participants[0].ready = true;
+    expect(applyRoomCommand(room, 'p1', { command: 'move', target: 'p1', slot: 4 })).toBe(true);
+    expect(room.participants[0]).toMatchObject({ slot: 4, ready: false });
+    expect(room.participants[2]).toMatchObject({ slot: 3, ready: false });
+    room.phase = 'play';
+    expect(applyRoomCommand(room, 'p1', { command: 'move', target: 'p2', slot: 5 })).toBe(false);
+    expect(room.participants[1].slot).toBe(2);
+  });
+
+  it('슬롯 맞바꾸기는 연결 attachment의 교대 팀 좌석도 같은 room 상태로 동기화한다', async () => {
+    const { room } = roomHarness();
+    const host = relaySocket('host');
+    const guest = relaySocket('guest');
+    await room.attach(host, 'device-key-host', '방장');
+    await room.attach(guest, 'device-key-guest', '손님');
+    await room.webSocketMessage(host, JSON.stringify({ type: 'room-command', command: 'move', target: host.deserializeAttachment().id, slot: 2 }));
+    expect(host.deserializeAttachment().seat).toBe(2);
+    expect(guest.deserializeAttachment().seat).toBe(1);
+  });
+});
+
+describe('L5: 팀 상태와 재연결', () => {
+  it('준비 표, 교대 팀 좌석, 비어 있지 않은 양 팀을 릴레이가 시작 조건으로 사용한다', () => {
+    expect([2, 3, 4, 5, 6].map(requiredReady)).toEqual([2, 2, 3, 3, 4]);
+    expect([1, 2, 3, 4, 5, 6].map(teamSeat)).toEqual([1, 2, 1, 2, 1, 2]);
+    const oneTeam = { hostId: 'p1', phase: 'lobby', participants: [{ id: 'p1', slot: 1, ready: true }, { id: 'p2', slot: 3, ready: true }] };
+    expect(applyRoomCommand(oneTeam, 'p1', { command: 'start' })).toBe(false);
+  });
+
+  it('방장만 두 팀 이름을 바꾸고 기본값은 정본 대립쌍 중 하나다', async () => {
+    const { room, values } = roomHarness();
+    const host = relaySocket('host');
+    const guest = relaySocket('guest');
+    await room.attach(host, 'device-key-host', '방장');
+    await room.attach(guest, 'device-key-guest', '손님');
+    expect(TEAM_PAIRS).toContainEqual(values.room.teamNames);
+    expect(applyRoomCommand(values.room, guest.deserializeAttachment().id, { command: 'team-name', team: 1, name: '안 됨' })).toBe(false);
+    expect(applyRoomCommand(values.room, host.deserializeAttachment().id, { command: 'team-name', team: 1, name: '왼쪽' })).toBe(true);
+    expect(values.room.teamNames[0]).toBe('왼쪽');
+  });
+
+  it('재연결은 참가자를 복제하지 않고 같은 명시 슬롯을 보존한다', async () => {
+    const { room, values } = roomHarness();
+    const first = relaySocket('first');
+    const peer = relaySocket('peer');
+    await room.attach(first, 'device-key-first', '첫째');
+    await room.attach(peer, 'device-key-peer', '둘째');
+    const original = { ...values.room.participants[0] };
+    first.close();
+    await room.webSocketClose(first);
+    const replacement = relaySocket('replacement');
+    await room.attach(replacement, 'device-key-first', '첫째');
+    expect(values.room.participants).toHaveLength(2);
+    expect(values.room.participants[0]).toMatchObject({ id: original.id, slot: original.slot });
+    expect(replacement.deserializeAttachment()).toMatchObject({ id: original.id, seat: teamSeat(original.slot) });
   });
 });
