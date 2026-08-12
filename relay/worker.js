@@ -1,6 +1,7 @@
 const ROOM_CODE = /^[A-HJ-KM-NP-Z]{3}-[0-9]{2}$/;
 const HEARTBEAT_MS = 20_000;
 const STALE_MS = 60_000;
+const RESERVATION_MS = 30_000;
 
 export default {
   async fetch(request, env) {
@@ -19,6 +20,7 @@ export class Room {
   }
 
   async fetch(request) {
+    if (request.method === 'POST') return this.reserve();
     if (request.headers.get('Upgrade') !== 'websocket') return new Response('WebSocket required', { status: 426 });
     const pair = new WebSocketPair();
     const client = pair[0];
@@ -39,6 +41,20 @@ export class Room {
     this.broadcast({ type: 'peers', count: sockets.length });
     await this.state.storage.setAlarm(Date.now() + HEARTBEAT_MS);
     return new Response(null, { status: 101, webSocket: client });
+  }
+
+  async reserve() {
+    const reserved = await this.state.blockConcurrencyWhile(async () => {
+      const now = Date.now();
+      const reservedUntil = Number(await this.state.storage.get('reservedUntil') ?? 0);
+      if (this.state.getWebSockets().length > 0 || reservedUntil > now) return false;
+      await this.state.storage.put({ reservedUntil: now + RESERVATION_MS, updatedAt: now });
+      return true;
+    });
+    return new Response(reserved ? 'Reserved' : 'Occupied', {
+      status: reserved ? 201 : 409,
+      headers: { 'Access-Control-Allow-Origin': '*' },
+    });
   }
 
   async webSocketMessage(socket, raw) {

@@ -1,10 +1,10 @@
 import type { SamokState } from '../game/samok';
 
 const MARKERS = [
-  { fill: '#f2c94c', shape: '●', number: '1' },
-  { fill: '#56a8e8', shape: '■', number: '2' },
-  { fill: '#ef767a', shape: '▲', number: '3' },
-  { fill: '#65b96e', shape: '◆', number: '4' },
+  { className: 'player-1', shape: '●', number: '1' },
+  { className: 'player-2', shape: '■', number: '2' },
+  { className: 'player-3', shape: '▲', number: '3' },
+  { className: 'player-4', shape: '◆', number: '4' },
 ];
 
 interface BoardProps {
@@ -16,7 +16,7 @@ interface BoardProps {
 export function Board({ state, disabled = false, onDrop }: BoardProps) {
   return (
     <svg class="board" viewBox="0 0 700 600" role="grid" aria-label="사목 7열 6행 판">
-      <rect x="2" y="2" width="696" height="596" rx="24" fill="#f7f7f3" stroke="#111" stroke-width="4" />
+      <rect class="board-background" x="2" y="2" width="696" height="596" rx="24" stroke-width="4" />
       {Array.from({ length: 7 }, (_, column) => (
         <g
           key={column}
@@ -29,7 +29,7 @@ export function Board({ state, disabled = false, onDrop }: BoardProps) {
             if (!disabled && (event.key === 'Enter' || event.key === ' ')) onDrop(column);
           }}
         >
-          <rect x={column * 100 + 5} y="5" width="90" height="590" fill="transparent" />
+          <rect class="board-hit-area" x={column * 100 + 5} y="5" width="90" height="590" />
           {Array.from({ length: 6 }, (_, visualRow) => {
             const row = 5 - visualRow;
             const cell = state.board[row]?.[column] ?? 0;
@@ -38,7 +38,7 @@ export function Board({ state, disabled = false, onDrop }: BoardProps) {
             const cy = visualRow * 100 + 50;
             return (
               <g key={row} role="gridcell" aria-label={cell ? `${cell}번 말` : '빈칸'}>
-                <circle cx={cx} cy={cy} r="40" fill={marker?.fill ?? '#fff'} stroke="#111" stroke-width="5" />
+                <circle class={`board-cell ${marker?.className ?? ''}`} cx={cx} cy={cy} r="40" stroke-width="5" />
                 {marker && <text x={cx} y={cy + 3} class="piece-shape" text-anchor="middle">{marker.shape}</text>}
                 {marker && <text x={cx + 24} y={cy + 28} class="piece-number" text-anchor="middle">{marker.number}</text>}
               </g>

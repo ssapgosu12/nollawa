@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { requestSamokMove } from './ai/samok-client';
 import { Board } from './components/Board';
 import { samok, type SamokAction, type SamokState } from './game/samok';
-import { createRoomCode, normalizeRoomCode } from './lobby/room-code';
+import { normalizeRoomCode, reserveRoomCode } from './lobby/room-code';
 import { LoopbackTransport, WebSocketTransport, type Transport } from './transport/transport';
 
 type Screen = 'name' | 'room' | 'games' | 'play';
@@ -19,12 +19,17 @@ function relayUrl(code: string): string {
   return `${base.replace(/\/$/, '')}/room/${code}`;
 }
 
+function reservationUrl(code: string): string {
+  return relayUrl(code).replace(/^ws/, 'http');
+}
+
 export function App() {
   const [screen, setScreen] = useState<Screen>('name');
   const [name, setName] = useState('');
   const [roomCode, setRoomCode] = useState('');
   const [roomInput, setRoomInput] = useState('');
   const [roomError, setRoomError] = useState('');
+  const [creatingRoom, setCreatingRoom] = useState(false);
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<PlayMode>('local');
   const [state, setState] = useState(() => samok.init());
@@ -51,6 +56,24 @@ export function App() {
       return;
     }
     chooseRoom('remote', normalized);
+  }
+
+  async function createRoom() {
+    setCreatingRoom(true);
+    setRoomError('');
+    try {
+      const code = await reserveRoomCode(async (candidate) => {
+        const response = await fetch(reservationUrl(candidate), { method: 'POST' });
+        if (response.status === 409) return false;
+        if (!response.ok) throw new Error('방 코드를 확인하지 못했습니다. 다시 시도해 주세요.');
+        return true;
+      });
+      chooseRoom('remote', code);
+    } catch (error) {
+      setRoomError(error instanceof Error ? error.message : '방을 만들지 못했습니다.');
+    } finally {
+      setCreatingRoom(false);
+    }
   }
 
   async function startGame(nextMode: PlayMode) {
@@ -110,7 +133,7 @@ export function App() {
   return (
     <main class="app-shell">
       <header class="topbar">
-        <button class="brand" onClick={() => setScreen('name')}>사목 놀이터</button>
+        <button class="brand" onClick={() => setScreen('name')}>Nollawa party games</button>
         <span class="build-hash" aria-label={`빌드 ${__BUILD_HASH__}`}>빌드 {__BUILD_HASH__}</span>
       </header>
 
@@ -124,7 +147,7 @@ export function App() {
       {screen === 'room' && <section class="panel" aria-labelledby="room-title">
         <p class="eyebrow">반가워요, {name}</p><h1 id="room-title">어디서 플레이할까요?</h1>
         <div class="choice-grid">
-          <button class="choice" onClick={() => chooseRoom('remote', createRoomCode())}><strong>방 만들기</strong><span>새 코드를 친구에게 알려 주세요</span></button>
+          <button class="choice" disabled={creatingRoom} onClick={() => void createRoom()}><strong>{creatingRoom ? '빈 방 확인 중' : '방 만들기'}</strong><span>새 코드를 친구에게 알려 주세요</span></button>
           <div class="choice join-box"><strong>코드로 입장</strong><label>방 코드<input value={roomInput} placeholder="ABC-67" onInput={(event) => setRoomInput(event.currentTarget.value)} /></label><button onClick={joinRoom}>입장</button></div>
           <button class="choice" onClick={() => chooseRoom('local')}><strong>이 기기에서 플레이</strong><span>한 화면을 번갈아 사용해요</span></button>
         </div>
