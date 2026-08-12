@@ -149,7 +149,7 @@ export class Room {
       const room = await this.state.storage.get('room');
       if (!room || !applyRoomCommand(room, sender, message)) { socket.send(JSON.stringify({ type: 'room-error', message: '허용되지 않은 방 명령' })); return; }
       await this.state.storage.put({ room, updatedAt: Date.now() });
-      this.syncSeats(room);
+      await this.syncSeats(room);
       if (message.command === 'kick') this.closeParticipant(message.target);
       await this.emitRoom(room);
       return;
@@ -198,11 +198,15 @@ export class Room {
     for (const socket of activeWebSockets(this.state.getWebSockets())) if (socket.deserializeAttachment()?.id === id) socket.close(4003, 'Removed from room');
   }
 
-  syncSeats(room) {
+  async syncSeats(room) {
+    const authority = await this.state.storage.get('authority');
     for (const socket of activeWebSockets(this.state.getWebSockets())) {
       const attachment = socket.deserializeAttachment() ?? {};
       const person = participant(room, attachment.id);
-      socket.serializeAttachment({ ...attachment, seat: person ? teamSeat(person.slot) : null });
+      const seat = person ? teamSeat(person.slot) : null;
+      if (seat === attachment.seat) continue;
+      socket.serializeAttachment({ ...attachment, seat });
+      socket.send(JSON.stringify({ type: 'identity', id: attachment.id, authority, seat }));
     }
   }
 

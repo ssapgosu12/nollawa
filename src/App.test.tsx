@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { restartNoticeFor } from './App';
+import { identitySeat, remoteBoardDisabled, remoteSeatLabel, restartNoticeFor } from './App';
 import { applyRemoteAction, samok, type SamokState } from './game/samok';
 
 function terminalState(): SamokState {
@@ -20,5 +20,18 @@ describe('M0-FEEDBACK 원격 재시작', () => {
     expect(restartNoticeFor(snapshot.source, 'player-two', 2)).toBe('상대가 새 판을 시작했습니다');
     expect(restartNoticeFor(snapshot.source, 'player-one', 1)).toBe('');
     expect(restartNoticeFor(snapshot.source, 'spectator', null)).toBe('');
+  });
+});
+
+describe('M1-LOBBY CORRECTION: identity 팀 projection', () => {
+  it('재연결 없이 새 identity seat를 팀 표시와 보드 잠금에 같이 적용한다', () => {
+    const state = samok.init();
+    const movedSeat = identitySeat({ type: 'identity', id: 'player', authority: 'host', seat: 2 });
+    expect(remoteSeatLabel(movedSeat)).toBe('내 팀 2');
+    expect(remoteBoardDisabled(state, movedSeat)).toBe(true);
+
+    const swappedSeat = identitySeat({ type: 'identity', id: 'player', authority: 'host', seat: 1 });
+    expect(remoteSeatLabel(swappedSeat)).toBe('내 팀 1');
+    expect(remoteBoardDisabled(state, swappedSeat)).toBe(false);
   });
 });

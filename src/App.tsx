@@ -24,6 +24,9 @@ const GAMES = [{ id: 'samok', name: '사목', people: '2명', tags: ['공용', '
 export function restartNoticeFor(source: AcceptedActionSource | undefined, clientId: string | null, seat: Seat | null): string {
   return source?.action.type === 'restart' && seat !== null && source.actor.id !== clientId ? '상대가 새 판을 시작했습니다' : '';
 }
+export const identitySeat = (message: Extract<GameMessage, { type: 'identity' }>): Seat | null => message.seat;
+export const remoteSeatLabel = (seat: Seat | null): string => seat ? `내 팀 ${seat}` : '관전 중 · 좌석 없음';
+export const remoteBoardDisabled = (state: SamokState, seat: Seat | null): boolean => samok.terminal(state).ended || seat !== state.turn;
 
 function relayUrl(code: string): string {
   const base = import.meta.env.VITE_RELAY_URL ?? `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}`;
@@ -57,10 +60,11 @@ export function App() {
   function bindTransport(transport: Transport<GameMessage>, nextMode: PlayMode) {
     transport.onMessage((message) => {
       if (message.type === 'identity') {
+        const seat = identitySeat(message);
         clientId.current = message.id;
-        localSeatRef.current = message.seat;
+        localSeatRef.current = seat;
         setSelfId(message.id);
-        setLocalSeat(message.seat);
+        setLocalSeat(seat);
         isAuthority.current = message.id === message.authority;
       }
       if (message.type === 'authority') isAuthority.current = clientId.current === message.authority;
@@ -188,7 +192,7 @@ export function App() {
       </div></article>)}
     </div></section>}
 
-    {screen === 'play' && <section class="play-layout" aria-labelledby="play-title"><div class="game-status"><div><p class="eyebrow">{connection}</p><h1 id="play-title">{outcome}</h1>{mode === 'remote' && <p class={`seat-badge ${localSeat ? `player-${localSeat}` : ''}`}>{localSeat ? `내 팀 ${localSeat}` : '관전 중 · 좌석 없음'}</p>}{restartNotice && <p class="restart-notice" role="status">{restartNotice}</p>}</div><button onClick={() => setScreen(mode === 'remote' ? 'lobby' : 'games')}>{mode === 'remote' ? '방 로비' : '게임 목록'}</button></div><Board state={state} disabled={samok.terminal(state).ended || (mode === 'ai' && state.turn === 2) || (mode === 'remote' && localSeat !== state.turn)} onDrop={(column) => send({ type: 'action', action: { type: 'drop', column } })} /><p class="hint">열을 누르거나 키보드로 선택하세요. ● 1번 · ■ 2번</p>{samok.terminal(state).ended && <button class="primary restart" disabled={mode === 'remote' && localSeat === null} onClick={() => send({ type: 'action', action: { type: 'restart' } })}>다시 시작</button>}</section>}
+    {screen === 'play' && <section class="play-layout" aria-labelledby="play-title"><div class="game-status"><div><p class="eyebrow">{connection}</p><h1 id="play-title">{outcome}</h1>{mode === 'remote' && <p class={`seat-badge ${localSeat ? `player-${localSeat}` : ''}`}>{remoteSeatLabel(localSeat)}</p>}{restartNotice && <p class="restart-notice" role="status">{restartNotice}</p>}</div><button onClick={() => setScreen(mode === 'remote' ? 'lobby' : 'games')}>{mode === 'remote' ? '방 로비' : '게임 목록'}</button></div><Board state={state} disabled={(mode === 'remote' && remoteBoardDisabled(state, localSeat)) || (mode !== 'remote' && (samok.terminal(state).ended || (mode === 'ai' && state.turn === 2)))} onDrop={(column) => send({ type: 'action', action: { type: 'drop', column } })} /><p class="hint">열을 누르거나 키보드로 선택하세요. ● 1번 · ■ 2번</p>{samok.terminal(state).ended && <button class="primary restart" disabled={mode === 'remote' && localSeat === null} onClick={() => send({ type: 'action', action: { type: 'restart' } })}>다시 시작</button>}</section>}
     <UpdateBanner />
   </main>;
 }

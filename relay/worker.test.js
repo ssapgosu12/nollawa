@@ -236,15 +236,39 @@ describe('L4: 방장 권한과 슬롯 이동', () => {
     expect(room.participants[1].slot).toBe(2);
   });
 
-  it('슬롯 맞바꾸기는 연결 attachment의 교대 팀 좌석도 같은 room 상태로 동기화한다', async () => {
+  it('CORRECTION: 빈 슬롯 이동과 점유 swap은 영향받은 클라이언트에게만 새 identity 팀을 보낸다', async () => {
     const { room } = roomHarness();
     const host = relaySocket('host');
     const guest = relaySocket('guest');
     await room.attach(host, 'device-key-host', '방장');
     await room.attach(guest, 'device-key-guest', '손님');
+
+    host.messages.length = 0;
+    guest.messages.length = 0;
+    await room.webSocketMessage(host, JSON.stringify({ type: 'room-command', command: 'move', target: guest.deserializeAttachment().id, slot: 3 }));
+    expect(guest.messages.filter((message) => message.type === 'identity')).toEqual([
+      { type: 'identity', id: guest.deserializeAttachment().id, authority: host.deserializeAttachment().id, seat: 1 },
+    ]);
+    expect(host.messages.filter((message) => message.type === 'identity')).toEqual([]);
+
+    await room.webSocketMessage(host, JSON.stringify({ type: 'room-command', command: 'move', target: guest.deserializeAttachment().id, slot: 2 }));
+    host.messages.length = 0;
+    guest.messages.length = 0;
     await room.webSocketMessage(host, JSON.stringify({ type: 'room-command', command: 'move', target: host.deserializeAttachment().id, slot: 2 }));
     expect(host.deserializeAttachment().seat).toBe(2);
     expect(guest.deserializeAttachment().seat).toBe(1);
+    expect(host.messages.filter((message) => message.type === 'identity')).toEqual([
+      { type: 'identity', id: host.deserializeAttachment().id, authority: host.deserializeAttachment().id, seat: 2 },
+    ]);
+    expect(guest.messages.filter((message) => message.type === 'identity')).toEqual([
+      { type: 'identity', id: guest.deserializeAttachment().id, authority: host.deserializeAttachment().id, seat: 1 },
+    ]);
+
+    host.messages.length = 0;
+    guest.messages.length = 0;
+    await room.webSocketMessage(guest, JSON.stringify({ type: 'room-command', command: 'ready' }));
+    await room.webSocketMessage(host, JSON.stringify({ type: 'room-command', command: 'team-name', team: 1, name: '새 팀' }));
+    expect([...host.messages, ...guest.messages].filter((message) => message.type === 'identity')).toEqual([]);
   });
 });
 
