@@ -5,12 +5,10 @@ export interface Transport<Message> {
   onPeerChange(handler: (count: number) => void): () => void;
   close(): void;
 }
-
 const DEVICE_DB = 'nollawa-device';
 const DEVICE_STORE = 'identity';
 const RECONNECT_KEY = 'reconnect-key';
 let reconnectKeyPromise: Promise<string> | null = null;
-
 export function deviceReconnectKey(): Promise<string> {
   if (reconnectKeyPromise) return reconnectKeyPromise;
   reconnectKeyPromise = new Promise((resolve) => {
@@ -44,50 +42,40 @@ export function deviceReconnectKey(): Promise<string> {
   });
   return reconnectKeyPromise;
 }
-
 export function reconnectUrl(url: string, key: string, name = ''): string {
   const endpoint = new URL(url);
   endpoint.searchParams.set('reconnectKey', key);
   if (name) endpoint.searchParams.set('name', name);
   return endpoint.toString();
 }
-
 export class LoopbackTransport<Message> implements Transport<Message> {
   private messages = new Set<(message: Message) => void>();
   private peers = new Set<(count: number) => void>();
-
   async connect() {
     this.peers.forEach((handler) => handler(1));
   }
-
   send(message: Message) {
     queueMicrotask(() => this.messages.forEach((handler) => handler(structuredClone(message))));
   }
-
   onMessage(handler: (message: Message) => void) {
     this.messages.add(handler);
     return () => this.messages.delete(handler);
   }
-
   onPeerChange(handler: (count: number) => void) {
     this.peers.add(handler);
     return () => this.peers.delete(handler);
   }
-
   close() {
     this.peers.forEach((handler) => handler(0));
     this.messages.clear();
   }
 }
-
 export class WebSocketTransport<Message> implements Transport<Message> {
   private socket: WebSocket | null = null;
   private messages = new Set<(message: Message) => void>();
   private peers = new Set<(count: number) => void>();
   private heartbeat: number | null = null;
-
   constructor(private readonly url: string, private readonly reconnectKey: string, private readonly name = '') {}
-
   connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       const socket = new WebSocket(reconnectUrl(this.url, this.reconnectKey, this.name));
@@ -104,22 +92,18 @@ export class WebSocketTransport<Message> implements Transport<Message> {
       });
     });
   }
-
   send(message: Message) {
     if (this.socket?.readyState !== WebSocket.OPEN) throw new Error('릴레이 연결이 열려 있지 않습니다.');
     this.socket.send(JSON.stringify(message));
   }
-
   onMessage(handler: (message: Message) => void) {
     this.messages.add(handler);
     return () => this.messages.delete(handler);
   }
-
   onPeerChange(handler: (count: number) => void) {
     this.peers.add(handler);
     return () => this.peers.delete(handler);
   }
-
   close() {
     if (this.heartbeat !== null) window.clearInterval(this.heartbeat);
     this.socket?.close();

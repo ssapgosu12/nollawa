@@ -1,14 +1,12 @@
 import type { SamokState } from '../game/samok';
 import type { Seat } from '../game/samok';
 import { voteDots } from '../game/team-vote';
-
 const MARKERS = [
   { className: 'player-1', shape: '●', number: '1' },
   { className: 'player-2', shape: '■', number: '2' },
   { className: 'player-3', shape: '▲', number: '3' },
   { className: 'player-4', shape: '◆', number: '4' },
 ];
-
 interface BoardProps {
   state: SamokState;
   disabled?: boolean;
@@ -17,7 +15,6 @@ interface BoardProps {
   rouletteColumn?: number | null;
   onDrop(column: number): void;
 }
-
 export function Board({ state, disabled = false, selfId = null, seat = null, rouletteColumn = null, onDrop }: BoardProps) {
   const dots = voteDots(state, selfId);
   return (

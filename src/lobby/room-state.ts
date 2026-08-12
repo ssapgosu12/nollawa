@@ -1,5 +1,4 @@
 import type { Transport } from '../transport/transport';
-
 export interface RoomParticipant { id: string; slot: number; name: string; ready: boolean; present: boolean }
 export interface RoomSnapshot {
   code: string;
@@ -15,7 +14,6 @@ export type RoomCommand =
   | { command: 'kick' | 'promote'; target: string }
   | { command: 'move'; target: string; slot: number }
   | { command: 'team-name'; team: 1 | 2; name: string };
-
 export const MAIN_DESTINATIONS = [
   ['이 기기에서 플레이', 'games'],
   ['방 참여', 'lobby'],

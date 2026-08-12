@@ -1,7 +1,5 @@
 import { legalColumns, samok, type SamokState, type Seat } from '../game/samok';
-
 const ORDER = [3, 2, 4, 1, 5, 0, 6];
-
 function scoreWindow(values: number[], seat: Seat): number {
   const opponent = seat === 1 ? 2 : 1;
   const own = values.filter((value) => value === seat).length;
@@ -16,7 +14,6 @@ function scoreWindow(values: number[], seat: Seat): number {
   if (theirs === 2 && empty === 2) return -14;
   return own - theirs;
 }
-
 function evaluate(state: SamokState, seat: Seat): number {
   if (state.winner === seat) return 1_000_000;
   if (state.winner) return -1_000_000;
@@ -35,7 +32,6 @@ function evaluate(state: SamokState, seat: Seat): number {
   }
   return score;
 }
-
 function minimax(state: SamokState, depth: number, seat: Seat, alpha: number, beta: number): number {
   if (depth === 0 || samok.terminal(state).ended) return evaluate(state, seat);
   const maximizing = state.turn === seat;
@@ -54,7 +50,6 @@ function minimax(state: SamokState, depth: number, seat: Seat, alpha: number, be
   }
   return best;
 }
-
 export function greedySamokMove(state: SamokState): number | null {
   const legal = ORDER.filter((column) => legalColumns(state).includes(column));
   for (const column of legal) {
@@ -67,7 +62,6 @@ export function greedySamokMove(state: SamokState): number | null {
   }
   return legal[0] ?? null;
 }
-
 export function chooseSamokMove(state: SamokState): number | null {
   const seat = state.turn;
   let bestColumn = greedySamokMove(state);

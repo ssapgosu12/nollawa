@@ -1,8 +1,6 @@
 import { legalColumns, type SamokState } from '../game/samok';
 import { greedySamokMove } from './samok-ai';
-
 const TIMEOUT_MS = 800;
-
 export function requestSamokMove(state: SamokState): Promise<number | null> {
   const fallback = greedySamokMove(state);
   return new Promise((resolve) => {

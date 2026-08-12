@@ -1,13 +1,11 @@
 import type { RoomCommand, RoomSnapshot } from './room-state';
 import { canStartRoom, isRoomHost, readyLabel, roomSlots, teamForSlot } from './room-state';
-
 interface Props {
   room: RoomSnapshot;
   selfId: string | null;
   send: (command: RoomCommand) => void;
   openGames: () => void;
 }
-
 export function RoomLobby({ room, selfId, send, openGames }: Props) {
   const host = isRoomHost(room, selfId);
   return <section class="room-lobby" aria-labelledby="room-code">
