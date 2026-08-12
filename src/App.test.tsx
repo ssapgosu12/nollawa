@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { identitySeat, remoteBoardDisabled, remoteSeatLabel, restartNoticeFor } from './App';
+import { identitySeat, remoteBoardDisabled, remoteSeatLabel, restartNoticeFor, roomVoteMembers } from './App';
 import { applyRemoteAction, samok, type SamokState } from './game/samok';
 
 function terminalState(): SamokState {
@@ -33,5 +33,20 @@ describe('M1-LOBBY CORRECTION: identity 팀 projection', () => {
     const swappedSeat = identitySeat({ type: 'identity', id: 'player', authority: 'host', seat: 1 });
     expect(remoteSeatLabel(swappedSeat)).toBe('내 팀 1');
     expect(remoteBoardDisabled(state, swappedSeat)).toBe(false);
+  });
+});
+
+describe('L6 TEAM VOTE: authoritative room membership', () => {
+  it('authoritative room snapshot의 홀짝 슬롯만 현재 팀 voter 모집단으로 투영한다', () => {
+    const room = {
+      code: 'ABC-67', hostId: 'p1', game: 'samok', teamNames: ['왼쪽', '오른쪽'] as [string, string], phase: 'play' as const,
+      participants: [
+        { id: 'p1', slot: 1, name: '하나', ready: true, present: true },
+        { id: 'p2', slot: 2, name: '둘', ready: true, present: true },
+        { id: 'p3', slot: 3, name: '셋', ready: true, present: false },
+      ],
+    };
+    expect(roomVoteMembers(room, 1)).toEqual([{ id: 'p1', team: 1 }, { id: 'p3', team: 1 }]);
+    expect(roomVoteMembers(room, 2)).toEqual([{ id: 'p2', team: 2 }]);
   });
 });

@@ -2,9 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { requestSamokMove } from './ai/samok-client';
 import { Board } from './components/Board';
 import { applyRemoteAction, samok, type SamokAction, type SamokState, type Seat } from './game/samok';
+import { authorityVoteDeadline, reduceAuthorityVote, roulettePlan, settleTeamVote, type VoteMember } from './game/team-vote';
 import { normalizeRoomCode, reserveRoomCode } from './lobby/room-code';
 import { RoomLobby } from './lobby/RoomLobby';
-import { isRoomHost, MAIN_DESTINATIONS, reuseRemoteTransport, type RoomCommand, type RoomSnapshot } from './lobby/room-state';
+import { isRoomHost, MAIN_DESTINATIONS, reuseRemoteTransport, teamForSlot, type RoomCommand, type RoomSnapshot } from './lobby/room-state';
 import { deviceReconnectKey, LoopbackTransport, WebSocketTransport, type Transport } from './transport/transport';
 
 type Screen = 'name' | 'room' | 'lobby' | 'games' | 'play';
@@ -27,6 +28,7 @@ export function restartNoticeFor(source: AcceptedActionSource | undefined, clien
 export const identitySeat = (message: Extract<GameMessage, { type: 'identity' }>): Seat | null => message.seat;
 export const remoteSeatLabel = (seat: Seat | null): string => seat ? `내 팀 ${seat}` : '관전 중 · 좌석 없음';
 export const remoteBoardDisabled = (state: SamokState, seat: Seat | null): boolean => samok.terminal(state).ended || seat !== state.turn;
+export const roomVoteMembers = (room: RoomSnapshot | null, turn: Seat): VoteMember[] => room?.participants.filter((person) => teamForSlot(person.slot) === turn).map((person) => ({ id: person.id, team: turn })) ?? [];
 
 function relayUrl(code: string): string {
   const base = import.meta.env.VITE_RELAY_URL ?? `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}`;
@@ -48,10 +50,13 @@ export function App() {
   const [localSeat, setLocalSeat] = useState<Seat | null>(null);
   const [selfId, setSelfId] = useState<string | null>(null);
   const [room, setRoom] = useState<RoomSnapshot | null>(null);
+  const [authority, setAuthority] = useState(false);
+  const [rouletteColumn, setRouletteColumn] = useState<number | null>(null);
   const [restartNotice, setRestartNotice] = useState('');
   const transportRef = useRef<Transport<GameMessage> | null>(null);
   const clientId = useRef<string | null>(null);
   const localSeatRef = useRef<Seat | null>(null);
+  const roomRef = useRef<RoomSnapshot | null>(null);
   const isAuthority = useRef(false);
   const aiThinking = useRef(false);
   const visibleGames = useMemo(() => GAMES.filter((game) => `${game.name} ${game.people} ${game.tags.join(' ')}`.toLowerCase().includes(query.toLowerCase())), [query]);
@@ -66,15 +71,23 @@ export function App() {
         setSelfId(message.id);
         setLocalSeat(seat);
         isAuthority.current = message.id === message.authority;
+        setAuthority(isAuthority.current);
       }
-      if (message.type === 'authority') isAuthority.current = clientId.current === message.authority;
+      if (message.type === 'authority') {
+        isAuthority.current = clientId.current === message.authority;
+        setAuthority(isAuthority.current);
+      }
       if (message.type === 'room') {
+        roomRef.current = message.room;
         setRoom(message.room);
         if (message.room.phase === 'play') setScreen('play');
       }
       if (message.type === 'room-error') setConnection(message.message);
       if (message.type === 'action') setState((current) => {
-        const next = nextMode === 'remote' ? applyRemoteAction(current, message.action, message.actor?.seat ?? null) : samok.reduce(current, message.action);
+        let next = current;
+        if (nextMode !== 'remote') next = samok.reduce(current, message.action);
+        else if (isAuthority.current && message.action.type === 'vote' && message.actor) next = reduceAuthorityVote(current, message.action.column, message.actor, roomVoteMembers(roomRef.current, current.turn), true, Date.now(), Math.random);
+        else if (isAuthority.current && message.action.type === 'restart') next = applyRemoteAction(current, message.action, message.actor?.seat ?? null);
         if (nextMode === 'remote' && isAuthority.current && next !== current) {
           const source = message.actor ? { actor: message.actor, action: message.action } : undefined;
           queueMicrotask(() => transport.send({ type: 'snapshot', state: next, source }));
@@ -92,8 +105,10 @@ export function App() {
   function closeTransport() {
     transportRef.current?.close();
     transportRef.current = null;
+    roomRef.current = null;
     setRoom(null);
     setSelfId(null);
+    setAuthority(false);
   }
 
   function chooseLocal() {
@@ -168,6 +183,29 @@ export function App() {
       aiThinking.current = false;
     });
   }, [mode, screen, state]);
+  useEffect(() => {
+    if (mode !== 'remote' || screen !== 'play' || !authority) return;
+    const deadline = authorityVoteDeadline(state, authority);
+    if (deadline === null) return;
+    const timer = window.setTimeout(() => setState((current) => {
+      if (!isAuthority.current) return current;
+      const next = settleTeamVote(current, roomVoteMembers(roomRef.current, current.turn), Date.now(), Math.random);
+      if (next !== current) queueMicrotask(() => send({ type: 'snapshot', state: next }));
+      return next;
+    }), Math.max(0, deadline - Date.now()));
+    return () => window.clearTimeout(timer);
+  }, [authority, mode, room, screen, state]);
+  useEffect(() => {
+    const plan = roulettePlan(state.resolvedVote);
+    if (!plan.length) { setRouletteColumn(null); return; }
+    let elapsed = 0;
+    const timers = plan.map((step) => {
+      const timer = window.setTimeout(() => setRouletteColumn(step.column), elapsed);
+      elapsed += step.dwellMs;
+      return timer;
+    });
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [state.resolvedVote]);
   useEffect(() => () => transportRef.current?.close(), []);
 
   const outcome = state.winner ? `${state.winner}번 승리` : state.draw ? '무승부' : `${state.turn}번 차례`;
@@ -192,7 +230,7 @@ export function App() {
       </div></article>)}
     </div></section>}
 
-    {screen === 'play' && <section class="play-layout" aria-labelledby="play-title"><div class="game-status"><div><p class="eyebrow">{connection}</p><h1 id="play-title">{outcome}</h1>{mode === 'remote' && <p class={`seat-badge ${localSeat ? `player-${localSeat}` : ''}`}>{remoteSeatLabel(localSeat)}</p>}{restartNotice && <p class="restart-notice" role="status">{restartNotice}</p>}</div><button onClick={() => setScreen(mode === 'remote' ? 'lobby' : 'games')}>{mode === 'remote' ? '방 로비' : '게임 목록'}</button></div><Board state={state} disabled={(mode === 'remote' && remoteBoardDisabled(state, localSeat)) || (mode !== 'remote' && (samok.terminal(state).ended || (mode === 'ai' && state.turn === 2)))} onDrop={(column) => send({ type: 'action', action: { type: 'drop', column } })} /><p class="hint">열을 누르거나 키보드로 선택하세요. ● 1번 · ■ 2번</p>{samok.terminal(state).ended && <button class="primary restart" disabled={mode === 'remote' && localSeat === null} onClick={() => send({ type: 'action', action: { type: 'restart' } })}>다시 시작</button>}</section>}
+    {screen === 'play' && <section class="play-layout" aria-labelledby="play-title"><div class="game-status"><div><p class="eyebrow">{connection}</p><h1 id="play-title">{outcome}</h1>{mode === 'remote' && <p class={`seat-badge ${localSeat ? `player-${localSeat}` : ''}`}>{remoteSeatLabel(localSeat)}</p>}{restartNotice && <p class="restart-notice" role="status">{restartNotice}</p>}</div><button onClick={() => setScreen(mode === 'remote' ? 'lobby' : 'games')}>{mode === 'remote' ? '방 로비' : '게임 목록'}</button></div><Board state={state} selfId={mode === 'remote' ? selfId : null} seat={localSeat} rouletteColumn={rouletteColumn} disabled={(mode === 'remote' && remoteBoardDisabled(state, localSeat)) || (mode !== 'remote' && (samok.terminal(state).ended || (mode === 'ai' && state.turn === 2)))} onDrop={(column) => send({ type: 'action', action: { type: mode === 'remote' ? 'vote' : 'drop', column } })} /><p class="hint">열을 누르거나 키보드로 선택하세요. ● 1번 · ■ 2번</p>{samok.terminal(state).ended && <button class="primary restart" disabled={mode === 'remote' && localSeat === null} onClick={() => send({ type: 'action', action: { type: 'restart' } })}>다시 시작</button>}</section>}
     <UpdateBanner />
   </main>;
 }

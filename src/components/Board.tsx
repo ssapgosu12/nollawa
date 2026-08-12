@@ -1,4 +1,6 @@
 import type { SamokState } from '../game/samok';
+import type { Seat } from '../game/samok';
+import { voteDots } from '../game/team-vote';
 
 const MARKERS = [
   { className: 'player-1', shape: '●', number: '1' },
@@ -10,12 +12,16 @@ const MARKERS = [
 interface BoardProps {
   state: SamokState;
   disabled?: boolean;
+  selfId?: string | null;
+  seat?: Seat | null;
+  rouletteColumn?: number | null;
   onDrop(column: number): void;
 }
 
-export function Board({ state, disabled = false, onDrop }: BoardProps) {
+export function Board({ state, disabled = false, selfId = null, seat = null, rouletteColumn = null, onDrop }: BoardProps) {
+  const dots = voteDots(state, selfId);
   return (
-    <svg class="board" viewBox="0 0 700 600" role="grid" aria-label="사목 7열 6행 판">
+    <svg class="board" viewBox="0 0 700 650" role="grid" aria-label="사목 7열 6행 판">
       <rect class="board-background" x="2" y="2" width="696" height="596" rx="24" stroke-width="4" />
       {Array.from({ length: 7 }, (_, column) => (
         <g
@@ -30,6 +36,7 @@ export function Board({ state, disabled = false, onDrop }: BoardProps) {
           }}
         >
           <rect class="board-hit-area" x={column * 100 + 5} y="5" width="90" height="590" />
+          {rouletteColumn === column && <rect class="roulette-highlight" x={column * 100 + 8} y="8" width="84" height="584" rx="18" />}
           {Array.from({ length: 6 }, (_, visualRow) => {
             const row = 5 - visualRow;
             const cell = state.board[row]?.[column] ?? 0;
@@ -44,6 +51,12 @@ export function Board({ state, disabled = false, onDrop }: BoardProps) {
               </g>
             );
           })}
+          <g aria-label={`${column + 1}열 ${dots[column]?.count ?? 0}표`}>
+            {Array.from({ length: dots[column]?.count ?? 0 }, (_, index) => {
+              const own = Boolean(dots[column]?.own && index === 0);
+              return <circle key={index} class={`vote-dot ${own && seat ? `own-vote player-${seat}` : ''}`} cx={column * 100 + 50 + (index - ((dots[column]?.count ?? 1) - 1) / 2) * 20} cy="625" r="8" />;
+            })}
+          </g>
         </g>
       ))}
     </svg>

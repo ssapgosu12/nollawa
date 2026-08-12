@@ -64,6 +64,10 @@ label { display: block; font-weight: 700; }
 .board-background { fill: #fff; stroke: var(--line); }
 .board-cell { fill: var(--paper); stroke: var(--line); }
 .board-hit-area { fill: transparent; }
+.roulette-highlight { fill: var(--accent); opacity: .55; pointer-events: none; }
+.vote-dot { fill: var(--ink); stroke: var(--paper); stroke-width: 3px; pointer-events: none; }
+.vote-dot.own-vote.player-1 { fill: var(--player-1); }
+.vote-dot.own-vote.player-2 { fill: var(--player-2); }
 .board-cell.player-1 { fill: var(--player-1); }
 .board-cell.player-2 { fill: var(--player-2); }
 .board-cell.player-3 { fill: var(--player-3); }
