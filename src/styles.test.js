@@ -5,10 +5,11 @@ const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
 const board = readFileSync(new URL('./components/Board.tsx', import.meta.url), 'utf8');
 
 describe('L3 CORRECTION: 참가자 격자 responsive 계약', () => {
-  it('세로는 2열 3행이고 wide-tablet은 3열 2행이다', () => {
+  it('화면 폭과 무관하게 2열 3행이다 — 왼쪽/오른쪽 열이 곧 팀이므로 열 수를 바꿀 수 없다', () => {
     expect(css).toMatch(/\.participant-grid\s*{[^}]*grid-template-rows:\s*repeat\(3,/s);
     expect(css).toMatch(/\.team-headings,\s*\.participant-grid\s*{[^}]*grid-template-columns:\s*repeat\(2,/s);
-    expect(css).toMatch(/@media\s*\(min-width:\s*850px\)[^{]*{[\s\S]*?\.participant-grid\s*{[^}]*grid-template-columns:\s*repeat\(3,[^}]*grid-template-rows:\s*repeat\(2,[^}]*grid-auto-flow:\s*column/);
+    expect(css).not.toMatch(/\.participant-grid\s*{[^}]*grid-template-columns:\s*repeat\(3,/s);
+    expect(css).not.toMatch(/\.participant-grid\s*{[^}]*grid-auto-flow:\s*column/s);
   });
 });
 

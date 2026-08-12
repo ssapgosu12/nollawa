@@ -75,22 +75,42 @@ export class WebSocketTransport<Message> implements Transport<Message> {
   private messages = new Set<(message: Message) => void>();
   private peers = new Set<(count: number) => void>();
   private heartbeat: number | null = null;
+  private established = false;
+  private stopped = false;
+  private retry = 0;
+  private readonly wake = () => { if (document.visibilityState === 'visible') this.ping(); };
   constructor(private readonly url: string, private readonly reconnectKey: string, private readonly name = '') {}
   connect(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const socket = new WebSocket(reconnectUrl(this.url, this.reconnectKey, this.name));
-      this.socket = socket;
-      socket.addEventListener('open', () => {
-        this.heartbeat = window.setInterval(() => socket.send(JSON.stringify({ type: 'heartbeat', at: Date.now() })), 20_000);
-        resolve();
-      }, { once: true });
-      socket.addEventListener('error', () => reject(new Error('릴레이 연결에 실패했습니다.')), { once: true });
-      socket.addEventListener('message', (event) => {
-        const message = JSON.parse(String(event.data)) as Message & { type?: string; count?: number };
-        if (message.type === 'peers' && typeof message.count === 'number') this.peers.forEach((handler) => handler(message.count ?? 0));
-        else this.messages.forEach((handler) => handler(message));
-      });
+    return new Promise((resolve, reject) => this.open(resolve, reject));
+  }
+  private ping() {
+    if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify({ type: 'heartbeat', at: Date.now() }));
+  }
+  private open(resolve?: () => void, reject?: (error: Error) => void) {
+    const socket = new WebSocket(reconnectUrl(this.url, this.reconnectKey, this.name));
+    this.socket = socket;
+    socket.addEventListener('open', () => {
+      this.established = true;
+      this.retry = 0;
+      this.heartbeat = window.setInterval(() => this.ping(), 20_000);
+      document.addEventListener('visibilitychange', this.wake);
+      resolve?.();
+    }, { once: true });
+    socket.addEventListener('error', () => reject?.(new Error('릴레이 연결에 실패했습니다.')), { once: true });
+    socket.addEventListener('close', () => this.reopen());
+    socket.addEventListener('message', (event) => {
+      const message = JSON.parse(String(event.data)) as Message & { type?: string; count?: number };
+      if (message.type === 'peers' && typeof message.count === 'number') this.peers.forEach((handler) => handler(message.count ?? 0));
+      else this.messages.forEach((handler) => handler(message));
     });
+  }
+  private reopen() {
+    if (this.heartbeat !== null) window.clearInterval(this.heartbeat);
+    this.heartbeat = null;
+    document.removeEventListener('visibilitychange', this.wake);
+    if (this.stopped || !this.established) return;
+    this.peers.forEach((handler) => handler(0));
+    window.setTimeout(() => { if (!this.stopped) this.open(); }, Math.min(1000 * 2 ** this.retry++, 10_000));
   }
   send(message: Message) {
     if (this.socket?.readyState !== WebSocket.OPEN) throw new Error('릴레이 연결이 열려 있지 않습니다.');
@@ -105,7 +125,10 @@ export class WebSocketTransport<Message> implements Transport<Message> {
     return () => this.peers.delete(handler);
   }
   close() {
+    this.stopped = true;
     if (this.heartbeat !== null) window.clearInterval(this.heartbeat);
+    this.heartbeat = null;
+    document.removeEventListener('visibilitychange', this.wake);
     this.socket?.close();
     this.peers.forEach((handler) => handler(0));
   }
