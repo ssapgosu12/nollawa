@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { requestSamokMove } from './ai/samok-client';
 import { Board } from './components/Board';
-import { applyRemoteAction, samok, type SamokAction, type SamokState, type Seat } from './game/samok';
+import { reduceRematchConsent, rematchProgress, type RematchMember } from './game/rematch-consent';
+import { samok, type SamokAction, type SamokState, type Seat } from './game/samok';
 import { authorityVoteDeadline, reduceAuthorityVote, roulettePlan, settleTeamVote, type VoteMember } from './game/team-vote';
 import { normalizeRoomCode, reserveRoomCode } from './lobby/room-code';
 import { RoomLobby } from './lobby/RoomLobby';
@@ -20,13 +21,16 @@ type GameMessage =
   | ({ type: 'room-command' } & RoomCommand)
   | { type: 'room-error'; message: string };
 const GAMES = [{ id: 'samok', name: '사목', people: '2명', tags: ['공용', '멀티', 'AI'], capacity: 2 }];
-export function restartNoticeFor(source: AcceptedActionSource | undefined, clientId: string | null, seat: Seat | null): string {
-  return source?.action.type === 'restart' && seat !== null && source.actor.id !== clientId ? '상대가 새 판을 시작했습니다' : '';
+export function restartNoticeFor(state: SamokState, source: AcceptedActionSource | undefined, clientId: string | null, seat: Seat | null): string {
+  return source?.action.type === 'restart' && !samok.terminal(state).ended && state.moves === 0 && seat !== null && source.actor.id !== clientId ? '상대가 새 판을 시작했습니다' : '';
 }
 export const identitySeat = (message: Extract<GameMessage, { type: 'identity' }>): Seat | null => message.seat;
 export const remoteSeatLabel = (seat: Seat | null): string => seat ? `내 팀 ${seat}` : '관전 중 · 좌석 없음';
 export const remoteBoardDisabled = (state: SamokState, seat: Seat | null): boolean => samok.terminal(state).ended || seat !== state.turn;
 export const roomVoteMembers = (room: RoomSnapshot | null, turn: Seat): VoteMember[] => room?.participants.filter((person) => room.settings.aiOpponent ? turn === 1 : teamForSlot(person.slot) === turn).map((person) => ({ id: person.id, team: turn })) ?? [];
+export const roomRematchMembers = (room: RoomSnapshot | null): RematchMember[] => room?.participants.map(({ id, name }) => ({ id, name })) ?? [];
+export const remoteRematchPresentation = (state: SamokState, room: RoomSnapshot | null, selfId: string | null) => rematchProgress(state, roomRematchMembers(room), selfId);
+export const applyAuthorityRematch = (state: SamokState, actor: ActionActor | undefined, room: RoomSnapshot | null, authority: boolean): SamokState => authority && actor ? reduceRematchConsent(state, actor.id, roomRematchMembers(room)) : state;
 export const shouldRequestAiMove = (mode: PlayMode, room: RoomSnapshot | null, authority: boolean): boolean => mode === 'ai' || (mode === 'remote' && room?.settings.aiOpponent === true && authority);
 export const applyAuthorityAiMove = (state: SamokState, column: number, authority: boolean): SamokState => authority ? samok.reduce(state, { type: 'drop', column }) : state;
 function relayUrl(code: string): string {
@@ -84,7 +88,7 @@ export function App() {
         let next = current;
         if (nextMode !== 'remote') next = samok.reduce(current, message.action);
         else if (isAuthority.current && message.action.type === 'vote' && message.actor) next = reduceAuthorityVote(current, message.action.column, message.actor, roomVoteMembers(roomRef.current, current.turn), true, Date.now(), Math.random);
-        else if (isAuthority.current && message.action.type === 'restart') next = applyRemoteAction(current, message.action, message.actor?.seat ?? null);
+        else if (isAuthority.current && message.action.type === 'restart') next = applyAuthorityRematch(current, message.actor, roomRef.current, true);
         if (nextMode === 'remote' && isAuthority.current && next !== current) {
           const source = message.actor ? { actor: message.actor, action: message.action } : undefined;
           queueMicrotask(() => transport.send({ type: 'snapshot', state: next, source }));
@@ -92,7 +96,7 @@ export function App() {
         return next;
       });
       if (message.type === 'snapshot') {
-        setRestartNotice(restartNoticeFor(message.source, clientId.current, localSeatRef.current));
+        setRestartNotice(restartNoticeFor(message.state, message.source, clientId.current, localSeatRef.current));
         setState(message.state);
       }
     });
@@ -202,6 +206,7 @@ export function App() {
   }, [state.resolvedVote]);
   useEffect(() => () => transportRef.current?.close(), []);
   const outcome = state.winner ? `${state.winner}번 승리` : state.draw ? '무승부' : `${state.turn}번 차례`;
+  const rematch = remoteRematchPresentation(state, room, selfId);
   return <main class="app-shell">
     <header class="topbar"><button class="brand" onClick={() => { closeTransport(); setScreen('name'); }}>Nollawa party games</button><span class="build-hash" aria-label={`빌드 ${__BUILD_HASH__}`}>빌드 {__BUILD_HASH__}</span></header>
     {screen === 'name' && <section class="panel narrow" aria-labelledby="name-title"><p class="eyebrow">네 줄을 먼저 이어 보세요</p><h1 id="name-title">이름을 알려 주세요</h1><label>표시 이름<input value={name} maxLength={16} autoComplete="nickname" onInput={(event) => setName(event.currentTarget.value)} /></label><button class="primary" disabled={!name.trim()} onClick={() => setScreen('room')}>계속</button></section>}
@@ -218,7 +223,7 @@ export function App() {
         {mode === 'local' && <button onClick={() => void startLocal('ai')}>AI와 시작</button>}
       </div></article>)}
     </div></section>}
-    {screen === 'play' && <section class="play-layout" aria-labelledby="play-title"><div class="game-status"><div><p class="eyebrow">{connection}</p><h1 id="play-title">{outcome}</h1>{mode === 'remote' && <p class={`seat-badge ${localSeat ? `player-${localSeat}` : ''}`}>{remoteSeatLabel(localSeat)}</p>}{restartNotice && <p class="restart-notice" role="status">{restartNotice}</p>}</div><button onClick={() => setScreen(mode === 'remote' ? 'lobby' : 'games')}>{mode === 'remote' ? '방 로비' : '게임 목록'}</button></div><Board state={state} selfId={mode === 'remote' ? selfId : null} seat={localSeat} rouletteColumn={rouletteColumn} disabled={(mode === 'remote' && remoteBoardDisabled(state, localSeat)) || (mode !== 'remote' && (samok.terminal(state).ended || (mode === 'ai' && state.turn === 2)))} onDrop={(column) => send({ type: 'action', action: { type: mode === 'remote' ? 'vote' : 'drop', column } })} /><p class="hint">열을 누르거나 키보드로 선택하세요. ● 1번 · ■ 2번</p>{samok.terminal(state).ended && <button class="primary restart" disabled={mode === 'remote' && localSeat === null} onClick={() => send({ type: 'action', action: { type: 'restart' } })}>다시 시작</button>}</section>}
+    {screen === 'play' && <section class="play-layout" aria-labelledby="play-title"><div class="game-status"><div><p class="eyebrow">{connection}</p><h1 id="play-title">{outcome}</h1>{mode === 'remote' && <p class={`seat-badge ${localSeat ? `player-${localSeat}` : ''}`}>{remoteSeatLabel(localSeat)}</p>}{restartNotice && <p class="restart-notice" role="status">{restartNotice}</p>}</div><button onClick={() => setScreen(mode === 'remote' ? 'lobby' : 'games')}>{mode === 'remote' ? '방 로비' : '게임 목록'}</button></div><Board state={state} selfId={mode === 'remote' ? selfId : null} seat={localSeat} rouletteColumn={rouletteColumn} disabled={(mode === 'remote' && remoteBoardDisabled(state, localSeat)) || (mode !== 'remote' && (samok.terminal(state).ended || (mode === 'ai' && state.turn === 2)))} onDrop={(column) => send({ type: 'action', action: { type: mode === 'remote' ? 'vote' : 'drop', column } })} /><p class="hint">열을 누르거나 키보드로 선택하세요. ● 1번 · ■ 2번</p>{samok.terminal(state).ended && <div class="rematch"><div>{mode === 'remote' && room && <><p>{rematch.ready}/{rematch.total} 다음 판 준비</p><p>아직: {rematch.pendingNames.join(', ')}</p></>}</div><button class="primary restart" disabled={mode === 'remote' && (localSeat === null || rematch.selfReady)} onClick={() => send({ type: 'action', action: { type: 'restart' } })}>다음 판</button></div>}</section>}
     <UpdateBanner />
   </main>;
 }

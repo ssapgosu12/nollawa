@@ -71,6 +71,8 @@ label { display: block; font-weight: 700; }
 .piece-number { dominant-baseline: middle; font-size: 21px; font-weight: 900; fill: var(--ink); stroke: var(--paper); stroke-width: 4px; paint-order: stroke; pointer-events: none; }
 .hint { margin: .7rem auto; text-align: center; color: var(--muted); font-size: .9rem; }
 .restart { display: block; margin: .75rem auto; }
+.rematch { text-align: center; }
+.rematch p { margin: .35rem 0; }
 .room-lobby { width: min(100%, 720px); min-height: calc(100svh - 58px); margin: 0 auto; display: grid; grid-template-rows: auto auto auto minmax(280px, 1fr) auto; gap: .65rem; }
 .room-lobby > h1 { margin: 0; text-align: center; font: 900 clamp(2rem, 10vw, 4rem)/1 ui-monospace, monospace; letter-spacing: .08em; }
 .lobby-game { position: relative; display: flex; justify-content: space-between; gap: .75rem; border: 2px solid var(--line); border-radius: 14px; padding: .8rem 1rem; }
@@ -104,7 +106,7 @@ label { display: block; font-weight: 700; }
 @media (min-width: 850px) and (orientation: landscape) {
   .play-layout { display: grid; grid-template-columns: minmax(280px, 620px) minmax(180px, 1fr); column-gap: 1.5rem; align-items: center; }
   .board { grid-row: 1 / span 3; margin: 0; }
-  .game-status, .hint, .restart { grid-column: 2; }
+  .game-status, .hint, .rematch { grid-column: 2; }
   .game-status { display: block; }
   .game-status button { margin-top: 1rem; }
 }

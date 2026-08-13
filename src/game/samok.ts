@@ -11,6 +11,7 @@ export interface SamokState {
   moves: number;
   vote?: TeamVoteState;
   resolvedVote?: ResolvedTeamVote;
+  rematchConsent?: string[];
 }
 const ROWS = 6;
 const COLUMNS = 7;

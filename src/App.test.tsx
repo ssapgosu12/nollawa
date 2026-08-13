@@ -1,25 +1,49 @@
 import { describe, expect, it } from 'vitest';
-import { applyAuthorityAiMove, identitySeat, remoteBoardDisabled, remoteSeatLabel, restartNoticeFor, roomVoteMembers, shouldRequestAiMove } from './App';
-import { applyRemoteAction, samok, type SamokState } from './game/samok';
+import { applyAuthorityAiMove, applyAuthorityRematch, identitySeat, remoteBoardDisabled, remoteRematchPresentation, remoteSeatLabel, restartNoticeFor, roomVoteMembers, shouldRequestAiMove } from './App';
+import { samok, type SamokState } from './game/samok';
 
 function terminalState(): SamokState {
   return [0, 0, 1, 1, 2, 2, 3]
     .reduce((state, column) => samok.reduce(state, { type: 'drop', column }), samok.init());
 }
 
-describe('M0-FEEDBACK 원격 재시작', () => {
-  it('F1: 한 번의 승인된 재시작 스냅샷은 상대에게만 정확한 알림을 만든다', () => {
-    const action = { type: 'restart' } as const;
-    const terminal = terminalState();
-    const state = applyRemoteAction(terminal, action, 1);
-    const source = { actor: { id: 'player-one', seat: 1 as const }, action };
-    const snapshot = { state, source };
+describe('N1 REMATCH CONSENT: App authority routing and presentation', () => {
+  const room = (participants = [
+    { id: 'player-one', slot: 1, name: '하나', ready: true, present: true },
+    { id: 'player-two', slot: 2, name: '둘', ready: true, present: true },
+  ], aiOpponent = false) => ({
+    code: 'ABC-67', hostId: 'player-one', game: 'samok', teamNames: ['왼쪽', '오른쪽'] as [string, string], settings: { aiOpponent }, phase: 'play' as const, participants,
+  });
 
-    expect(snapshot.state.moves).toBe(0);
-    expect(applyRemoteAction(terminal, action, 2)).not.toBe(terminal);
-    expect(restartNoticeFor(snapshot.source, 'player-two', 2)).toBe('상대가 새 판을 시작했습니다');
-    expect(restartNoticeFor(snapshot.source, 'player-one', 1)).toBe('');
-    expect(restartNoticeFor(snapshot.source, 'spectator', null)).toBe('');
+  it('첫 사람은 terminal board를 유지하며 count와 pending name만 바꾸고 reset 전 옛 알림을 만들지 않는다', () => {
+    const terminal = terminalState();
+    const actor = { id: 'player-one', seat: 1 as const };
+    const state = applyAuthorityRematch(terminal, actor, room(), true);
+    const source = { actor, action: { type: 'restart' } as const };
+
+    expect(state.board).toBe(terminal.board);
+    expect(samok.terminal(state).ended).toBe(true);
+    expect(remoteRematchPresentation(state, room(), 'player-one')).toEqual({ ready: 1, total: 2, pendingNames: ['둘'], selfReady: true });
+    expect(restartNoticeFor(state, source, 'player-two', 2)).toBe('');
+  });
+
+  it('마지막 사람만 한 번 reset하고 F3 교대 뒤에만 상대 알림을 만들며 non-authority는 무시한다', () => {
+    const terminal = terminalState();
+    const first = applyAuthorityRematch(terminal, { id: 'player-one', seat: 1 }, room(), true);
+    const actor = { id: 'player-two', seat: 2 as const };
+    const reset = applyAuthorityRematch(first, actor, room(), true);
+    const source = { actor, action: { type: 'restart' } as const };
+
+    expect(reset).toEqual({ ...samok.init(), turn: 2 });
+    expect(restartNoticeFor(reset, source, 'player-one', 1)).toBe('상대가 새 판을 시작했습니다');
+    expect(applyAuthorityRematch(first, actor, room(), false)).toBe(first);
+  });
+
+  it('사람 한 명인 remote와 AI-opponent room은 그 사람 동의 즉시 reset한다', () => {
+    const only = [{ id: 'player-one', slot: 1, name: '혼자', ready: true, present: true }];
+    const actor = { id: 'player-one', seat: 1 as const };
+    expect(applyAuthorityRematch(terminalState(), actor, room(only), true).moves).toBe(0);
+    expect(applyAuthorityRematch(terminalState(), actor, room(only, true), true).moves).toBe(0);
   });
 });
 
