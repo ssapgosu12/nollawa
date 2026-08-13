@@ -41,6 +41,10 @@ label { display: block; font-weight: 700; }
 .join-box button { margin-top: .75rem; }
 .error { margin-top: 1rem; color: var(--danger); font-weight: 800; }
 .game-list { margin-top: 1rem; }
+.filters { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
+.filters > div { display: flex; flex-wrap: wrap; gap: .35rem; }
+.filters button { min-height: 36px; padding: .35rem .65rem; }
+.filters button.selected { background: var(--accent); font-weight: 900; }
 .game-card { display: flex; justify-content: space-between; gap: 1rem; border: 2px solid var(--line); border-radius: 14px; padding: 1rem; background: var(--paper); }
 .game-card h2 { margin-bottom: .25rem; }
 .people { margin-bottom: .65rem; color: var(--muted); }
