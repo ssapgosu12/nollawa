@@ -89,6 +89,8 @@ describe('P4/P5: authoritative room snapshot 화면 투영', () => {
     const playing = snapshot(3, 2);
     playing.phase = 'play';
     expect(roomScreen(playing, 'p3')).toBe('play');
+    playing.participants[1]!.activity = 'games';
+    expect(roomScreen(playing, 'p2')).toBe('games');
     playing.participants = playing.participants.filter((person) => person.id !== 'p3');
     expect(roomScreen(playing, 'p3')).toBe('lobby');
     playing.phase = 'lobby';

@@ -11,13 +11,13 @@ export function lowestFreeSeat(sockets) {
   return !occupied.has(1) ? 1 : !occupied.has(2) ? 2 : null;
 }
 export const teamSeat = (slot) => slot % 2 ? 1 : 2;
-export const roomSeat = (room, person) => person ? room.settings?.aiOpponent ? 1 : teamSeat(person.slot) : null;
+export const roomSeat = (room, person) => person && (room.phase !== 'play' || person.activity === 'play') ? room.settings?.aiOpponent ? 1 : teamSeat(person.slot) : null;
 export const requiredReady = (total) => [0, 0, 2, 2, 3, 3, 4][total] ?? Infinity;
 const canContinue = (room) => room.settings?.aiOpponent ? room.participants.length > 0 : [1, 2].every((team) => room.participants.some((person) => teamSeat(person.slot) === team));
 
 function resetLobby(room) {
   room.phase = 'lobby';
-  for (const person of room.participants) person.ready = false;
+  for (const person of room.participants) { person.ready = false; person.activity = 'lobby'; }
 }
 
 function leaveRoom(room, sender) {
@@ -28,7 +28,7 @@ function leaveRoom(room, sender) {
 
 function newRoom(code) {
   const pair = TEAM_PAIRS[Math.floor(Math.random() * TEAM_PAIRS.length)];
-  return { code, participants: [], hostId: null, game: 'samok', teamNames: [...pair], settings: { aiOpponent: false }, phase: 'lobby' };
+  return { code, participants: [], hostId: null, game: 'samok', teamNames: [...pair], settings: { aiOpponent: false, aiStrength: 'normal' }, phase: 'lobby' };
 }
 
 function participant(room, id) {
@@ -51,13 +51,22 @@ export function applyRoomCommand(room, sender, message) {
     actor.ready = !actor.ready;
     return true;
   }
+  if (message.command === 'set-activity' && actor.activity !== 'play' && ['lobby', 'games'].includes(message.activity)) {
+    actor.activity = message.activity;
+    return true;
+  }
   if (sender !== room.hostId) return false;
   if (message.command === 'set-ai-opponent' && typeof message.enabled === 'boolean') {
     room.settings = { ...(room.settings ?? {}), aiOpponent: message.enabled };
     return true;
   }
+  if (message.command === 'set-ai-strength' && ['normal', 'high'].includes(message.strength)) {
+    room.settings = { ...(room.settings ?? {}), aiStrength: message.strength };
+    return true;
+  }
   if (message.command === 'select-game' && typeof message.game === 'string' && message.game.length <= 32) {
     room.game = message.game;
+    actor.activity = 'lobby';
     return true;
   }
   if (message.command === 'start') {
@@ -65,6 +74,7 @@ export function applyRoomCommand(room, sender, message) {
     const bothTeams = [1, 2].every((team) => room.participants.some((person) => teamSeat(person.slot) === team));
     if (room.phase !== 'lobby' || ready < requiredReady(room.participants.length) || (!room.settings?.aiOpponent && !bothTeams)) return false;
     room.phase = 'play';
+    for (const person of room.participants) person.activity = 'play';
     return true;
   }
   const target = participant(room, message.target);
@@ -123,11 +133,12 @@ export class Room {
       const replaced = existing.filter((socket) => socket.deserializeAttachment()?.reconnectKey === reconnectKey);
       const stored = await this.state.storage.get(['room', 'snapshot', 'seq', 'authority']);
       const room = stored.get('room') ?? newRoom(code);
-      room.settings ??= { aiOpponent: false };
+      room.settings = { aiOpponent: room.settings?.aiOpponent === true, aiStrength: room.settings?.aiStrength === 'high' ? 'high' : 'normal' };
+      for (const member of room.participants) member.activity ??= room.phase === 'play' ? 'play' : 'lobby';
       let person = room.participants.find((item) => item.reconnectKey === reconnectKey);
       if (!person && room.participants.length < 6) {
         const slot = [1, 2, 3, 4, 5, 6].find((value) => !room.participants.some((item) => item.slot === value));
-        person = { id: replaced[0]?.deserializeAttachment()?.id ?? crypto.randomUUID(), reconnectKey, slot, name: rawName.trim().slice(0, 16) || '플레이어', ready: false };
+        person = { id: replaced[0]?.deserializeAttachment()?.id ?? crypto.randomUUID(), reconnectKey, slot, name: rawName.trim().slice(0, 16) || '플레이어', ready: false, activity: 'lobby' };
         room.participants.push(person);
         room.hostId ??= person.id;
       }

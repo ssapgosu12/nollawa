@@ -28,13 +28,15 @@ export function restartNoticeFor(state: SamokState, source: AcceptedActionSource
 export const identitySeat = (message: Extract<GameMessage, { type: 'identity' }>): Seat | null => message.seat;
 export const remoteSeatLabel = (seat: Seat | null): string => seat ? `내 팀 ${seat}` : '관전 중 · 좌석 없음';
 export const remoteBoardDisabled = (state: SamokState, seat: Seat | null): boolean => samok.terminal(state).ended || seat !== state.turn;
-export const roomVoteMembers = (room: RoomSnapshot | null, turn: Seat): VoteMember[] => room?.participants.filter((person) => room.settings.aiOpponent ? turn === 1 : teamForSlot(person.slot) === turn).map((person) => ({ id: person.id, team: turn })) ?? [];
-export const roomRematchMembers = (room: RoomSnapshot | null): RematchMember[] => room?.participants.map(({ id, name }) => ({ id, name })) ?? [];
+const activeGameParticipants = (room: RoomSnapshot) => room.participants.filter((person) => (person.activity ?? (room.phase === 'play' ? 'play' : 'lobby')) === 'play');
+export const roomVoteMembers = (room: RoomSnapshot | null, turn: Seat): VoteMember[] => room ? activeGameParticipants(room).filter((person) => room.settings.aiOpponent ? turn === 1 : teamForSlot(person.slot) === turn).map((person) => ({ id: person.id, team: turn })) : [];
+export const roomRematchMembers = (room: RoomSnapshot | null): RematchMember[] => room ? activeGameParticipants(room).map(({ id, name }) => ({ id, name })) : [];
 export const remoteRematchPresentation = (state: SamokState, room: RoomSnapshot | null, selfId: string | null) => rematchProgress(state, roomRematchMembers(room), selfId);
 export const applyAuthorityRematch = (state: SamokState, actor: ActionActor | undefined, room: RoomSnapshot | null, authority: boolean): SamokState => authority && actor ? reduceRematchConsent(state, actor.id, roomRematchMembers(room)) : state;
 export const shouldRequestAiMove = (mode: PlayMode, room: RoomSnapshot | null, authority: boolean): boolean => mode === 'ai' || (mode === 'remote' && room?.settings.aiOpponent === true && authority);
 export const applyAuthorityAiMove = (state: SamokState, column: number, authority: boolean): SamokState => authority ? samok.reduce(state, { type: 'drop', column }) : state;
 export const AI_MOVE_DELAY_MS = 1_000;
+export const aiBudgetMs = (room: RoomSnapshot | null) => room?.settings.aiStrength === 'high' ? 3_000 : AI_MOVE_DELAY_MS;
 export function voteTimerPresentation(state: SamokState, now: number) {
   if (!state.vote || state.vote.effectsSuppressed) return { remaining: 0, visible: false, intensity: 0, periodMs: 1_000 };
   const remaining = Math.max(0, Math.ceil((state.vote.deadline - now) / 1_000));
@@ -46,13 +48,18 @@ export function leaveForTitle(send: (command: RoomCommand) => void, close: () =>
   close();
   showTitle();
 }
-export function waitForAiMoveGate(startedAt: number, signal?: AbortSignal): Promise<boolean> {
+export function waitForAiMoveGate(startedAt: number, signal?: AbortSignal, budgetMs = AI_MOVE_DELAY_MS): Promise<boolean> {
   return new Promise((resolve) => {
     if (signal?.aborted) { resolve(false); return; }
-    const timer = globalThis.setTimeout(() => { signal?.removeEventListener('abort', cancel); resolve(true); }, Math.max(0, startedAt + AI_MOVE_DELAY_MS - Date.now()));
+    const timer = globalThis.setTimeout(() => { signal?.removeEventListener('abort', cancel); resolve(true); }, Math.max(0, startedAt + budgetMs - Date.now()));
     const cancel = () => { globalThis.clearTimeout(timer); resolve(false); };
     signal?.addEventListener('abort', cancel, { once: true });
   });
+}
+export async function withAiMoveGate(request: Promise<number | null>, startedAt: number, budgetMs: number, signal: AbortSignal, present: (active: boolean) => void): Promise<[number | null, boolean]> {
+  present(true);
+  try { const current = await waitForAiMoveGate(startedAt, signal, budgetMs); return [current ? await request : null, current]; }
+  finally { present(false); }
 }
 function relayUrl(code: string): string {
   const base = import.meta.env.VITE_RELAY_URL ?? `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}`;
@@ -74,6 +81,7 @@ export function App() {
   const [selfId, setSelfId] = useState<string | null>(null);
   const [room, setRoom] = useState<RoomSnapshot | null>(null);
   const [authority, setAuthority] = useState(false);
+  const [aiThinkingVisible, setAiThinkingVisible] = useState(false);
   const [rouletteColumn, setRouletteColumn] = useState<number | null>(null);
   const [restartNotice, setRestartNotice] = useState('');
   const [clock, setClock] = useState(() => Date.now());
@@ -196,7 +204,7 @@ export function App() {
     const controller = new AbortController();
     const startedAt = Date.now();
     aiThinking.current = true;
-    void Promise.all([requestSamokMove(state), waitForAiMoveGate(startedAt, controller.signal)]).then(([column, current]) => {
+    void withAiMoveGate(requestSamokMove(state), startedAt, aiBudgetMs(room), controller.signal, (active) => { if (requestId === aiRequest.current) setAiThinkingVisible(active); }).then(([column, current]) => {
       if (!current || requestId !== aiRequest.current) return;
       if (column !== null && mode === 'remote') setState((current) => {
         const next = applyAuthorityAiMove(current, column, isAuthority.current);
@@ -205,7 +213,7 @@ export function App() {
       });
       else if (column !== null) send({ type: 'action', action: { type: 'drop', column } });
     }).finally(() => { if (requestId === aiRequest.current) aiThinking.current = false; });
-    return () => { aiRequest.current += 1; controller.abort(); aiThinking.current = false; };
+    return () => { aiRequest.current += 1; controller.abort(); aiThinking.current = false; setAiThinkingVisible(false); };
   }, [authority, mode, room, screen, state]);
   useEffect(() => {
     if (mode !== 'remote' || screen !== 'play' || !authority) return;
@@ -255,13 +263,13 @@ export function App() {
     </div>{roomError && <p class="error" role="alert">{roomError}</p>}</section>}
     {screen === 'lobby' && room && <RoomLobby room={room} selfId={selfId} send={sendRoom} openGames={() => setScreen('games')} />}
     {screen === 'lobby' && !room && <section class="panel"><h1>{roomCode}</h1><p>{connection}</p></section>}
-    {screen === 'games' && <section class="panel" aria-labelledby="games-title"><p class="eyebrow">{mode === 'remote' ? `방 ${roomCode}` : '이 기기'}</p><h1 id="games-title">게임을 골라 주세요</h1>{mode === 'remote' && <button onClick={() => setScreen('lobby')}>방 로비</button>}<label>게임 검색<input type="search" value={query} onInput={(event) => setQuery(event.currentTarget.value)} /></label><div class="game-list">
+    {screen === 'games' && <section class="panel" aria-labelledby="games-title"><p class="eyebrow">{mode === 'remote' ? `방 ${roomCode}` : '이 기기'}</p><h1 id="games-title">게임을 골라 주세요</h1>{mode === 'remote' && <button onClick={() => { sendRoom({ command: 'set-activity', activity: 'lobby' }); setScreen('lobby'); }}>방 로비</button>}<label>게임 검색<input type="search" value={query} onInput={(event) => setQuery(event.currentTarget.value)} /></label><div class="game-list">
       {visibleGames.map((game) => <article class="game-card" key={game.name}><div><h2>{game.name}</h2><p class="people">{game.people} 전용 · 최대 {game.capacity}명</p><div class="tags">{game.tags.map((tag) => <span key={tag}>{tag}</span>)}</div></div><div class="game-actions">
         {mode === 'remote' ? <button class="primary" disabled={!isHost} onClick={() => { sendRoom({ command: 'select-game', game: game.id }); setScreen('lobby'); }}>게임 선택</button> : <button class="primary" onClick={() => void startLocal(mode)}>두 사람이 시작</button>}
         {mode === 'local' && <button onClick={() => void startLocal('ai')}>AI와 시작</button>}
       </div></article>)}
     </div></section>}
-    {screen === 'play' && <section class="play-layout" aria-labelledby="play-title"><div class="game-status"><div><p class="eyebrow">{connection}</p><h1 id="play-title">{outcome}</h1>{mode === 'remote' && <p class={`seat-badge ${localSeat ? `player-${localSeat}` : ''}`}>{remoteSeatLabel(localSeat)}</p>}{restartNotice && <p class="restart-notice" role="status">{restartNotice}</p>}</div>{mode === 'remote' ? <div><button onClick={() => returnToLobby(sendRoom)}>로비로 돌아가기</button><button onClick={() => leaveForTitle(sendRoom, closeTransport, () => setScreen('name'))}>타이틀로 나가기</button></div> : <button onClick={() => setScreen('games')}>게임 목록</button>}</div><Board state={state} selfId={mode === 'remote' ? selfId : null} seat={localSeat} rouletteColumn={rouletteColumn} disabled={(mode === 'remote' && remoteBoardDisabled(state, localSeat)) || (mode !== 'remote' && (samok.terminal(state).ended || (mode === 'ai' && state.turn === 2)))} onDrop={(column) => send({ type: 'action', action: { type: mode === 'remote' ? 'vote' : 'drop', column } })} /><p class="hint">열을 누르거나 키보드로 선택하세요. ● 1번 · ■ 2번</p>{samok.terminal(state).ended && <div class="rematch"><div>{mode === 'remote' && room && <><p>{rematch.ready}/{rematch.total} 다음 판 준비</p><p>아직: {rematch.pendingNames.join(', ')}</p></>}</div><button class="primary restart" disabled={mode === 'remote' && (localSeat === null || rematch.selfReady)} onClick={() => send({ type: 'action', action: { type: 'restart' } })}>다음 판</button></div>}</section>}
+    {screen === 'play' && <section class="play-layout" aria-labelledby="play-title"><div class="game-status"><div><p class="eyebrow">{connection}</p><h1 id="play-title">{outcome}</h1>{aiThinkingVisible && <p class="ai-thinking" role="status">AI 생각중...</p>}{mode === 'remote' && <p class={`seat-badge ${localSeat ? `player-${localSeat}` : ''}`}>{remoteSeatLabel(localSeat)}</p>}{restartNotice && <p class="restart-notice" role="status">{restartNotice}</p>}</div>{mode === 'remote' ? <div><button onClick={() => returnToLobby(sendRoom)}>로비로 돌아가기</button><button onClick={() => leaveForTitle(sendRoom, closeTransport, () => setScreen('name'))}>타이틀로 나가기</button></div> : <button onClick={() => setScreen('games')}>게임 목록</button>}</div><Board state={state} selfId={mode === 'remote' ? selfId : null} seat={localSeat} rouletteColumn={rouletteColumn} disabled={(mode === 'remote' && remoteBoardDisabled(state, localSeat)) || (mode !== 'remote' && (samok.terminal(state).ended || (mode === 'ai' && state.turn === 2)))} onDrop={(column) => send({ type: 'action', action: { type: mode === 'remote' ? 'vote' : 'drop', column } })} /><p class="hint">열을 누르거나 키보드로 선택하세요. ● 1번 · ■ 2번</p>{samok.terminal(state).ended && <div class="rematch"><div>{mode === 'remote' && room && <><p>{rematch.ready}/{rematch.total} 다음 판 준비</p><p>아직: {rematch.pendingNames.join(', ')}</p></>}</div><button class="primary restart" disabled={mode === 'remote' && (localSeat === null || rematch.selfReady)} onClick={() => send({ type: 'action', action: { type: 'restart' } })}>다음 판</button></div>}</section>}
     {screen === 'play' && voteTimer.visible && <Vignette intensity={voteTimer.intensity} periodMs={voteTimer.periodMs} />}
     {screen === 'play' && <Countdown remaining={voteTimer.remaining} visible={voteTimer.visible} />}
     <UpdateBanner />
