@@ -6,7 +6,7 @@ import { samok, type SamokAction, type SamokState, type Seat } from './game/samo
 import { authorityResolvedVoteDeadline, authorityVoteDeadline, commitResolvedTeamVote, reduceAuthorityVote, roulettePlan, settleTeamVote, type VoteMember } from './game/team-vote';
 import { normalizeRoomCode, reserveRoomCode } from './lobby/room-code';
 import { RoomLobby } from './lobby/RoomLobby';
-import { isRoomHost, MAIN_DESTINATIONS, reuseRemoteTransport, teamForSlot, type RoomCommand, type RoomSnapshot } from './lobby/room-state';
+import { isRoomHost, MAIN_DESTINATIONS, reuseRemoteTransport, roomScreen, teamForSlot, type RoomCommand, type RoomSnapshot } from './lobby/room-state';
 import { deviceReconnectKey, LoopbackTransport, WebSocketTransport, type Transport } from './transport/transport';
 type Screen = 'name' | 'room' | 'lobby' | 'games' | 'play';
 type PlayMode = 'local' | 'ai' | 'remote';
@@ -34,6 +34,12 @@ export const applyAuthorityRematch = (state: SamokState, actor: ActionActor | un
 export const shouldRequestAiMove = (mode: PlayMode, room: RoomSnapshot | null, authority: boolean): boolean => mode === 'ai' || (mode === 'remote' && room?.settings.aiOpponent === true && authority);
 export const applyAuthorityAiMove = (state: SamokState, column: number, authority: boolean): SamokState => authority ? samok.reduce(state, { type: 'drop', column }) : state;
 export const AI_MOVE_DELAY_MS = 1_000;
+export const returnToLobby = (send: (command: RoomCommand) => void) => send({ command: 'return-lobby' });
+export function leaveForTitle(send: (command: RoomCommand) => void, close: () => void, showTitle: () => void) {
+  send({ command: 'leave-room' });
+  close();
+  showTitle();
+}
 export function waitForAiMoveGate(startedAt: number, signal?: AbortSignal): Promise<boolean> {
   return new Promise((resolve) => {
     if (signal?.aborted) { resolve(false); return; }
@@ -91,7 +97,7 @@ export function App() {
       if (message.type === 'room') {
         roomRef.current = message.room;
         setRoom(message.room);
-        if (message.room.phase === 'play') setScreen('play');
+        setScreen(roomScreen(message.room, clientId.current));
       }
       if (message.type === 'room-error') setConnection(message.message);
       if (message.type === 'action') setState((current) => {
@@ -241,7 +247,7 @@ export function App() {
         {mode === 'local' && <button onClick={() => void startLocal('ai')}>AI와 시작</button>}
       </div></article>)}
     </div></section>}
-    {screen === 'play' && <section class="play-layout" aria-labelledby="play-title"><div class="game-status"><div><p class="eyebrow">{connection}</p><h1 id="play-title">{outcome}</h1>{mode === 'remote' && <p class={`seat-badge ${localSeat ? `player-${localSeat}` : ''}`}>{remoteSeatLabel(localSeat)}</p>}{restartNotice && <p class="restart-notice" role="status">{restartNotice}</p>}</div><button onClick={() => setScreen(mode === 'remote' ? 'lobby' : 'games')}>{mode === 'remote' ? '방 로비' : '게임 목록'}</button></div><Board state={state} selfId={mode === 'remote' ? selfId : null} seat={localSeat} rouletteColumn={rouletteColumn} disabled={(mode === 'remote' && remoteBoardDisabled(state, localSeat)) || (mode !== 'remote' && (samok.terminal(state).ended || (mode === 'ai' && state.turn === 2)))} onDrop={(column) => send({ type: 'action', action: { type: mode === 'remote' ? 'vote' : 'drop', column } })} /><p class="hint">열을 누르거나 키보드로 선택하세요. ● 1번 · ■ 2번</p>{samok.terminal(state).ended && <div class="rematch"><div>{mode === 'remote' && room && <><p>{rematch.ready}/{rematch.total} 다음 판 준비</p><p>아직: {rematch.pendingNames.join(', ')}</p></>}</div><button class="primary restart" disabled={mode === 'remote' && (localSeat === null || rematch.selfReady)} onClick={() => send({ type: 'action', action: { type: 'restart' } })}>다음 판</button></div>}</section>}
+    {screen === 'play' && <section class="play-layout" aria-labelledby="play-title"><div class="game-status"><div><p class="eyebrow">{connection}</p><h1 id="play-title">{outcome}</h1>{mode === 'remote' && <p class={`seat-badge ${localSeat ? `player-${localSeat}` : ''}`}>{remoteSeatLabel(localSeat)}</p>}{restartNotice && <p class="restart-notice" role="status">{restartNotice}</p>}</div>{mode === 'remote' ? <div><button onClick={() => returnToLobby(sendRoom)}>로비로 돌아가기</button><button onClick={() => leaveForTitle(sendRoom, closeTransport, () => setScreen('name'))}>타이틀로 나가기</button></div> : <button onClick={() => setScreen('games')}>게임 목록</button>}</div><Board state={state} selfId={mode === 'remote' ? selfId : null} seat={localSeat} rouletteColumn={rouletteColumn} disabled={(mode === 'remote' && remoteBoardDisabled(state, localSeat)) || (mode !== 'remote' && (samok.terminal(state).ended || (mode === 'ai' && state.turn === 2)))} onDrop={(column) => send({ type: 'action', action: { type: mode === 'remote' ? 'vote' : 'drop', column } })} /><p class="hint">열을 누르거나 키보드로 선택하세요. ● 1번 · ■ 2번</p>{samok.terminal(state).ended && <div class="rematch"><div>{mode === 'remote' && room && <><p>{rematch.ready}/{rematch.total} 다음 판 준비</p><p>아직: {rematch.pendingNames.join(', ')}</p></>}</div><button class="primary restart" disabled={mode === 'remote' && (localSeat === null || rematch.selfReady)} onClick={() => send({ type: 'action', action: { type: 'restart' } })}>다음 판</button></div>}</section>}
     <UpdateBanner />
   </main>;
 }

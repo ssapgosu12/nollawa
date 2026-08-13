@@ -13,6 +13,18 @@ export function lowestFreeSeat(sockets) {
 export const teamSeat = (slot) => slot % 2 ? 1 : 2;
 export const roomSeat = (room, person) => person ? room.settings?.aiOpponent ? 1 : teamSeat(person.slot) : null;
 export const requiredReady = (total) => [0, 0, 2, 2, 3, 3, 4][total] ?? Infinity;
+const canContinue = (room) => room.settings?.aiOpponent ? room.participants.length > 0 : [1, 2].every((team) => room.participants.some((person) => teamSeat(person.slot) === team));
+
+function resetLobby(room) {
+  room.phase = 'lobby';
+  for (const person of room.participants) person.ready = false;
+}
+
+function leaveRoom(room, sender) {
+  room.participants = room.participants.filter((person) => person.id !== sender);
+  if (room.hostId === sender) room.hostId = room.participants[0]?.id ?? null;
+  if (room.phase === 'play' && !canContinue(room)) resetLobby(room);
+}
 
 function newRoom(code) {
   const pair = TEAM_PAIRS[Math.floor(Math.random() * TEAM_PAIRS.length)];
@@ -26,6 +38,15 @@ function participant(room, id) {
 export function applyRoomCommand(room, sender, message) {
   const actor = participant(room, sender);
   if (!actor) return false;
+  if (message.command === 'return-lobby') {
+    if (sender === room.hostId) resetLobby(room);
+    else leaveRoom(room, sender);
+    return true;
+  }
+  if (message.command === 'leave-room') {
+    leaveRoom(room, sender);
+    return true;
+  }
   if (message.command === 'ready' && room.phase === 'lobby' && sender !== room.hostId) {
     actor.ready = !actor.ready;
     return true;
@@ -156,6 +177,7 @@ export class Room {
       if (!room || !applyRoomCommand(room, sender, message)) { socket.send(JSON.stringify({ type: 'room-error', message: '허용되지 않은 방 명령' })); return; }
       await this.state.storage.put({ room, updatedAt: Date.now() });
       await this.syncSeats(room);
+      if (!participant(room, sender)) await this.reassignAuthority(socket, room);
       if (message.command === 'kick') this.closeParticipant(message.target);
       await this.emitRoom(room);
       return;
@@ -175,8 +197,8 @@ export class Room {
 
   async webSocketClose(socket) {
     socket.serializeAttachment({ ...(socket.deserializeAttachment() ?? {}), seat: null });
-    await this.reassignAuthority(socket);
     const room = await this.state.storage.get('room');
+    await this.reassignAuthority(socket, room);
     if (room) await this.emitRoom(room);
   }
 
@@ -221,9 +243,11 @@ export class Room {
     for (const socket of activeWebSockets(this.state.getWebSockets())) try { socket.send(encoded); } catch { socket.close(1011, 'Send failed'); }
   }
 
-  async reassignAuthority(excludedSocket) {
-    const sockets = activeWebSockets(this.state.getWebSockets()).filter((socket) => socket !== excludedSocket);
-    const ids = sockets.map((socket) => socket.deserializeAttachment()?.id);
+  async reassignAuthority(excludedSocket, room) {
+    const sockets = activeWebSockets(this.state.getWebSockets());
+    const members = room && new Set(room.participants.map((person) => person.id));
+    const eligible = sockets.filter((socket) => socket !== excludedSocket && (!members || members.has(socket.deserializeAttachment()?.id)));
+    const ids = eligible.map((socket) => socket.deserializeAttachment()?.id);
     const saved = await this.state.storage.get('authority');
     const authority = saved && ids.includes(saved) ? saved : ids[0] ?? null;
     await this.state.storage.put({ authority, updatedAt: Date.now() });

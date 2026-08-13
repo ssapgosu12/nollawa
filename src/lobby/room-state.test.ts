@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Transport } from '../transport/transport';
-import { canStartRoom, isRoomHost, lobbyAction, MAIN_DESTINATIONS, readyLabel, requiredReady, reuseRemoteTransport, roomSlots, teamForSlot, type RoomSnapshot } from './room-state';
+import { canStartRoom, isRoomHost, lobbyAction, MAIN_DESTINATIONS, readyLabel, requiredReady, reuseRemoteTransport, roomScreen, roomSlots, teamForSlot, type RoomSnapshot } from './room-state';
 
 function snapshot(total: number, ready: number, slots = Array.from({ length: total }, (_, index) => index + 1), aiOpponent = false): RoomSnapshot {
   return {
@@ -81,5 +81,20 @@ describe('L4: 방장 UI 권한', () => {
   it('방장 여부가 비방장 선택 UI의 disabled 근거다', () => {
     expect(isRoomHost(snapshot(2, 2), 'p1')).toBe(true);
     expect(isRoomHost(snapshot(2, 2), 'p2')).toBe(false);
+  });
+});
+
+describe('P4/P5: authoritative room snapshot 화면 투영', () => {
+  it('참가자는 play를 보지만 제거된 guest와 lobby 전이를 받은 전원은 lobby를 본다', () => {
+    const playing = snapshot(3, 2);
+    playing.phase = 'play';
+    expect(roomScreen(playing, 'p3')).toBe('play');
+    playing.participants = playing.participants.filter((person) => person.id !== 'p3');
+    expect(roomScreen(playing, 'p3')).toBe('lobby');
+    playing.phase = 'lobby';
+    expect(roomScreen(playing, 'p1')).toBe('lobby');
+    expect(lobbyAction(playing, 'p3')).toMatchObject({ label: '방에서 나왔습니다', disabled: true });
+    playing.hostId = null;
+    expect(isRoomHost(playing, null)).toBe(false);
   });
 });

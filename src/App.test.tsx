@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AI_MOVE_DELAY_MS, applyAuthorityAiMove, applyAuthorityRematch, identitySeat, remoteBoardDisabled, remoteRematchPresentation, remoteSeatLabel, restartNoticeFor, roomVoteMembers, shouldRequestAiMove, waitForAiMoveGate } from './App';
+import { AI_MOVE_DELAY_MS, applyAuthorityAiMove, applyAuthorityRematch, identitySeat, leaveForTitle, remoteBoardDisabled, remoteRematchPresentation, remoteSeatLabel, restartNoticeFor, returnToLobby, roomVoteMembers, shouldRequestAiMove, waitForAiMoveGate } from './App';
 import { samok, type SamokState } from './game/samok';
 
 function terminalState(): SamokState {
@@ -128,5 +128,24 @@ describe('P2 AI 착수 공통 최소 지연과 stale 취소', () => {
     expect(await gate).toBe(false);
     await vi.runAllTimersAsync();
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe('P4: 대국 화면의 서로 다른 퇴장 동작', () => {
+  it('로비 복귀는 relay command만 보내고 타이틀 나가기는 leave command 뒤 transport와 화면을 닫는다', () => {
+    const events: string[] = [];
+    returnToLobby((command) => events.push(command.command));
+    expect(events).toEqual(['return-lobby']);
+    leaveForTitle((command) => events.push(command.command), () => events.push('close'), () => events.push('title'));
+    expect(events).toEqual(['return-lobby', 'leave-room', 'close', 'title']);
+  });
+
+  it('제거된 guest는 authoritative voter 모집단에도 남지 않는다', () => {
+    const room = {
+      code: 'ABC-67', hostId: 'p1', game: 'samok', teamNames: ['왼쪽', '오른쪽'] as [string, string], settings: { aiOpponent: false }, phase: 'play' as const,
+      participants: [{ id: 'p1', slot: 1, name: '방장', ready: true, present: true }],
+    };
+    expect(roomVoteMembers(room, 1)).toEqual([{ id: 'p1', team: 1 }]);
+    expect(roomVoteMembers(room, 2)).toEqual([]);
   });
 });

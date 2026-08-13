@@ -361,3 +361,63 @@ describe('L5: 팀 상태와 재연결', () => {
     expect(replacement.deserializeAttachment()).toMatchObject({ id: original.id, seat: teamSeat(original.slot) });
   });
 });
+
+describe('P3-P6: authoritative 로비 복귀와 퇴장 수명주기', () => {
+  it('P3/P5: host 로비 복귀 한 명령은 phase와 전원 ready를 함께 초기화하고 ready를 다시 허용한다', async () => {
+    const { room, values } = roomHarness();
+    const host = relaySocket('host');
+    const guest = relaySocket('guest');
+    await room.attach(host, 'device-key-host', '방장');
+    await room.attach(guest, 'device-key-guest', '손님');
+    values.room.phase = 'play';
+    values.room.participants.forEach((person) => { person.ready = true; });
+
+    await room.webSocketMessage(host, JSON.stringify({ type: 'room-command', command: 'return-lobby' }));
+
+    expect(values.room).toMatchObject({ phase: 'lobby', participants: [{ ready: false }, { ready: false }] });
+    expect(guest.messages.filter((message) => message.type === 'room').at(-1).room.phase).toBe('lobby');
+    expect(applyRoomCommand(values.room, guest.deserializeAttachment().id, { command: 'ready' })).toBe(true);
+  });
+
+  it('P4: guest 로비 복귀는 참가자와 좌석에서 제거하고 남은 판이 성립하면 phase를 유지한다', async () => {
+    const { room, values } = roomHarness();
+    const host = relaySocket('host');
+    const guest = relaySocket('guest');
+    const leaving = relaySocket('leaving');
+    await room.attach(host, 'device-key-host', '방장');
+    await room.attach(guest, 'device-key-guest', '손님');
+    await room.attach(leaving, 'device-key-leaving', '퇴장자');
+    values.room.phase = 'play';
+
+    await room.webSocketMessage(leaving, JSON.stringify({ type: 'room-command', command: 'return-lobby' }));
+
+    expect(values.room.phase).toBe('play');
+    expect(values.room.participants.map((person) => person.id)).not.toContain(leaving.deserializeAttachment().id);
+    expect(leaving.deserializeAttachment().seat).toBeNull();
+    expect(leaving.messages.filter((message) => message.type === 'identity').at(-1).seat).toBeNull();
+  });
+
+  it('P6: 판 종료 snapshot은 phase를 유지하고 host title 퇴장은 입장순 승계하며 성립 불가일 때만 lobby로 간다', async () => {
+    const { room, values } = roomHarness();
+    const host = relaySocket('host');
+    const guest = relaySocket('guest');
+    const third = relaySocket('third');
+    await room.attach(host, 'device-key-host', '방장');
+    await room.attach(guest, 'device-key-guest', '손님');
+    await room.attach(third, 'device-key-third', '셋째');
+    values.room.phase = 'play';
+    values.room.participants.forEach((person) => { person.ready = true; });
+    await room.webSocketMessage(host, JSON.stringify({ type: 'snapshot', state: { winner: 1 } }));
+    expect(values.room.phase).toBe('play');
+
+    const hostId = host.deserializeAttachment().id;
+    const guestId = guest.deserializeAttachment().id;
+    const thirdId = third.deserializeAttachment().id;
+    expect(applyRoomCommand(values.room, hostId, { command: 'leave-room' })).toBe(true);
+    expect(values.room).toMatchObject({ hostId: guestId, phase: 'play' });
+    expect(applyRoomCommand(values.room, guestId, { command: 'leave-room' })).toBe(true);
+    expect(values.room).toMatchObject({ hostId: thirdId, phase: 'lobby', participants: [{ id: thirdId, ready: false }] });
+    expect(applyRoomCommand(values.room, thirdId, { command: 'leave-room' })).toBe(true);
+    expect(values.room).toMatchObject({ hostId: null, phase: 'lobby', participants: [] });
+  });
+});
