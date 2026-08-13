@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { identitySeat, remoteBoardDisabled, remoteSeatLabel, restartNoticeFor, roomVoteMembers } from './App';
+import { applyAuthorityAiMove, identitySeat, remoteBoardDisabled, remoteSeatLabel, restartNoticeFor, roomVoteMembers, shouldRequestAiMove } from './App';
 import { applyRemoteAction, samok, type SamokState } from './game/samok';
 
 function terminalState(): SamokState {
@@ -48,5 +48,34 @@ describe('L6 TEAM VOTE: authoritative room membership', () => {
     };
     expect(roomVoteMembers(room, 1)).toEqual([{ id: 'p1', team: 1 }, { id: 'p3', team: 1 }]);
     expect(roomVoteMembers(room, 2)).toEqual([{ id: 'p2', team: 2 }]);
+  });
+});
+
+describe('N4 AI-ON/OFF: authoritative voters and AI turn owner', () => {
+  const room = (aiOpponent: boolean) => ({
+    code: 'ABC-67', hostId: 'p1', game: 'samok', teamNames: ['왼쪽', '오른쪽'] as [string, string], settings: { aiOpponent }, phase: 'play' as const,
+    participants: [
+      { id: 'p1', slot: 1, name: '하나', ready: true, present: true },
+      { id: 'p2', slot: 2, name: '둘', ready: true, present: true },
+      { id: 'p3', slot: 3, name: '셋', ready: true, present: true },
+    ],
+  });
+
+  it('AI-on 인간 턴은 좌우 슬롯 전원이 voter이고 AI 턴은 인간 voter가 없으며 AI-off는 팀별이다', () => {
+    expect(roomVoteMembers(room(true), 1)).toEqual(['p1', 'p2', 'p3'].map((id) => ({ id, team: 1 })));
+    expect(roomVoteMembers(room(true), 2)).toEqual([]);
+    expect(roomVoteMembers(room(false), 1)).toEqual([{ id: 'p1', team: 1 }, { id: 'p3', team: 1 }]);
+    expect(roomVoteMembers(room(false), 2)).toEqual([{ id: 'p2', team: 2 }]);
+  });
+
+  it('remote AI는 현재 authority만 요청·적용해 2번 돌을 만들고 non-authority와 AI-off는 적용하지 않는다', () => {
+    expect(shouldRequestAiMove('remote', room(true), true)).toBe(true);
+    expect(shouldRequestAiMove('remote', room(true), false)).toBe(false);
+    expect(shouldRequestAiMove('remote', room(false), true)).toBe(false);
+    const aiTurn = samok.reduce(samok.init(), { type: 'drop', column: 0 });
+    expect(applyAuthorityAiMove(aiTurn, 1, false)).toBe(aiTurn);
+    const moved = applyAuthorityAiMove(aiTurn, 1, true);
+    expect(moved).toMatchObject({ turn: 1, moves: 2 });
+    expect(moved.board[0]?.[1]).toBe(2);
   });
 });

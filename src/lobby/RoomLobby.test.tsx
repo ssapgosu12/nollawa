@@ -53,3 +53,14 @@ describe('N6: RoomLobby authoritative AI setting control', () => {
     expect(sent).toHaveLength(1);
   });
 });
+
+describe('N4 AI-ON/OFF: lobby side headings', () => {
+  it('AI-on은 편집 팀명 대신 사람 편과 AI를 보이고 AI-off 방장은 두 팀명을 계속 편집한다', () => {
+    const aiTree = tree(RoomLobby({ room: room(2, true), selfId: 'p1', send() {}, openGames() {} }));
+    const aiHeadings = aiTree.find((node) => node.type === 'div' && node.props.class === 'team-headings');
+    expect(text(aiHeadings)).toBe('사람 편AI');
+    expect(tree(aiHeadings).filter((node) => node.type === 'input')).toHaveLength(0);
+    const teamHeadings = tree(RoomLobby({ room: room(2, false), selfId: 'p1', send() {}, openGames() {} })).find((node) => node.type === 'div' && node.props.class === 'team-headings');
+    expect(tree(teamHeadings).filter((node) => node.type === 'input')).toHaveLength(2);
+  });
+});

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { activeWebSockets, applyRoomCommand, lowestFreeSeat, requiredReady, Room, TEAM_PAIRS, teamSeat } from './worker.js';
+import { activeWebSockets, applyRoomCommand, lowestFreeSeat, requiredReady, roomSeat, Room, TEAM_PAIRS, teamSeat } from './worker.js';
 
 function socket(seat, readyState = 1) {
   return { readyState, deserializeAttachment: () => ({ seat }) };
@@ -298,6 +298,30 @@ describe('N6: authoritative 게임 설정 command', () => {
     await room.webSocketMessage(guest, JSON.stringify({ type: 'room-command', command: 'set-ai-opponent', enabled: false }));
     expect(values.room.settings).toEqual({ aiOpponent: true });
     expect(guest.messages.at(-1)).toEqual({ type: 'room-error', message: '허용되지 않은 방 명령' });
+  });
+});
+
+describe('N4 AI-ON/OFF: relay-owned seat projection and start gate', () => {
+  it('AI-on은 모든 인간을 1번으로 재투영하고 action actor도 1번이며 AI-off는 홀짝 좌석을 복구한다', async () => {
+    const { room, values } = roomHarness();
+    const host = relaySocket('host');
+    const guest = relaySocket('guest');
+    await room.attach(host, 'device-key-host', '방장');
+    await room.attach(guest, 'device-key-guest', '손님');
+    await room.webSocketMessage(host, JSON.stringify({ type: 'room-command', command: 'set-ai-opponent', enabled: true }));
+    expect([host, guest].map((socket) => socket.deserializeAttachment().seat)).toEqual([1, 1]);
+    expect(values.room.participants.map((person) => roomSeat(values.room, person))).toEqual([1, 1]);
+    await room.webSocketMessage(guest, JSON.stringify({ type: 'action', action: { type: 'vote', column: 3 } }));
+    expect(host.messages.findLast((message) => message.type === 'action').actor).toEqual({ id: guest.deserializeAttachment().id, seat: 1 });
+    await room.webSocketMessage(host, JSON.stringify({ type: 'room-command', command: 'set-ai-opponent', enabled: false }));
+    expect([host, guest].map((socket) => socket.deserializeAttachment().seat)).toEqual([1, 2]);
+  });
+
+  it('AI-on만 양 팀 최소를 면제해 1인 방을 시작하고 readiness 표 자체는 바꾸지 않는다', () => {
+    const oneHuman = (aiOpponent) => ({ hostId: 'p1', settings: { aiOpponent }, phase: 'lobby', participants: [{ id: 'p1', slot: 1, ready: false }] });
+    expect([1, 2, 3, 4, 5, 6].map(requiredReady)).toEqual([0, 2, 2, 3, 3, 4]);
+    expect(applyRoomCommand(oneHuman(true), 'p1', { command: 'start' })).toBe(true);
+    expect(applyRoomCommand(oneHuman(false), 'p1', { command: 'start' })).toBe(false);
   });
 });
 

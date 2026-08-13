@@ -26,7 +26,9 @@ export function restartNoticeFor(source: AcceptedActionSource | undefined, clien
 export const identitySeat = (message: Extract<GameMessage, { type: 'identity' }>): Seat | null => message.seat;
 export const remoteSeatLabel = (seat: Seat | null): string => seat ? `내 팀 ${seat}` : '관전 중 · 좌석 없음';
 export const remoteBoardDisabled = (state: SamokState, seat: Seat | null): boolean => samok.terminal(state).ended || seat !== state.turn;
-export const roomVoteMembers = (room: RoomSnapshot | null, turn: Seat): VoteMember[] => room?.participants.filter((person) => teamForSlot(person.slot) === turn).map((person) => ({ id: person.id, team: turn })) ?? [];
+export const roomVoteMembers = (room: RoomSnapshot | null, turn: Seat): VoteMember[] => room?.participants.filter((person) => room.settings.aiOpponent ? turn === 1 : teamForSlot(person.slot) === turn).map((person) => ({ id: person.id, team: turn })) ?? [];
+export const shouldRequestAiMove = (mode: PlayMode, room: RoomSnapshot | null, authority: boolean): boolean => mode === 'ai' || (mode === 'remote' && room?.settings.aiOpponent === true && authority);
+export const applyAuthorityAiMove = (state: SamokState, column: number, authority: boolean): SamokState => authority ? samok.reduce(state, { type: 'drop', column }) : state;
 function relayUrl(code: string): string {
   const base = import.meta.env.VITE_RELAY_URL ?? `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}`;
   return `${base.replace(/\/$/, '')}/room/${code}`;
@@ -163,13 +165,18 @@ export function App() {
   }
   const sendRoom = (command: RoomCommand) => send({ type: 'room-command', ...command });
   useEffect(() => {
-    if (screen !== 'play' || mode !== 'ai' || state.turn !== 2 || samok.terminal(state).ended || aiThinking.current) return;
+    if (screen !== 'play' || !shouldRequestAiMove(mode, room, authority) || state.turn !== 2 || samok.terminal(state).ended || aiThinking.current) return;
     aiThinking.current = true;
     void requestSamokMove(state).then((column) => {
-      if (column !== null) send({ type: 'action', action: { type: 'drop', column } });
+      if (column !== null && mode === 'remote') setState((current) => {
+        const next = applyAuthorityAiMove(current, column, isAuthority.current);
+        if (next !== current) queueMicrotask(() => send({ type: 'snapshot', state: next }));
+        return next;
+      });
+      else if (column !== null) send({ type: 'action', action: { type: 'drop', column } });
       aiThinking.current = false;
     });
-  }, [mode, screen, state]);
+  }, [authority, mode, room, screen, state]);
   useEffect(() => {
     if (mode !== 'remote' || screen !== 'play' || !authority) return;
     const deadline = authorityVoteDeadline(state, authority);

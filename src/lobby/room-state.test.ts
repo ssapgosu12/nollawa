@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import type { Transport } from '../transport/transport';
 import { canStartRoom, isRoomHost, lobbyAction, MAIN_DESTINATIONS, readyLabel, requiredReady, reuseRemoteTransport, roomSlots, teamForSlot, type RoomSnapshot } from './room-state';
 
-function snapshot(total: number, ready: number, slots = Array.from({ length: total }, (_, index) => index + 1)): RoomSnapshot {
+function snapshot(total: number, ready: number, slots = Array.from({ length: total }, (_, index) => index + 1), aiOpponent = false): RoomSnapshot {
   return {
-    code: 'ABC-67', hostId: 'p1', game: 'samok', teamNames: ['콜라', '사이다'], settings: { aiOpponent: false }, phase: 'lobby',
+    code: 'ABC-67', hostId: 'p1', game: 'samok', teamNames: ['콜라', '사이다'], settings: { aiOpponent }, phase: 'lobby',
     participants: slots.map((slot, index) => ({ id: `p${index + 1}`, slot, name: `사람 ${index + 1}`, ready: index > 0 && index <= ready, present: true })),
   };
 }
@@ -55,6 +55,14 @@ describe('N5: 시작 action 강조 계약', () => {
     expect(lobbyAction(snapshot(4, 1), 'p1')).toMatchObject({ command: 'start', disabled: true, emphasized: false });
     expect(lobbyAction(snapshot(4, 2), 'p1')).toMatchObject({ command: 'start', disabled: false, emphasized: true });
     expect(lobbyAction(snapshot(4, 2), 'p2')).toMatchObject({ command: 'ready', emphasized: false });
+  });
+});
+
+describe('N4 AI-ON/OFF: client start projection', () => {
+  it('AI-on 1인 방은 암묵적 방장 준비로 시작하고 AI-off는 양 팀 최소를 유지한다', () => {
+    expect(canStartRoom(snapshot(1, 0, [1], true))).toBe(true);
+    expect(canStartRoom(snapshot(1, 0, [1], false))).toBe(false);
+    expect([2, 3, 4, 5, 6].map(requiredReady)).toEqual([2, 2, 3, 3, 4]);
   });
 });
 

@@ -13,12 +13,12 @@ export function RoomLobby({ room, selfId, send, openGames }: Props) {
     <h1 id="room-code">{room.code}</h1>
     <article class="lobby-game"><div><h2>{room.game === 'samok' ? '사목' : room.game}</h2><p>2명 · #대전 #동시진행</p></div><details class="game-settings"><summary aria-label="게임 설정">…</summary><div class="game-settings-popup"><label>AI 대전<input type="checkbox" checked={room.settings.aiOpponent} disabled={!host} onChange={(event) => { if (host) send({ command: 'set-ai-opponent', enabled: event.currentTarget.checked }); }} /></label></div></details></article>
     <div class="team-headings">
-      {room.teamNames.map((team, index) => host
+      {room.settings.aiOpponent ? <><strong>사람 편</strong><strong>AI</strong></> : room.teamNames.map((team, index) => host
         ? <label key={index}>팀 {index + 1}<input value={team} maxLength={24} onChange={(event) => send({ command: 'team-name', team: index + 1 as 1 | 2, name: event.currentTarget.value })} /></label>
         : <strong key={team}>팀 {index + 1} · {team}</strong>)}
     </div>
     <div class="participant-grid">
-      {roomSlots(room).map((person, index) => <article class={`participant team-${teamForSlot(index + 1)}`} key={index}>
+      {roomSlots(room).map((person, index) => <article class={`participant team-${room.settings.aiOpponent ? 1 : teamForSlot(index + 1)}`} key={index}>
         {person ? <>
           <strong>{person.id === room.hostId ? '♛ ' : ''}{person.name}</strong>
           <span>{person.id === room.hostId || person.ready ? '준비' : '대기'}{person.present ? '' : ' · 연결 끊김'}</span>

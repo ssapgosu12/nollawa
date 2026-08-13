@@ -31,7 +31,7 @@ export const readyLabel = (room: RoomSnapshot) => {
 };
 export function canStartRoom(room: RoomSnapshot): boolean {
   const ready = Number(room.participants.some((person) => person.id === room.hostId)) + room.participants.filter((person) => person.id !== room.hostId && person.ready).length;
-  return room.phase === 'lobby' && ready >= requiredReady(room.participants.length) && [1, 2].every((team) => room.participants.some((person) => teamForSlot(person.slot) === team));
+  return room.phase === 'lobby' && ready >= requiredReady(room.participants.length) && (room.settings.aiOpponent || [1, 2].every((team) => room.participants.some((person) => teamForSlot(person.slot) === team)));
 }
 export function lobbyAction(room: RoomSnapshot, id: string | null) {
   const host = isRoomHost(room, id);

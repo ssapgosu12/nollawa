@@ -11,6 +11,7 @@ export function lowestFreeSeat(sockets) {
   return !occupied.has(1) ? 1 : !occupied.has(2) ? 2 : null;
 }
 export const teamSeat = (slot) => slot % 2 ? 1 : 2;
+export const roomSeat = (room, person) => person ? room.settings?.aiOpponent ? 1 : teamSeat(person.slot) : null;
 export const requiredReady = (total) => [0, 0, 2, 2, 3, 3, 4][total] ?? Infinity;
 
 function newRoom(code) {
@@ -41,7 +42,7 @@ export function applyRoomCommand(room, sender, message) {
   if (message.command === 'start') {
     const ready = 1 + room.participants.filter((person) => person.id !== room.hostId && person.ready).length;
     const bothTeams = [1, 2].every((team) => room.participants.some((person) => teamSeat(person.slot) === team));
-    if (room.phase !== 'lobby' || ready < requiredReady(room.participants.length) || !bothTeams) return false;
+    if (room.phase !== 'lobby' || ready < requiredReady(room.participants.length) || (!room.settings?.aiOpponent && !bothTeams)) return false;
     room.phase = 'play';
     return true;
   }
@@ -114,7 +115,7 @@ export class Room {
         socket.close(4001, 'Replaced connection');
       }
       const id = person?.id ?? crypto.randomUUID();
-      const seat = person ? teamSeat(person.slot) : null;
+      const seat = roomSeat(room, person);
       this.state.acceptWebSocket(server);
       server.serializeAttachment({ id, reconnectKey, seat, lastSeen: Date.now() });
       const sockets = activeWebSockets(this.state.getWebSockets());
@@ -208,7 +209,7 @@ export class Room {
     for (const socket of activeWebSockets(this.state.getWebSockets())) {
       const attachment = socket.deserializeAttachment() ?? {};
       const person = participant(room, attachment.id);
-      const seat = person ? teamSeat(person.slot) : null;
+      const seat = roomSeat(room, person);
       if (seat === attachment.seat) continue;
       socket.serializeAttachment({ ...attachment, seat });
       socket.send(JSON.stringify({ type: 'identity', id: attachment.id, authority, seat }));
