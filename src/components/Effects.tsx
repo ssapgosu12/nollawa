@@ -1,8 +1,14 @@
 import type { ComponentChildren } from 'preact';
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 
 export type CoinFace = 'H' | 'T';
 export type DieFace = 1 | 2 | 3 | 4 | 5 | 6;
+
+export const demoCoinOutcomes = (count: number, replayKey: number): CoinFace[] =>
+  Array.from({ length: count }, (_, index) => (index + replayKey) % 2 ? 'T' : 'H');
+
+export const demoDiceOutcomes = (count: number, replayKey: number): DieFace[] =>
+  Array.from({ length: count }, (_, index) => ((index + replayKey) % 6 + 1) as DieFace);
 
 interface ReplayProps { replayKey?: number }
 interface CoinResultsProps extends ReplayProps { outcomes: readonly CoinFace[] }
@@ -49,7 +55,7 @@ function EffectDemo({ title, children }: DemoProps) {
   return <article class="effect-demo">
     <h2>{title}</h2>
     {children(replayKey)}
-    <div class="effect-controls"><button onClick={() => setReplayKey((value) => value + 1)}>던지기</button><label><input type="checkbox" checked={automatic} onChange={(event) => setAutomatic(event.currentTarget.checked)} /> 자동</label></div>
+    <div class="effect-controls"><button onClick={() => setReplayKey((value) => value + 1)}>던지기!</button><label><input type="checkbox" checked={automatic} onChange={(event) => setAutomatic(event.currentTarget.checked)} /> 자동</label></div>
   </article>;
 }
 
@@ -57,16 +63,14 @@ export function EffectsTestPage({ onBack }: { onBack: () => void }) {
   const [coinCount, setCoinCount] = useState(4);
   const [diceCount, setDiceCount] = useState(2);
   const [shuffleKey, setShuffleKey] = useState(0);
-  const coins = useMemo<CoinFace[]>(() => Array.from({ length: coinCount }, (_, index) => index % 2 ? 'T' : 'H'), [coinCount]);
-  const dice = useMemo<DieFace[]>(() => Array.from({ length: diceCount }, (_, index) => (index % 6 + 1) as DieFace), [diceCount]);
   return <section class="panel effects-page" aria-labelledby="effects-title">
     <button onClick={onBack}>게임 목록</button><h1 id="effects-title">연출 테스트</h1>
     <div class="effect-selectors">
       <label>동전 개수<select value={coinCount} onChange={(event) => setCoinCount(Number(event.currentTarget.value))}>{Array.from({ length: 12 }, (_, index) => <option value={index + 1}>{index + 1}</option>)}</select></label>
       <label>주사위 개수<select value={diceCount} onChange={(event) => setDiceCount(Number(event.currentTarget.value))}>{Array.from({ length: 6 }, (_, index) => <option value={index + 1}>{index + 1}</option>)}</select></label>
     </div>
-    <EffectDemo title="동전 던지기">{(replayKey) => <CoinResults outcomes={coins} replayKey={replayKey} />}</EffectDemo>
-    <EffectDemo title="주사위 굴리기">{(replayKey) => <DiceResults outcomes={dice} replayKey={replayKey} />}</EffectDemo>
+    <EffectDemo title="동전 던지기">{(replayKey) => <CoinResults outcomes={demoCoinOutcomes(coinCount, replayKey)} replayKey={replayKey} />}</EffectDemo>
+    <EffectDemo title="주사위 굴리기">{(replayKey) => <DiceResults outcomes={demoDiceOutcomes(diceCount, replayKey)} replayKey={replayKey} />}</EffectDemo>
     <article class="effect-demo"><h2>덱 섞기</h2><button onClick={() => setShuffleKey((value) => value + 1)}>덱 섞기</button><DeckShuffle deckName="Nollawa 카드" replayKey={shuffleKey} /></article>
   </section>;
 }

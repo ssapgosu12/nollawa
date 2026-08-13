@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { CoinResults, DeckShuffle, DiceResults } from './Effects';
+import { CoinResults, DeckShuffle, DiceResults, demoCoinOutcomes, demoDiceOutcomes } from './Effects';
 
 const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8');
 const source = readFileSync(new URL('./Effects.tsx', import.meta.url), 'utf8');
@@ -46,13 +46,20 @@ describe('E4: full deck-shuffle sequence', () => {
     expect(caption.props.children.join('')).toBe('테스트 카드 덱이 섞이고 있습니다');
     expect(css).toMatch(/@keyframes shuffle-card[\s\S]*var\(--effect-near\)[\s\S]*translate\(-50%, -50%\)[\s\S]*var\(--effect-exit\)/);
     expect(css).toMatch(/@keyframes deck-overlay[\s\S]*100%\s*{[^}]*visibility:\s*hidden/);
+    const deckRule = css.match(/\.shuffle-card\s*{[^}]*}/)?.[0] ?? '';
+    expect(deckRule).not.toContain('var(--accent)');
+    expect(deckRule).toMatch(/var\(--effect-card\)[\s\S]*var\(--ink\)/);
   });
 });
 
 describe('E5: manual and automatic coin and dice execution', () => {
   it('provides both launch modes for each effect and removes all motion in reduced-motion mode', () => {
     expect(source.match(/<EffectDemo title="(?:동전 던지기|주사위 굴리기)">/g)).toHaveLength(2);
-    expect(source).toMatch(/던지기<\/button>[\s\S]*type="checkbox"[\s\S]*자동/);
+    expect(source.match(/>던지기!<\/button>/g)).toHaveLength(1);
+    expect(source).toMatch(/demoCoinOutcomes\(coinCount, replayKey\)[\s\S]*demoDiceOutcomes\(diceCount, replayKey\)/);
+    expect(demoCoinOutcomes(4, 0)).not.toEqual(demoCoinOutcomes(4, 1));
+    expect(demoDiceOutcomes(2, 0)).not.toEqual(demoDiceOutcomes(2, 1));
+    expect(source).toMatch(/type="checkbox"[\s\S]*자동/);
     expect(css).toMatch(/prefers-reduced-motion:\s*reduce[\s\S]*\.effect-coin, \.effect-die, \.shuffle-card, \.shuffle-caption, \.deck-shuffle-overlay\s*{\s*animation:\s*none/);
     expect(source).not.toMatch(/#[\da-f]{3,8}\b/i);
   });
