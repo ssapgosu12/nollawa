@@ -1,7 +1,7 @@
-import type { GameContract } from './contract';
+import type { GameContract, SharedGameState } from './contract';
 import { copyGrid, emptyGrid, hasLine, otherSeat, type GridCell, type GridSeat } from './line-grid';
 export type OmokAction = { type: 'place'; row: number; column: number } | { type: 'swap' } | { type: 'restart' };
-export interface OmokState { board: GridCell[][]; turn: GridSeat; winner: GridSeat | null; draw: boolean; moves: number; swapAvailable: boolean; starter: GridSeat }
+export interface OmokState extends SharedGameState { board: GridCell[][]; turn: GridSeat; winner: GridSeat | null; draw: boolean; moves: number; swapAvailable: boolean; starter: GridSeat }
 const SIZE = 15;
 const fresh = (starter: GridSeat): OmokState => ({ board: emptyGrid(SIZE), turn: starter, winner: null, draw: false, moves: 0, swapAvailable: false, starter });
 function reduce(state: OmokState, action: OmokAction): OmokState {

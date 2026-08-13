@@ -26,17 +26,17 @@ describe('L6 TEAM VOTE: 자격·합법성·표 교체', () => {
     const members = team('p1', 'p2', 'p3');
     const first = cast(samok.init(), 'p1', 1, members);
     const changed = cast(first, 'p1', 4, members, 1_000);
-    expect(changed.vote?.voters).toEqual([{ id: 'p1', team: 1, column: 4 }]);
+    expect(changed.vote?.voters).toEqual([{ id: 'p1', team: 1, move: '4' }]);
     expect(changed.vote?.deadline).toBe(16_000);
     expect(cast(changed, 'p1', 4, members, 2_000)).toBe(changed);
   });
 
   it('persisted snapshot의 중복 voter id도 집계와 dot에서 한 번만 센다', () => {
     const duplicated: SamokState = { ...samok.init(), vote: { turn: 1, deadline: 0, effectsSuppressed: true, voters: [
-      { id: 'p1', team: 1, column: 6 }, { id: 'p1', team: 1, column: 6 }, { id: 'p2', team: 1, column: 1 },
+      { id: 'p1', team: 1, move: '6' }, { id: 'p1', team: 1, move: '6' }, { id: 'p2', team: 1, move: '1' },
     ] } };
     expect(voteDots(duplicated, 'p1')[6]).toEqual({ count: 1, own: true });
-    expect(settleTeamVote(duplicated, team('p1', 'p2'), 0, () => 0).resolvedVote?.selected).toBe(1);
+    expect(settleTeamVote(duplicated, team('p1', 'p2'), 0, () => 0).resolvedVote?.selected).toBe('1');
   });
 });
 
@@ -54,7 +54,7 @@ describe('V1: 마지막 표 기준 절대 마감과 권위 확정', () => {
     const two = cast(one, 'p2', 2, members, 20);
     const three = cast(two, 'p3', 2, members, 30);
     expect(three.moves).toBe(1);
-    expect(three.resolvedVote?.selected).toBe(2);
+    expect(three.resolvedVote?.selected).toBe('2');
   });
 
   it('accepted 새 표와 변경 표마다 미투표자×4+7 마감을 재시작하고 전원 투표는 1초와 effects 숨김을 저장한다', () => {
@@ -80,7 +80,7 @@ describe('V1: 마지막 표 기준 절대 마감과 권위 확정', () => {
     expect(nextVoteDeadline(open)).toBe(12_000);
     expect(settleTeamVote(open, team('p1', 'p2'), 11_999, random)).toBe(open);
     const resolved = settleTeamVote(open, team('p1', 'p2'), 12_000, random);
-    expect(resolved.resolvedVote?.selected).toBe(5);
+    expect(resolved.resolvedVote?.selected).toBe('5');
     expect(random).not.toHaveBeenCalled();
   });
 
@@ -99,7 +99,7 @@ describe('L6 TEAM VOTE: 동점 선택·룰렛·단일 착수', () => {
     const random = vi.fn(() => 0.75);
     const resolved = settleTeamVote(tied, members, 2_000, random);
     expect(random).toHaveBeenCalledTimes(1);
-    expect(resolved.resolvedVote).toMatchObject({ selected: 5, presentation: [5, 1] });
+    expect(resolved.resolvedVote).toMatchObject({ selected: '5', presentation: ['5', '1'] });
     expect(resolved.board).toEqual(tied.board);
     expect(resolved.moves).toBe(0);
     expect(resolved.turn).toBe(1);
@@ -120,19 +120,19 @@ describe('L6 TEAM VOTE: 동점 선택·룰렛·단일 착수', () => {
     state = cast(state, 'p3', 2, members, 20);
     state = cast(state, 'p4', 3, members, 30);
     const resolved = settleTeamVote(state, members, 1_030, () => 0.99);
-    expect(resolved.resolvedVote?.selected).toBe(3);
-    expect(resolved.resolvedVote?.presentation).toEqual([3, 0, 1]);
+    expect(resolved.resolvedVote?.selected).toBe('3');
+    expect(resolved.resolvedVote?.presentation).toEqual(['3', '0', '1']);
   });
 
   it('모든 소비자는 7개의 증가 dwell, 약 2초, stored winner 종착 plan을 도출한다', () => {
-    const resolved = { turn: 1 as const, selected: 3, presentation: [3, 0, 1], settledAt: 10 };
+    const resolved = { turn: 1 as const, selected: '3', presentation: ['3', '0', '1'], settledAt: 10 };
     const first = roulettePlan(resolved);
     const second = roulettePlan(structuredClone(resolved));
     expect(first).toEqual(second);
     expect(first).toHaveLength(7);
     expect(first.map((step) => step.dwellMs)).toEqual([100, 150, 200, 250, 300, 350, 400]);
     expect(first.reduce((sum, step) => sum + step.dwellMs, 0)).toBe(1_750);
-    expect(first.at(-1)?.column).toBe(3);
+    expect(first.at(-1)?.move).toBe('3');
   });
 });
 
@@ -155,7 +155,7 @@ describe('L6 TEAM VOTE: snapshot·권위·UI projection·로컬 보존', () => {
     expect(reduceAuthorityVote(resumed, 6, actor('p3'), members, false, 13_000, () => 0)).toBe(resumed);
     const pending = settleTeamVote(resumed, members, 13_000, () => 0.99);
     const transferred = JSON.parse(JSON.stringify(pending)) as SamokState;
-    expect(transferred.resolvedVote).toMatchObject({ selected: 4, settledAt: 13_000 });
+    expect(transferred.resolvedVote).toMatchObject({ selected: '4', settledAt: 13_000 });
     expect(authorityResolvedVoteDeadline(transferred, false)).toBeNull();
     expect(authorityResolvedVoteDeadline(transferred, true)).toBe(14_750);
     expect(commitResolvedTeamVote(transferred, 14_749)).toBe(transferred);

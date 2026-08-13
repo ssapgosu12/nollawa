@@ -9,6 +9,8 @@
   --line: #111;
   --accent: #f2c94c;
   --danger: #a51d28;
+  --effect-overlay: rgb(10 12 18 / .92);
+  --effect-card: rgb(247 244 232);
   --player-1: #FF0D22; --player-2: #21DB3B; --player-3: #00AEFC; --player-4: #B500FC;
 }
 *, *::before, *::after { box-sizing: border-box; }
@@ -67,6 +69,11 @@ label { display: block; font-weight: 700; }
 .vote-dot { fill: var(--ink); stroke: var(--paper); stroke-width: 3px; pointer-events: none; }
 .vote-dot.own-vote.player-1 { fill: var(--player-1); }
 .vote-dot.own-vote.player-2 { fill: var(--player-2); }
+.vote-marker { pointer-events: none; }
+.vote-marker circle { fill: var(--paper); stroke: var(--ink); stroke-width: 4px; }
+.vote-marker text { fill: var(--ink); font-size: 20px; font-weight: 900; }
+.vote-marker.own-vote.player-1 circle { fill: var(--player-1); }
+.vote-marker.own-vote.player-2 circle { fill: var(--player-2); }
 .board-cell.player-1 { fill: var(--player-1); }
 .board-cell.player-2 { fill: var(--player-2); }
 .board-cell.player-3 { fill: var(--player-3); }
@@ -103,6 +110,34 @@ label { display: block; font-weight: 700; }
 .viewport-vignette { position: fixed; z-index: 8; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 62%, rgb(0 0 0 / calc(var(--vignette-intensity) * .35)) 82%, rgb(0 0 0 / var(--vignette-intensity)) 100%); animation: vignette-flash var(--vignette-period) ease-in-out infinite alternate; }
 .viewport-countdown { position: fixed; z-index: 9; bottom: max(.2rem, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); color: var(--ink); font-size: clamp(1.5rem, 7vw, 3rem); font-weight: 900; line-height: 1; text-shadow: 0 1px var(--paper); }
 @keyframes vignette-flash { from { opacity: .2; } to { opacity: 1; } }
+.effects-page { margin-top: 1rem; padding-bottom: 3rem; }
+.effects-page > h1 { margin-top: 1rem; }
+.effect-selectors { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+.effect-selectors select { display: block; width: 100%; min-height: 44px; margin-top: .35rem; border: 2px solid var(--line); border-radius: 8px; padding: .45rem; color: var(--ink); background: var(--paper); }
+.effect-demo { position: relative; overflow: hidden; margin-top: 1rem; border: 2px solid var(--line); border-radius: 14px; padding: 1rem; background: var(--paper); }
+.effect-demo h2 { margin-bottom: .65rem; }
+.effect-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)); align-items: center; gap: clamp(.35rem, 2vw, .75rem); width: 100%; min-height: 80px; }
+.effect-coin, .effect-die { justify-self: center; width: clamp(42px, 11vw, 64px); aspect-ratio: 1; animation-delay: calc(var(--effect-index) * 55ms); animation-fill-mode: both; }
+.effect-coin { display: grid; place-items: center; border: 3px solid var(--line); border-radius: 50%; font-size: clamp(1.25rem, 5vw, 2rem); font-weight: 900; animation-name: coin-toss; animation-duration: 650ms; }
+.effect-coin.face-H { color: var(--ink); background: var(--paper); }
+.effect-coin.face-T { color: var(--paper); background: var(--ink); }
+.effect-die { display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); border: 3px solid var(--line); border-radius: 12px; padding: 7px; background: var(--paper); box-shadow: 0 3px 0 var(--line); animation-name: die-roll; animation-duration: 650ms; }
+.die-pip { align-self: center; justify-self: center; width: min(9px, 60%); aspect-ratio: 1; border-radius: 50%; background: transparent; }
+.die-pip.is-on { background: var(--ink); }
+.effect-controls { display: flex; align-items: center; gap: .8rem; margin-top: .75rem; }
+.effect-controls label { display: flex; align-items: center; gap: .35rem; }
+.effect-controls input { width: 24px; min-height: 24px; margin: 0; }
+.deck-shuffle-overlay { position: fixed; z-index: 20; inset: 0; display: grid; place-items: center; overflow: hidden; color: var(--paper); background: var(--effect-overlay); pointer-events: none; animation: deck-overlay 5s both; }
+.shuffle-deck { position: relative; width: min(38vw, 150px); aspect-ratio: 2 / 3; }
+.shuffle-card { position: absolute; top: 50%; left: 50%; width: 100%; height: 100%; border: 3px solid var(--line); border-radius: 12px; background: repeating-linear-gradient(45deg, var(--effect-card) 0 8px, var(--ink) 8px 16px); box-shadow: 0 2px 0 var(--line); transform: translate(-50%, -50%); animation: shuffle-card 4.4s both; animation-delay: calc(var(--effect-index) * 32ms); }
+.shuffle-card:nth-child(odd) { --effect-near: -1.7rem; --effect-exit: -60vw; --effect-tilt: -12deg; }
+.shuffle-card:nth-child(even) { --effect-near: 1.7rem; --effect-exit: 60vw; --effect-tilt: 12deg; }
+.shuffle-caption { position: absolute; right: 1rem; bottom: max(1.25rem, env(safe-area-inset-bottom)); left: 1rem; margin: 0; text-align: center; font-size: clamp(1.1rem, 5vw, 2rem); font-weight: 900; animation: shuffle-caption 5s both; }
+@keyframes coin-toss { from { opacity: 0; transform: translateY(-24vh) rotateY(540deg); } 72% { transform: translateY(7px) rotateY(0); } to { opacity: 1; transform: none; } }
+@keyframes die-roll { from { opacity: 0; transform: translateY(-20vh) rotate(300deg) scale(.7); } 72% { transform: translateY(7px) rotate(0); } to { opacity: 1; transform: none; } }
+@keyframes shuffle-card { 0% { opacity: 0; transform: translate(-50%, -75vh) scale(.8); } 16% { opacity: 1; transform: translate(-50%, -50%); } 30% { transform: translate(calc(-50% + var(--effect-near)), -50%) rotate(var(--effect-tilt)); } 43% { transform: translate(calc(-50% - var(--effect-near)), -50%) rotate(var(--effect-tilt)); } 56% { transform: translate(-50%, -50%); } 68% { transform: translate(calc(-50% + var(--effect-near)), -50%); } 100% { opacity: 0; transform: translate(calc(-50% + var(--effect-exit)), -50%) rotate(var(--effect-tilt)); } }
+@keyframes shuffle-caption { 0%, 12%, 95%, 100% { opacity: 0; } 20%, 88% { opacity: 1; } }
+@keyframes deck-overlay { 0% { opacity: 0; visibility: visible; } 8%, 92% { opacity: 1; visibility: visible; } 99% { opacity: 0; visibility: visible; } 100% { opacity: 0; visibility: hidden; } }
 @media (max-width: 600px) {
   .choice-grid { grid-template-columns: 1fr; }
   .join-box { grid-row: auto; }
@@ -121,4 +156,6 @@ label { display: block; font-weight: 700; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; }
   .viewport-vignette { animation: none; opacity: .3; }
+  .effect-coin, .effect-die, .shuffle-card, .shuffle-caption, .deck-shuffle-overlay { animation: none; }
+  .deck-shuffle-overlay { position: relative; inset: auto; min-height: 260px; margin-top: .75rem; visibility: visible; opacity: 1; }
 }

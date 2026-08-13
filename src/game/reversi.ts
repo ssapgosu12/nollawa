@@ -1,7 +1,7 @@
-import type { GameContract } from './contract';
+import type { GameContract, SharedGameState } from './contract';
 import { copyGrid, emptyGrid, otherSeat, type GridCell, type GridSeat } from './line-grid';
 export type ReversiAction = { type: 'move'; row: number; column: number } | { type: 'restart' };
-export interface ReversiState { board: GridCell[][]; turn: GridSeat; winner: GridSeat | null; draw: boolean; moves: number; starter: GridSeat }
+export interface ReversiState extends SharedGameState { board: GridCell[][]; turn: GridSeat; winner: GridSeat | null; draw: boolean; moves: number; starter: GridSeat }
 export interface ReversiMove { row: number; column: number }
 const SIZE = 8;
 const DIRECTIONS = [-1, 0, 1].flatMap((dr) => [-1, 0, 1].map((dc) => [dr, dc] as const)).filter(([dr, dc]) => dr || dc);

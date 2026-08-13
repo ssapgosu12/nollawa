@@ -43,15 +43,15 @@ describe('L6 INTEGRATION: opaque action → authority snapshot → identical con
     opponent.messages.length = 0;
     teammate.messages.length = 0;
 
-    await room.webSocketMessage(teammate, JSON.stringify({ type: 'action', action: { type: 'vote', column: 1 }, actor: { id: 'forged', seat: 2 } }));
+    await room.webSocketMessage(teammate, JSON.stringify({ type: 'action', action: { type: 'vote', move: '1' }, actor: { id: 'forged', seat: 2 } }));
     expect(values.snapshot).toBeUndefined();
     const forwarded = authority.messages.find((message) => message.type === 'action');
-    expect(forwarded).toMatchObject({ action: { type: 'vote', column: 1 }, actor: { id: teammate.deserializeAttachment().id, seat: 1 } });
+    expect(forwarded).toMatchObject({ action: { type: 'vote', move: '1' }, actor: { id: teammate.deserializeAttachment().id, seat: 1 } });
 
     await room.webSocketMessage(teammate, JSON.stringify({ type: 'snapshot', state: { forged: true } }));
     expect(values.snapshot).toBeUndefined();
     const members = [authority, teammate].map((socket) => ({ id: socket.deserializeAttachment().id, team: 1 }));
-    let state = reduceAuthorityVote(samok.init(), forwarded.action.column, forwarded.actor, members, true, 0, () => 0);
+    let state = reduceAuthorityVote(samok.init(), forwarded.action.move, forwarded.actor, members, true, 0, () => 0);
     state = reduceAuthorityVote(state, 5, authority.deserializeAttachment(), members, true, 1, () => 0);
     state = settleTeamVote(state, members, 1_001, () => 0.99);
     await room.webSocketMessage(authority, JSON.stringify({ type: 'snapshot', state }));
@@ -60,7 +60,7 @@ describe('L6 INTEGRATION: opaque action → authority snapshot → identical con
     const teammateSnapshot = teammate.messages.findLast((message) => message.type === 'snapshot');
     expect(values.snapshot.moves).toBe(0);
     expect(opponentSnapshot.state).toEqual(teammateSnapshot.state);
-    expect(opponentSnapshot.state.resolvedVote).toEqual({ turn: 1, selected: 5, presentation: [5, 1], settledAt: 1_001 });
+    expect(opponentSnapshot.state.resolvedVote).toEqual({ turn: 1, selected: '5', presentation: ['5', '1'], settledAt: 1_001 });
     expect(commitResolvedTeamVote(state, 2_750)).toBe(state);
 
     state = commitResolvedTeamVote(state, 2_751);

@@ -1,17 +1,19 @@
 import type { Transport } from '../transport/transport';
-export interface RoomParticipant { id: string; slot: number; name: string; ready: boolean; present: boolean }
+export interface RoomParticipant { id: string; slot: number; name: string; ready: boolean; present: boolean; activity?: 'lobby' | 'games' | 'play' }
 export interface RoomSnapshot {
   code: string;
   participants: RoomParticipant[];
   hostId: string | null;
   game: string;
   teamNames: [string, string];
-  settings: { aiOpponent: boolean };
+  settings: { aiOpponent: boolean; aiStrength?: 'normal' | 'high' };
   phase: 'lobby' | 'play';
 }
 export type RoomCommand =
   | { command: 'ready' | 'start' | 'return-lobby' | 'leave-room' }
   | { command: 'set-ai-opponent'; enabled: boolean }
+  | { command: 'set-ai-strength'; strength: 'normal' | 'high' }
+  | { command: 'set-activity'; activity: 'lobby' | 'games' }
   | { command: 'select-game'; game: string }
   | { command: 'kick' | 'promote'; target: string }
   | { command: 'move'; target: string; slot: number }
@@ -25,7 +27,11 @@ export const requiredReady = (total: number) => [0, 0, 2, 2, 3, 3, 4][total] ?? 
 export const teamForSlot = (slot: number): 1 | 2 => slot % 2 ? 1 : 2;
 export const roomSlots = (room: RoomSnapshot) => Array.from({ length: 6 }, (_, index) => room.participants.find((person) => person.slot === index + 1) ?? null);
 export const isRoomHost = (room: RoomSnapshot, id: string | null) => id !== null && room.hostId === id;
-export const roomScreen = (room: RoomSnapshot, id: string | null) => room.phase === 'play' && room.participants.some((person) => person.id === id) ? 'play' : 'lobby';
+export const participantStatusLabel = (room: RoomSnapshot, person: RoomParticipant) => !person.present ? '연결 끊김' : person.activity === 'games' ? '게임 목록 보는 중' : person.activity === 'play' ? '게임 중' : person.id === room.hostId || person.ready ? '준비' : '대기';
+export const roomScreen = (room: RoomSnapshot, id: string | null) => {
+  const person = room.participants.find((member) => member.id === id);
+  return person?.activity === 'games' ? 'games' : room.phase === 'play' && person && (person.activity ?? 'play') === 'play' ? 'play' : 'lobby';
+};
 export const readyLabel = (room: RoomSnapshot) => {
   const guests = room.participants.filter((person) => person.id !== room.hostId);
   return `${guests.filter((person) => person.ready).length}/${guests.length} 준비됨`;

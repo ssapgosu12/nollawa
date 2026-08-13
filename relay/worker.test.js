@@ -293,11 +293,56 @@ describe('N6: authoritative 게임 설정 command', () => {
     await room.attach(host, 'device-key-host', '방장');
     await room.attach(guest, 'device-key-guest', '손님');
     await room.webSocketMessage(host, JSON.stringify({ type: 'room-command', command: 'set-ai-opponent', enabled: true }));
-    expect(values.room.settings).toEqual({ aiOpponent: true });
-    expect(guest.messages.filter((message) => message.type === 'room').at(-1).room.settings).toEqual({ aiOpponent: true });
+    expect(values.room.settings).toEqual({ aiOpponent: true, aiStrength: 'normal' });
+    expect(guest.messages.filter((message) => message.type === 'room').at(-1).room.settings).toEqual({ aiOpponent: true, aiStrength: 'normal' });
     await room.webSocketMessage(guest, JSON.stringify({ type: 'room-command', command: 'set-ai-opponent', enabled: false }));
-    expect(values.room.settings).toEqual({ aiOpponent: true });
+    expect(values.room.settings).toEqual({ aiOpponent: true, aiStrength: 'normal' });
     expect(guest.messages.at(-1)).toEqual({ type: 'room-error', message: '허용되지 않은 방 명령' });
+  });
+});
+
+describe('S1: relay-owned 참가자 활동과 play 모집단', () => {
+  it('발신 identity로 lobby/game-list/play를 전파하고 play 중 신규 참가자는 대기/무좌석이다', async () => {
+    const { room, values } = roomHarness();
+    const host = relaySocket('host');
+    const guest = relaySocket('guest');
+    await room.attach(host, 'device-key-host', '방장');
+    await room.attach(guest, 'device-key-guest', '손님');
+    const guestId = guest.deserializeAttachment().id;
+    await room.webSocketMessage(guest, JSON.stringify({ type: 'room-command', command: 'set-activity', activity: 'games', id: host.deserializeAttachment().id }));
+    expect(values.room.participants.find((person) => person.id === guestId).activity).toBe('games');
+    expect(values.room.participants.find((person) => person.id !== guestId).activity).toBe('lobby');
+    await room.webSocketMessage(guest, JSON.stringify({ type: 'room-command', command: 'set-activity', activity: 'lobby' }));
+    await room.webSocketMessage(guest, JSON.stringify({ type: 'room-command', command: 'ready' }));
+    await room.webSocketMessage(host, JSON.stringify({ type: 'room-command', command: 'start' }));
+    expect(values.room.participants.map((person) => person.activity)).toEqual(['play', 'play']);
+    guest.close();
+    await room.webSocketClose(guest);
+    expect(values.room.participants.find((person) => person.id === guestId)).toMatchObject({ slot: 2, activity: 'play' });
+    expect(host.messages.filter((message) => message.type === 'room').at(-1).room.participants.find((person) => person.id === guestId)).toMatchObject({ slot: 2, present: false });
+    const newcomer = relaySocket('newcomer');
+    await room.attach(newcomer, 'device-key-newcomer', '새 참가자');
+    expect(values.room.participants.at(-1)).toMatchObject({ activity: 'lobby', ready: false });
+    expect(newcomer.deserializeAttachment().seat).toBeNull();
+    expect(newcomer.messages.filter((message) => message.type === 'room').at(-1).room.participants.at(-1)).toMatchObject({ activity: 'lobby', present: true });
+  });
+});
+
+describe('S2: authoritative AI 강도 default/migration/host gate', () => {
+  it('기본·legacy는 보통이고 방장 high만 snapshot으로 공유하며 손님 변경은 거부한다', async () => {
+    const { room, values } = roomHarness();
+    const host = relaySocket('host');
+    const guest = relaySocket('guest');
+    await room.attach(host, 'device-key-host', '방장');
+    expect(values.room.settings.aiStrength).toBe('normal');
+    values.room.settings = { aiOpponent: true };
+    await room.attach(guest, 'device-key-guest', '손님');
+    expect(values.room.settings).toEqual({ aiOpponent: true, aiStrength: 'normal' });
+    await room.webSocketMessage(host, JSON.stringify({ type: 'room-command', command: 'set-ai-strength', strength: 'high' }));
+    expect(guest.messages.filter((message) => message.type === 'room').at(-1).room.settings.aiStrength).toBe('high');
+    await room.webSocketMessage(guest, JSON.stringify({ type: 'room-command', command: 'set-ai-strength', strength: 'normal' }));
+    expect(values.room.settings.aiStrength).toBe('high');
+    expect(guest.messages.at(-1)).toMatchObject({ type: 'room-error' });
   });
 });
 
@@ -311,7 +356,7 @@ describe('N4 AI-ON/OFF: relay-owned seat projection and start gate', () => {
     await room.webSocketMessage(host, JSON.stringify({ type: 'room-command', command: 'set-ai-opponent', enabled: true }));
     expect([host, guest].map((socket) => socket.deserializeAttachment().seat)).toEqual([1, 1]);
     expect(values.room.participants.map((person) => roomSeat(values.room, person))).toEqual([1, 1]);
-    await room.webSocketMessage(guest, JSON.stringify({ type: 'action', action: { type: 'vote', column: 3 } }));
+    await room.webSocketMessage(guest, JSON.stringify({ type: 'action', action: { type: 'vote', move: '3' } }));
     expect(host.messages.findLast((message) => message.type === 'action').actor).toEqual({ id: guest.deserializeAttachment().id, seat: 1 });
     await room.webSocketMessage(host, JSON.stringify({ type: 'room-command', command: 'set-ai-opponent', enabled: false }));
     expect([host, guest].map((socket) => socket.deserializeAttachment().seat)).toEqual([1, 2]);

@@ -81,3 +81,33 @@ describe('D-014: 게임 이름 옆 AI 대전 꼬리표', () => {
     expect(heading(false)).toBe('사목');
   });
 });
+
+describe('S1: 참가자 상태 5종 표시 우선순위', () => {
+  it('다섯 label이 모두 구별되고 연결 끊김은 준비/게임 중보다 우선하면서 슬롯을 보존한다', () => {
+    const current = room(0, false, 5);
+    current.participants.forEach((person, index) => Object.assign(person, [
+      { ready: false, activity: 'lobby' }, { ready: true, activity: 'lobby' },
+      { activity: 'games' }, { activity: 'play' }, { ready: true, activity: 'play', present: false },
+    ][index]));
+    current.hostId = null;
+    const nodes = tree(RoomLobby({ room: current, selfId: null, send() {}, openGames() {} }));
+    const cards = nodes.filter((node) => node.type === 'article' && String(node.props.class).includes('participant'));
+    expect(cards).toHaveLength(6);
+    expect(cards.slice(0, 5).map((card) => text(tree(card).find((node) => node.type === 'span')))).toEqual(['대기', '준비', '게임 목록 보는 중', '게임 중', '연결 끊김']);
+  });
+});
+
+describe('S2: AI 강도 snapshot과 방장 control', () => {
+  it('보통/높음을 같은 snapshot에서 보며 방장만 강도 command를 보낸다', () => {
+    const current = room(2);
+    current.settings.aiStrength = 'high';
+    const sent: unknown[] = [];
+    const select = (id: string) => tree(RoomLobby({ room: current, selfId: id, send: (command) => sent.push(command), openGames() {} })).find((node) => node.type === 'select');
+    expect(select('p1').props).toMatchObject({ value: 'high', disabled: false });
+    select('p1').props.onChange({ currentTarget: { value: 'normal' } });
+    expect(sent).toEqual([{ command: 'set-ai-strength', strength: 'normal' }]);
+    expect(select('p2').props).toMatchObject({ value: 'high', disabled: true });
+    select('p2').props.onChange({ currentTarget: { value: 'normal' } });
+    expect(sent).toHaveLength(1);
+  });
+});

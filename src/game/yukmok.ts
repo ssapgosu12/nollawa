@@ -1,7 +1,7 @@
-import type { GameContract } from './contract';
+import type { GameContract, SharedGameState } from './contract';
 import { copyGrid, emptyGrid, hasLine, otherSeat, type GridCell, type GridSeat } from './line-grid';
 export type YukmokAction = { type: 'place'; row: number; column: number } | { type: 'restart' };
-export interface YukmokState { board: GridCell[][]; turn: GridSeat; winner: GridSeat | null; draw: boolean; moves: number; stonesLeft: 1 | 2; starter: GridSeat }
+export interface YukmokState extends SharedGameState { board: GridCell[][]; turn: GridSeat; winner: GridSeat | null; draw: boolean; moves: number; stonesLeft: 1 | 2; starter: GridSeat }
 const SIZE = 19;
 const fresh = (starter: GridSeat): YukmokState => ({ board: emptyGrid(SIZE), turn: starter, winner: null, draw: false, moves: 0, stonesLeft: 1, starter });
 function reduce(state: YukmokState, action: YukmokAction): YukmokState {

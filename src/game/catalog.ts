@@ -2,11 +2,13 @@ import { omok, type OmokAction, type OmokState } from './omok';
 import { reversi, legalReversiMoves, type ReversiAction, type ReversiState } from './reversi';
 import { legalColumns, samok, type SamokAction, type SamokState, type Seat } from './samok';
 import { yukmok, type YukmokAction, type YukmokState } from './yukmok';
+import type { GameMove, GameMoveKey, GridMove } from './contract';
+export type { GameMove, GameMoveKey, GridMove } from './contract';
 export type GameId = 'samok' | 'omok' | 'yukmok' | 'reversi';
-export type GridMove = { row: number; column: number };
-export type GameMove = number | GridMove;
 export type GameState = SamokState | OmokState | YukmokState | ReversiState;
 export type GameAction = SamokAction | OmokAction | YukmokAction | ReversiAction;
+export type VoteAction = { type: 'vote'; move: GameMoveKey };
+export type GameWireAction = GameAction | VoteAction;
 export const GAME_CATALOG = [
   { id: 'samok', name: '사목', people: '2인', time: '5분', tags: ['봇 있음', '대전', '5분 이내'] },
   { id: 'omok', name: '오목', people: '2인', time: '10분', tags: ['봇 있음', '대전'] },
@@ -23,10 +25,15 @@ export function legalGameMoves(id: GameId, state: GameState): GameMove[] {
   if (terminalGame(id, state).ended) return [];
   if (id === 'samok') return legalColumns(state as SamokState);
   if (id === 'reversi') return legalReversiMoves(state as ReversiState);
+  const swap: GameMove[] = id === 'omok' && (state as OmokState).swapAvailable ? [{ kind: 'swap' }] : [];
   const board = state.board, center = (board.length - 1) / 2;
-  return board.flatMap((row, r) => row.map((cell, column) => ({ cell, row: r, column }))).filter(({ cell }) => cell === 0).sort((a, b) => Math.abs(a.row - center) + Math.abs(a.column - center) - Math.abs(b.row - center) - Math.abs(b.column - center)).map(({ row, column }) => ({ row, column }));
+  return [...swap, ...board.flatMap((row, r) => row.map((cell, column) => ({ cell, row: r, column }))).filter(({ cell }) => cell === 0).sort((a, b) => Math.abs(a.row - center) + Math.abs(a.column - center) - Math.abs(b.row - center) - Math.abs(b.column - center)).map(({ row, column }) => ({ row, column }))];
 }
-export const actionForMove = (id: GameId, move: GameMove): GameAction => id === 'samok' ? { type: 'drop', column: move as number } : { type: id === 'reversi' ? 'move' : 'place', ...(move as GridMove) } as GameAction;
+export const actionForMove = (id: GameId, move: GameMove): GameAction => typeof move === 'object' && 'kind' in move ? { type: 'swap' } : id === 'samok' ? { type: 'drop', column: move as number } : { type: id === 'reversi' ? 'move' : 'place', ...(move as GridMove) } as GameAction;
 export const restartAction = (): GameAction => ({ type: 'restart' });
-export const moveKey = (move: GameMove): string => typeof move === 'number' ? `${move}` : `${move.row}:${move.column}`;
+export const moveKey = (move: GameMove): GameMoveKey => typeof move === 'number' ? `${move}` : 'kind' in move ? move.kind : `${move.row}:${move.column}`;
+export const moveForKey = (id: GameId, state: GameState, key: GameMoveKey): GameMove | null => legalGameMoves(id, state).find((move) => moveKey(move) === key) ?? null;
+export const legalGameMoveKeys = (id: GameId, state: GameState): GameMoveKey[] => legalGameMoves(id, state).map(moveKey);
+export function reduceGameMove(id: GameId, state: GameState, key: GameMoveKey): GameState { const move = moveForKey(id, state, key); return move === null ? state : reduceGame(id, state, actionForMove(id, move)); }
+export const voteActionForMove = (move: GameMove): VoteAction => ({ type: 'vote', move: moveKey(move) });
 export const seatToAct = (state: GameState): Seat => state.turn;

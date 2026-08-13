@@ -11,15 +11,15 @@ export const snapCellPixels = (available: number, cells: number): number => Math
 export const stoneDitherEnabled = (diameterPixels: number): boolean => diameterPixels >= 26;
 export interface BoardGridProps {
   geometry: GridGeometry; board: readonly (readonly number[])[]; label: string; disabled?: boolean; flipRows?: boolean;
-  columnInput?: boolean; rouletteColumn?: number | null; patternId?: string; viewBox?: string; cellPixels?: number;
+  columnInput?: boolean; rouletteColumn?: number | null; rouletteCell?: { row: number; column: number } | null; patternId?: string; viewBox?: string; cellPixels?: number;
   isLegal(row: number, column: number): boolean; onSelect(row: number, column: number): void;
   renderCell(value: number, row: number, column: number, cx: number, cy: number): ComponentChildren;
-  selectionLabel(row: number, column: number): string; footer?(column: number, cx: number, y: number): ComponentChildren;
+  selectionLabel(row: number, column: number): string; overlay?(row: number, column: number, cx: number, cy: number): ComponentChildren; footer?(column: number, cx: number, y: number): ComponentChildren;
 }
 export function gridMetrics(geometry: GridGeometry) {
   return { width: geometry.columns * 100, boardHeight: geometry.rows * 100, height: geometry.rows * 100 + (geometry.footer ?? 0) };
 }
-export function GridBoard({ geometry, board, label, disabled = false, flipRows = false, columnInput = false, rouletteColumn = null, patternId = 'board-dither', viewBox, cellPixels = 100, isLegal, onSelect, renderCell, selectionLabel, footer }: BoardGridProps) {
+export function GridBoard({ geometry, board, label, disabled = false, flipRows = false, columnInput = false, rouletteColumn = null, rouletteCell = null, patternId = 'board-dither', viewBox, cellPixels = 100, isLegal, onSelect, renderCell, selectionLabel, overlay, footer }: BoardGridProps) {
   const { width, boardHeight, height } = gridMetrics(geometry);
   const pixel = 100 / Math.max(1, Math.floor(cellPixels));
   const cells = Array.from({ length: geometry.rows * geometry.columns }, (_, index) => ({ visualRow: Math.floor(index / geometry.columns), column: index % geometry.columns }));
@@ -30,7 +30,9 @@ export function GridBoard({ geometry, board, label, disabled = false, flipRows =
     {geometry.layout !== 'slots' && Array.from({ length: geometry.columns + (geometry.layout === 'cells' ? 1 : 0) }, (_, column) => <line key={`v${column}`} x1={(column + (geometry.layout === 'intersections' ? .5 : 0)) * 100} x2={(column + (geometry.layout === 'intersections' ? .5 : 0)) * 100} y1={geometry.layout === 'cells' ? 0 : 50} y2={geometry.layout === 'cells' ? boardHeight : boardHeight - 50} stroke="var(--line)" stroke-width="3" />)}
     {geometry.layout !== 'slots' && Array.from({ length: geometry.rows + (geometry.layout === 'cells' ? 1 : 0) }, (_, row) => <line key={`h${row}`} y1={(row + (geometry.layout === 'intersections' ? .5 : 0)) * 100} y2={(row + (geometry.layout === 'intersections' ? .5 : 0)) * 100} x1={geometry.layout === 'cells' ? 0 : 50} x2={geometry.layout === 'cells' ? width : width - 50} stroke="var(--line)" stroke-width="3" />)}
     {rouletteColumn !== null && <rect class="roulette-highlight" x={rouletteColumn * 100 + 8} y="8" width="84" height={boardHeight - 16} rx="18" />}
+    {rouletteCell && <rect class="roulette-highlight" x={rouletteCell.column * 100 + 8} y={rouletteCell.row * 100 + 8} width="84" height="84" rx="18" />}
     {cells.map(({ visualRow, column }) => { const row = flipRows ? geometry.rows - 1 - visualRow : visualRow; return renderCell(board[row]?.[column] ?? 0, row, column, column * 100 + 50, visualRow * 100 + 50); })}
+    {overlay && cells.map(({ visualRow, column }) => { const row = flipRows ? geometry.rows - 1 - visualRow : visualRow; return overlay(row, column, column * 100 + 50, visualRow * 100 + 50); })}
     {(columnInput ? Array.from({ length: geometry.columns }, (_, column) => ({ row: 0, column })) : cells.map(({ visualRow, column }) => ({ row: flipRows ? geometry.rows - 1 - visualRow : visualRow, column }))).map(({ row, column }) => {
       const legal = !disabled && isLegal(row, column), y = columnInput ? 5 : (flipRows ? geometry.rows - 1 - row : row) * 100 + 5;
       return <g key={`${row}:${column}`} role="button" aria-label={selectionLabel(row, column)} aria-disabled={!legal} tabIndex={legal ? 0 : -1} onClick={() => select(row, column)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') select(row, column); }}><rect class="board-hit-area" x={column * 100 + 5} y={y} width="90" height={columnInput ? boardHeight - 10 : 90} /></g>;

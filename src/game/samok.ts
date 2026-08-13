@@ -1,17 +1,13 @@
-import type { GameContract } from './contract';
-import type { ResolvedTeamVote, TeamVoteState } from './team-vote';
+import type { GameContract, SharedGameState } from './contract';
 export type Seat = 1 | 2;
 export type Cell = 0 | Seat;
-export type SamokAction = { type: 'drop' | 'vote'; column: number } | { type: 'restart' };
-export interface SamokState {
+export type SamokAction = { type: 'drop'; column: number } | { type: 'restart' };
+export interface SamokState extends SharedGameState {
   board: Cell[][];
   turn: Seat;
   winner: Seat | null;
   draw: boolean;
   moves: number;
-  vote?: TeamVoteState;
-  resolvedVote?: ResolvedTeamVote;
-  rematchConsent?: string[];
 }
 const ROWS = 6;
 const COLUMNS = 7;
@@ -53,7 +49,6 @@ function reduce(state: SamokState, action: SamokAction): SamokState {
     const previousStarter = state.moves % 2 === 0 ? state.turn : otherSeat(state.turn);
     return init(otherSeat(previousStarter));
   }
-  if (action.type === 'vote') return state;
   if (state.winner || state.draw
     || !Number.isInteger(action.column) || action.column < 0 || action.column >= COLUMNS) return state;
   const row = state.board.findIndex((cells) => cells[action.column] === 0);
