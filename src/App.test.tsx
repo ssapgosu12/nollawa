@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AI_MOVE_DELAY_MS, applyAuthorityAiMove, applyAuthorityRematch, identitySeat, leaveForTitle, remoteBoardDisabled, remoteRematchPresentation, remoteSeatLabel, restartNoticeFor, returnToLobby, roomVoteMembers, shouldRequestAiMove, waitForAiMoveGate } from './App';
+import { AI_MOVE_DELAY_MS, aiBudgetMs, applyAuthorityAiMove, applyAuthorityRematch, identitySeat, leaveForTitle, remoteBoardDisabled, remoteRematchPresentation, remoteSeatLabel, restartNoticeFor, returnToLobby, roomRematchMembers, roomVoteMembers, shouldRequestAiMove, waitForAiMoveGate, withAiMoveGate } from './App';
 import { samok, type SamokState } from './game/samok';
 
 function terminalState(): SamokState {
@@ -131,6 +131,53 @@ describe('P2 AI 착수 공통 최소 지연과 stale 취소', () => {
     expect(await gate).toBe(false);
     await vi.runAllTimersAsync();
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe('S2/S3: App 공통 AI budget과 생각중 lifecycle', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('normal/high snapshot을 App request gate의 정확한 1000/3000ms로 매핑한다', () => {
+    expect(aiBudgetMs(null)).toBe(1_000);
+    expect(aiBudgetMs({ settings: { aiOpponent: true } } as Parameters<typeof aiBudgetMs>[0])).toBe(1_000);
+    expect(aiBudgetMs({ settings: { aiOpponent: true, aiStrength: 'high' } } as Parameters<typeof aiBudgetMs>[0])).toBe(3_000);
+  });
+
+  it.each(['local', 'remote'])('%s authority path는 전체 active request 동안 AI 생각중...을 유지하고 완료/취소 때 제거한다', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(10_000);
+    let finish!: (value: number) => void;
+    const request = new Promise<number>((resolve) => { finish = resolve; });
+    const visible: string[] = [];
+    const controller = new AbortController();
+    const gated = withAiMoveGate(request, Date.now(), 1_000, controller.signal, (active) => visible.push(active ? 'AI 생각중...' : ''));
+    expect(visible).toEqual(['AI 생각중...']);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(visible).toEqual(['AI 생각중...']);
+    finish(3);
+    await expect(gated).resolves.toEqual([3, true]);
+    expect(visible).toEqual(['AI 생각중...', '']);
+    const cancelled: string[] = [];
+    const abort = new AbortController();
+    const stale = withAiMoveGate(Promise.resolve(4), Date.now(), 3_000, abort.signal, (active) => cancelled.push(active ? 'AI 생각중...' : ''));
+    abort.abort();
+    await expect(stale).resolves.toEqual([null, false]);
+    expect(cancelled).toEqual(['AI 생각중...', '']);
+  });
+
+  it('late joiner: lobby/games 참가자는 vote와 rematch 분모에 없고 activity 없는 legacy play 참가자는 유지한다', () => {
+    const room = {
+      code: 'ABC-67', hostId: 'legacy', game: 'samok', teamNames: ['왼쪽', '오른쪽'] as [string, string], settings: { aiOpponent: false }, phase: 'play' as const,
+      participants: [
+        { id: 'legacy', slot: 1, name: '기존', ready: true, present: true },
+        { id: 'active', slot: 2, name: '대국 중', ready: true, present: true, activity: 'play' as const },
+        { id: 'waiting', slot: 3, name: '늦게 입장', ready: false, present: true, activity: 'lobby' as const },
+        { id: 'browsing', slot: 4, name: '게임 목록', ready: false, present: true, activity: 'games' as const },
+      ],
+    };
+    expect(roomVoteMembers(room, 1)).toEqual([{ id: 'legacy', team: 1 }]);
+    expect(roomVoteMembers(room, 2)).toEqual([{ id: 'active', team: 2 }]);
+    expect(roomRematchMembers(room)).toEqual([{ id: 'legacy', name: '기존' }, { id: 'active', name: '대국 중' }]);
   });
 });
 
