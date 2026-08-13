@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { requestSamokMove } from './ai/samok-client';
 import { Board } from './components/Board';
+import { EffectsTestPage } from './components/Effects';
 import { Countdown, Vignette } from './components/TableEffects';
 import { reduceRematchConsent, rematchProgress, type RematchMember } from './game/rematch-consent';
 import { samok, type SamokAction, type SamokState, type Seat } from './game/samok';
@@ -9,7 +10,7 @@ import { normalizeRoomCode, requestReservation, reserveRoomCode } from './lobby/
 import { RoomLobby } from './lobby/RoomLobby';
 import { isRoomHost, MAIN_DESTINATIONS, reuseRemoteTransport, roomScreen, teamForSlot, type RoomCommand, type RoomSnapshot } from './lobby/room-state';
 import { deviceReconnectKey, LoopbackTransport, WebSocketTransport, type Transport } from './transport/transport';
-type Screen = 'name' | 'room' | 'lobby' | 'games' | 'play';
+type Screen = 'name' | 'room' | 'lobby' | 'games' | 'effects' | 'play';
 type PlayMode = 'local' | 'ai' | 'remote';
 interface ActionActor { id: string; seat: Seat | null }
 interface AcceptedActionSource { actor: ActionActor; action: SamokAction }
@@ -260,7 +261,9 @@ export function App() {
         {mode === 'remote' ? <button class="primary" disabled={!isHost} onClick={() => { sendRoom({ command: 'select-game', game: game.id }); setScreen('lobby'); }}>게임 선택</button> : <button class="primary" onClick={() => void startLocal(mode)}>두 사람이 시작</button>}
         {mode === 'local' && <button onClick={() => void startLocal('ai')}>AI와 시작</button>}
       </div></article>)}
+      <article class="game-card effects-entry"><div><h2>연출 테스트</h2><p class="people">동전 · 주사위 · 덱 섞기</p><div class="tags"><span>E1–E5</span></div></div><div class="game-actions"><button class="primary" onClick={() => setScreen('effects')}>테스트 열기</button></div></article>
     </div></section>}
+    {screen === 'effects' && <EffectsTestPage onBack={() => setScreen('games')} />}
     {screen === 'play' && <section class="play-layout" aria-labelledby="play-title"><div class="game-status"><div><p class="eyebrow">{connection}</p><h1 id="play-title">{outcome}</h1>{mode === 'remote' && <p class={`seat-badge ${localSeat ? `player-${localSeat}` : ''}`}>{remoteSeatLabel(localSeat)}</p>}{restartNotice && <p class="restart-notice" role="status">{restartNotice}</p>}</div>{mode === 'remote' ? <div><button onClick={() => returnToLobby(sendRoom)}>로비로 돌아가기</button><button onClick={() => leaveForTitle(sendRoom, closeTransport, () => setScreen('name'))}>타이틀로 나가기</button></div> : <button onClick={() => setScreen('games')}>게임 목록</button>}</div><Board state={state} selfId={mode === 'remote' ? selfId : null} seat={localSeat} rouletteColumn={rouletteColumn} disabled={(mode === 'remote' && remoteBoardDisabled(state, localSeat)) || (mode !== 'remote' && (samok.terminal(state).ended || (mode === 'ai' && state.turn === 2)))} onDrop={(column) => send({ type: 'action', action: { type: mode === 'remote' ? 'vote' : 'drop', column } })} /><p class="hint">열을 누르거나 키보드로 선택하세요. ● 1번 · ■ 2번</p>{samok.terminal(state).ended && <div class="rematch"><div>{mode === 'remote' && room && <><p>{rematch.ready}/{rematch.total} 다음 판 준비</p><p>아직: {rematch.pendingNames.join(', ')}</p></>}</div><button class="primary restart" disabled={mode === 'remote' && (localSeat === null || rematch.selfReady)} onClick={() => send({ type: 'action', action: { type: 'restart' } })}>다음 판</button></div>}</section>}
     {screen === 'play' && voteTimer.visible && <Vignette intensity={voteTimer.intensity} periodMs={voteTimer.periodMs} />}
     {screen === 'play' && <Countdown remaining={voteTimer.remaining} visible={voteTimer.visible} />}
