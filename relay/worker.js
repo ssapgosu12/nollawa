@@ -15,7 +15,7 @@ export const requiredReady = (total) => [0, 0, 2, 2, 3, 3, 4][total] ?? Infinity
 
 function newRoom(code) {
   const pair = TEAM_PAIRS[Math.floor(Math.random() * TEAM_PAIRS.length)];
-  return { code, participants: [], hostId: null, game: 'samok', teamNames: [...pair], phase: 'lobby' };
+  return { code, participants: [], hostId: null, game: 'samok', teamNames: [...pair], settings: { aiOpponent: false }, phase: 'lobby' };
 }
 
 function participant(room, id) {
@@ -25,17 +25,21 @@ function participant(room, id) {
 export function applyRoomCommand(room, sender, message) {
   const actor = participant(room, sender);
   if (!actor) return false;
-  if (message.command === 'ready' && room.phase === 'lobby') {
+  if (message.command === 'ready' && room.phase === 'lobby' && sender !== room.hostId) {
     actor.ready = !actor.ready;
     return true;
   }
   if (sender !== room.hostId) return false;
+  if (message.command === 'set-ai-opponent' && typeof message.enabled === 'boolean') {
+    room.settings = { ...(room.settings ?? {}), aiOpponent: message.enabled };
+    return true;
+  }
   if (message.command === 'select-game' && typeof message.game === 'string' && message.game.length <= 32) {
     room.game = message.game;
     return true;
   }
   if (message.command === 'start') {
-    const ready = room.participants.filter((person) => person.ready).length;
+    const ready = 1 + room.participants.filter((person) => person.id !== room.hostId && person.ready).length;
     const bothTeams = [1, 2].every((team) => room.participants.some((person) => teamSeat(person.slot) === team));
     if (room.phase !== 'lobby' || ready < requiredReady(room.participants.length) || !bothTeams) return false;
     room.phase = 'play';
@@ -97,6 +101,7 @@ export class Room {
       const replaced = existing.filter((socket) => socket.deserializeAttachment()?.reconnectKey === reconnectKey);
       const stored = await this.state.storage.get(['room', 'snapshot', 'seq', 'authority']);
       const room = stored.get('room') ?? newRoom(code);
+      room.settings ??= { aiOpponent: false };
       let person = room.participants.find((item) => item.reconnectKey === reconnectKey);
       if (!person && room.participants.length < 6) {
         const slot = [1, 2, 3, 4, 5, 6].find((value) => !room.participants.some((item) => item.slot === value));

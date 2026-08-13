@@ -272,6 +272,35 @@ describe('L4: 방장 권한과 슬롯 이동', () => {
   });
 });
 
+describe('N2: 릴레이의 암묵적 방장 준비 권한', () => {
+  it('위조한 방장 ready는 거부하고 준비 손님 둘과 암묵적 방장으로 4명 방을 시작한다', () => {
+    const room = { hostId: 'p1', phase: 'lobby', participants: [
+      { id: 'p1', slot: 1, ready: false }, { id: 'p2', slot: 2, ready: true },
+      { id: 'p3', slot: 3, ready: true }, { id: 'p4', slot: 4, ready: false },
+    ] };
+    expect(applyRoomCommand(room, 'p1', { command: 'ready' })).toBe(false);
+    expect(applyRoomCommand(room, 'p2', { command: 'start' })).toBe(false);
+    expect(room.participants[0].ready).toBe(false);
+    expect(applyRoomCommand(room, 'p1', { command: 'start' })).toBe(true);
+  });
+});
+
+describe('N6: authoritative 게임 설정 command', () => {
+  it('방장 AI 설정은 room snapshot을 바꾸고 손님의 같은 명령은 거부된다', async () => {
+    const { room, values } = roomHarness();
+    const host = relaySocket('host');
+    const guest = relaySocket('guest');
+    await room.attach(host, 'device-key-host', '방장');
+    await room.attach(guest, 'device-key-guest', '손님');
+    await room.webSocketMessage(host, JSON.stringify({ type: 'room-command', command: 'set-ai-opponent', enabled: true }));
+    expect(values.room.settings).toEqual({ aiOpponent: true });
+    expect(guest.messages.filter((message) => message.type === 'room').at(-1).room.settings).toEqual({ aiOpponent: true });
+    await room.webSocketMessage(guest, JSON.stringify({ type: 'room-command', command: 'set-ai-opponent', enabled: false }));
+    expect(values.room.settings).toEqual({ aiOpponent: true });
+    expect(guest.messages.at(-1)).toEqual({ type: 'room-error', message: '허용되지 않은 방 명령' });
+  });
+});
+
 describe('L5: 팀 상태와 재연결', () => {
   it('준비 표, 교대 팀 좌석, 비어 있지 않은 양 팀을 릴레이가 시작 조건으로 사용한다', () => {
     expect([2, 3, 4, 5, 6].map(requiredReady)).toEqual([2, 2, 3, 3, 4]);

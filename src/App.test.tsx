@@ -39,7 +39,7 @@ describe('M1-LOBBY CORRECTION: identity 팀 projection', () => {
 describe('L6 TEAM VOTE: authoritative room membership', () => {
   it('authoritative room snapshot의 홀짝 슬롯만 현재 팀 voter 모집단으로 투영한다', () => {
     const room = {
-      code: 'ABC-67', hostId: 'p1', game: 'samok', teamNames: ['왼쪽', '오른쪽'] as [string, string], phase: 'play' as const,
+      code: 'ABC-67', hostId: 'p1', game: 'samok', teamNames: ['왼쪽', '오른쪽'] as [string, string], settings: { aiOpponent: false }, phase: 'play' as const,
       participants: [
         { id: 'p1', slot: 1, name: '하나', ready: true, present: true },
         { id: 'p2', slot: 2, name: '둘', ready: true, present: true },
