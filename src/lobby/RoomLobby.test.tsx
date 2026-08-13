@@ -69,3 +69,15 @@ describe('A1: AI 대전은 사람 전원 한 팀', () => {
     expect(tree(teamHeadings).filter((node) => node.type === 'input')).toHaveLength(2);
   });
 });
+
+describe('D-014: 게임 이름 옆 AI 대전 꼬리표', () => {
+  const heading = (aiOpponent: boolean) => {
+    const nodes = tree(RoomLobby({ room: room(2, aiOpponent), selfId: 'p1', send() {}, openGames() {} }));
+    return nodes.filter((node) => node.type === 'h2').map(text).join('');
+  };
+
+  it('AI 대전이 켜지면 이름 옆에 (AI 대전)이 붙고, 꺼지면 붙지 않는다', () => {
+    expect(heading(true)).toBe('사목 (AI 대전)');
+    expect(heading(false)).toBe('사목');
+  });
+});

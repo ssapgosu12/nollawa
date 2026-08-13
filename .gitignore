@@ -3,3 +3,4 @@ node_modules/
 *.log
 collab13/
 relay/.wrangler/
+dist/
