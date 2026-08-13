@@ -53,17 +53,17 @@ describe('L6 INTEGRATION: opaque action → authority snapshot → identical con
     const members = [authority, teammate].map((socket) => ({ id: socket.deserializeAttachment().id, team: 1 }));
     let state = reduceAuthorityVote(samok.init(), forwarded.action.column, forwarded.actor, members, true, 0, () => 0);
     state = reduceAuthorityVote(state, 5, authority.deserializeAttachment(), members, true, 1, () => 0);
-    state = settleTeamVote(state, members, 5_001, () => 0.99);
+    state = settleTeamVote(state, members, 1_001, () => 0.99);
     await room.webSocketMessage(authority, JSON.stringify({ type: 'snapshot', state }));
 
     const opponentSnapshot = opponent.messages.findLast((message) => message.type === 'snapshot');
     const teammateSnapshot = teammate.messages.findLast((message) => message.type === 'snapshot');
     expect(values.snapshot.moves).toBe(0);
     expect(opponentSnapshot.state).toEqual(teammateSnapshot.state);
-    expect(opponentSnapshot.state.resolvedVote).toEqual({ turn: 1, selected: 5, presentation: [5, 1], settledAt: 5_001 });
-    expect(commitResolvedTeamVote(state, 6_750)).toBe(state);
+    expect(opponentSnapshot.state.resolvedVote).toEqual({ turn: 1, selected: 5, presentation: [5, 1], settledAt: 1_001 });
+    expect(commitResolvedTeamVote(state, 2_750)).toBe(state);
 
-    state = commitResolvedTeamVote(state, 6_751);
+    state = commitResolvedTeamVote(state, 2_751);
     await room.webSocketMessage(authority, JSON.stringify({ type: 'snapshot', state }));
     const committedForOpponent = opponent.messages.findLast((message) => message.type === 'snapshot');
     const committedForTeammate = teammate.messages.findLast((message) => message.type === 'snapshot');

@@ -5,8 +5,8 @@ export interface VoteActor { id: string; seat: Seat | null }
 export interface TeamVoteState {
   turn: Seat;
   voters: Array<{ id: string; team: Seat; column: number }>;
-  firstDeadline: number;
-  majorityDeadline: number | null;
+  deadline: number;
+  effectsSuppressed: boolean;
 }
 export interface ResolvedTeamVote {
   turn: Seat;
@@ -15,9 +15,6 @@ export interface ResolvedTeamVote {
   settledAt: number;
 }
 export interface RouletteStep { column: number; dwellMs: number }
-
-const FIRST_VOTE_MS = 15_000;
-const MAJORITY_MS = 5_000;
 
 function currentMembers(members: readonly VoteMember[], turn: Seat): VoteMember[] {
   const current = members.filter((member) => member.team === turn);
@@ -52,7 +49,7 @@ function finalize(state: SamokState, vote: TeamVoteState, members: readonly Vote
 
 export function nextVoteDeadline(state: SamokState): number | null {
   if (!state.vote || state.vote.turn !== state.turn) return null;
-  return state.vote.majorityDeadline === null ? state.vote.firstDeadline : Math.min(state.vote.firstDeadline, state.vote.majorityDeadline);
+  return state.vote.deadline;
 }
 
 export const authorityVoteDeadline = (state: SamokState, authority: boolean): number | null => authority ? nextVoteDeadline(state) : null;
@@ -83,14 +80,16 @@ export function castTeamVote(state: SamokState, column: number, actor: VoteActor
   const expired = settleTeamVote(state, eligible, now, random);
   if (expired !== state) return expired;
   const previous = state.vote?.turn === state.turn ? state.vote : undefined;
+  const previousVote = previous ? validVoters(previous, eligible, legalColumns(state)).find((voter) => voter.id === actor.id) : undefined;
+  if (previousVote?.column === column) return state;
   const voters = previous ? validVoters(previous, eligible, legalColumns(state)).filter((voter) => voter.id !== actor.id) : [];
   voters.push({ id: actor.id, team: state.turn, column });
-  const majority = Math.floor(eligible.length / 2) + 1;
+  const unvoted = eligible.length - voters.length;
   const vote: TeamVoteState = {
     turn: state.turn,
     voters,
-    firstDeadline: previous?.firstDeadline ?? now + FIRST_VOTE_MS,
-    majorityDeadline: previous?.majorityDeadline ?? (voters.length >= majority ? now + MAJORITY_MS : null),
+    deadline: now + (unvoted === 0 ? 1_000 : (unvoted * 4 + 7) * 1_000),
+    effectsSuppressed: unvoted === 0,
   };
   const next = { ...state, vote, resolvedVote: undefined };
   if (voters.length === eligible.length && new Set(voters.map((voter) => voter.column)).size === 1) return finalize(next, vote, eligible, now, random);

@@ -75,21 +75,24 @@ describe('L6 TEAM VOTE: authoritative room membership', () => {
   });
 });
 
-describe('N4 AI-ON/OFF: authoritative voters and AI turn owner', () => {
+describe('A1: authoritative human voters and AI seat 2 owner', () => {
   const room = (aiOpponent: boolean) => ({
     code: 'ABC-67', hostId: 'p1', game: 'samok', teamNames: ['왼쪽', '오른쪽'] as [string, string], settings: { aiOpponent }, phase: 'play' as const,
     participants: [
       { id: 'p1', slot: 1, name: '하나', ready: true, present: true },
       { id: 'p2', slot: 2, name: '둘', ready: true, present: true },
       { id: 'p3', slot: 3, name: '셋', ready: true, present: true },
+      { id: 'p4', slot: 4, name: '넷', ready: true, present: true },
+      { id: 'p5', slot: 5, name: '다섯', ready: true, present: true },
+      { id: 'p6', slot: 6, name: '여섯', ready: true, present: true },
     ],
   });
 
   it('AI-on 인간 턴은 좌우 슬롯 전원이 voter이고 AI 턴은 인간 voter가 없으며 AI-off는 팀별이다', () => {
-    expect(roomVoteMembers(room(true), 1)).toEqual(['p1', 'p2', 'p3'].map((id) => ({ id, team: 1 })));
+    expect(roomVoteMembers(room(true), 1)).toEqual(['p1', 'p2', 'p3', 'p4', 'p5', 'p6'].map((id) => ({ id, team: 1 })));
     expect(roomVoteMembers(room(true), 2)).toEqual([]);
-    expect(roomVoteMembers(room(false), 1)).toEqual([{ id: 'p1', team: 1 }, { id: 'p3', team: 1 }]);
-    expect(roomVoteMembers(room(false), 2)).toEqual([{ id: 'p2', team: 2 }]);
+    expect(roomVoteMembers(room(false), 1)).toEqual([{ id: 'p1', team: 1 }, { id: 'p3', team: 1 }, { id: 'p5', team: 1 }]);
+    expect(roomVoteMembers(room(false), 2)).toEqual([{ id: 'p2', team: 2 }, { id: 'p4', team: 2 }, { id: 'p6', team: 2 }]);
   });
 
   it('remote AI는 현재 authority만 요청·적용해 2번 돌을 만들고 non-authority와 AI-off는 적용하지 않는다', () => {

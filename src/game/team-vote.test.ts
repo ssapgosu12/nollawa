@@ -27,11 +27,12 @@ describe('L6 TEAM VOTE: 자격·합법성·표 교체', () => {
     const first = cast(samok.init(), 'p1', 1, members);
     const changed = cast(first, 'p1', 4, members, 1_000);
     expect(changed.vote?.voters).toEqual([{ id: 'p1', team: 1, column: 4 }]);
-    expect(changed.vote?.firstDeadline).toBe(15_000);
+    expect(changed.vote?.deadline).toBe(16_000);
+    expect(cast(changed, 'p1', 4, members, 2_000)).toBe(changed);
   });
 
   it('persisted snapshot의 중복 voter id도 집계와 dot에서 한 번만 센다', () => {
-    const duplicated: SamokState = { ...samok.init(), vote: { turn: 1, firstDeadline: 0, majorityDeadline: null, voters: [
+    const duplicated: SamokState = { ...samok.init(), vote: { turn: 1, deadline: 0, effectsSuppressed: true, voters: [
       { id: 'p1', team: 1, column: 6 }, { id: 'p1', team: 1, column: 6 }, { id: 'p2', team: 1, column: 1 },
     ] } };
     expect(voteDots(duplicated, 'p1')[6]).toEqual({ count: 1, own: true });
@@ -39,7 +40,7 @@ describe('L6 TEAM VOTE: 자격·합법성·표 교체', () => {
   });
 });
 
-describe('L6 TEAM VOTE: 세 확정 조건과 절대 마감', () => {
+describe('V1: 마지막 표 기준 절대 마감과 권위 확정', () => {
   it('한 명 팀은 첫 표가 전원 동일 표라 즉시 정확히 한 수를 둔다', () => {
     const resolved = cast(samok.init(), 'solo', 3, team('solo'));
     expect(resolved.moves).toBe(1);
@@ -47,7 +48,7 @@ describe('L6 TEAM VOTE: 세 확정 조건과 절대 마감', () => {
     expect(resolved.vote).toBeUndefined();
   });
 
-  it('팀 전원이 같은 선택을 하면 15초 전에도 즉시 확정한다', () => {
+  it('팀 전원이 같은 선택을 하면 마감을 기다리지 않고 즉시 확정한다', () => {
     const members = team('p1', 'p2', 'p3');
     const one = cast(samok.init(), 'p1', 2, members, 10);
     const two = cast(one, 'p2', 2, members, 20);
@@ -56,32 +57,31 @@ describe('L6 TEAM VOTE: 세 확정 조건과 절대 마감', () => {
     expect(three.resolvedVote?.selected).toBe(2);
   });
 
-  it('첫 표 +15초에 현재 유일 최다를 확정하고 unique maximum은 난수를 호출하지 않는다', () => {
+  it('accepted 새 표와 변경 표마다 미투표자×4+7 마감을 재시작하고 전원 투표는 1초와 effects 숨김을 저장한다', () => {
+    const members = team('p1', 'p2', 'p3', 'p4');
+    const first = cast(samok.init(), 'p1', 1, members, 1_000);
+    expect(first.vote).toMatchObject({ deadline: 20_000, effectsSuppressed: false });
+    const second = cast(first, 'p2', 2, members, 3_000);
+    expect(second.vote?.deadline).toBe(18_000);
+    expect(cast(second, 'p2', 2, members, 4_000)).toBe(second);
+    const changed = cast(second, 'p2', 3, members, 5_000);
+    expect(changed.vote?.deadline).toBe(20_000);
+    const third = cast(changed, 'p3', 4, members, 6_000);
+    expect(third.vote?.deadline).toBe(17_000);
+    const all = cast(third, 'p4', 5, members, 7_000);
+    expect(all.vote).toMatchObject({ deadline: 8_000, effectsSuppressed: true });
+    expect(settleTeamVote(all, members, 7_999, () => 0)).toBe(all);
+    expect(settleTeamVote(all, members, 8_000, () => 0).resolvedVote).toBeDefined();
+  });
+
+  it('마지막 표 마감에서 유일 최다를 확정하고 unique maximum은 난수를 호출하지 않는다', () => {
     const random = vi.fn(() => 0.9);
     const open = cast(samok.init(), 'p1', 5, team('p1', 'p2'), 1_000, random);
-    expect(nextVoteDeadline(open)).toBe(16_000);
-    expect(settleTeamVote(open, team('p1', 'p2'), 15_999, random)).toBe(open);
-    const resolved = settleTeamVote(open, team('p1', 'p2'), 16_000, random);
+    expect(nextVoteDeadline(open)).toBe(12_000);
+    expect(settleTeamVote(open, team('p1', 'p2'), 11_999, random)).toBe(open);
+    const resolved = settleTeamVote(open, team('p1', 'p2'), 12_000, random);
     expect(resolved.resolvedVote?.selected).toBe(5);
     expect(random).not.toHaveBeenCalled();
-  });
-
-  it('과반 참여를 처음 달성한 때 +5초에 최다를 확정한다', () => {
-    const members = team('p1', 'p2', 'p3');
-    const one = cast(samok.init(), 'p1', 1, members, 2_000);
-    const majority = cast(one, 'p2', 1, members, 4_000);
-    expect(majority.vote?.majorityDeadline).toBe(9_000);
-    expect(nextVoteDeadline(majority)).toBe(9_000);
-    expect(settleTeamVote(majority, members, 9_000, () => 0).moves).toBe(1);
-  });
-
-  it('두 절대 마감 중 먼저인 first-vote +15초가 뒤늦게 생긴 majority +5초보다 앞선다', () => {
-    const members = team('p1', 'p2', 'p3');
-    const first = cast(samok.init(), 'p1', 1, members, 0);
-    const lateMajority = cast(first, 'p2', 1, members, 12_000);
-    expect(lateMajority.vote?.majorityDeadline).toBe(17_000);
-    expect(nextVoteDeadline(lateMajority)).toBe(15_000);
-    expect(settleTeamVote(lateMajority, members, 15_000, () => 0).moves).toBe(1);
   });
 
   it('아무 표도 없으면 마감도 timer source도 생기지 않아 무한 대기한다', () => {
@@ -97,16 +97,16 @@ describe('L6 TEAM VOTE: 동점 선택·룰렛·단일 착수', () => {
     const first = cast(samok.init(), 'p1', 1, members, 0);
     const tied = cast(first, 'p2', 5, members, 1_000);
     const random = vi.fn(() => 0.75);
-    const resolved = settleTeamVote(tied, members, 6_000, random);
+    const resolved = settleTeamVote(tied, members, 2_000, random);
     expect(random).toHaveBeenCalledTimes(1);
     expect(resolved.resolvedVote).toMatchObject({ selected: 5, presentation: [5, 1] });
     expect(resolved.board).toEqual(tied.board);
     expect(resolved.moves).toBe(0);
     expect(resolved.turn).toBe(1);
     expect(resolved.vote).toBeUndefined();
-    expect(resolvedVoteDeadline(resolved)).toBe(7_750);
-    expect(commitResolvedTeamVote(resolved, 7_749)).toBe(resolved);
-    const committed = commitResolvedTeamVote(resolved, 7_750);
+    expect(resolvedVoteDeadline(resolved)).toBe(3_750);
+    expect(commitResolvedTeamVote(resolved, 3_749)).toBe(resolved);
+    const committed = commitResolvedTeamVote(resolved, 3_750);
     expect(committed.board[0]?.[5]).toBe(1);
     expect(committed).toMatchObject({ moves: 1, turn: 2 });
     expect(committed.resolvedVote).toBeUndefined();
@@ -119,7 +119,7 @@ describe('L6 TEAM VOTE: 동점 선택·룰렛·단일 착수', () => {
     state = cast(state, 'p2', 1, members, 10);
     state = cast(state, 'p3', 2, members, 20);
     state = cast(state, 'p4', 3, members, 30);
-    const resolved = settleTeamVote(state, members, 5_020, () => 0.99);
+    const resolved = settleTeamVote(state, members, 1_030, () => 0.99);
     expect(resolved.resolvedVote?.selected).toBe(3);
     expect(resolved.resolvedVote?.presentation).toEqual([3, 0, 1]);
   });
@@ -149,17 +149,17 @@ describe('L6 TEAM VOTE: snapshot·권위·UI projection·로컬 보존', () => {
     const open = cast(cast(samok.init(), 'p1', 2, members, 1_000), 'p2', 4, members, 2_000);
     const resumed = JSON.parse(JSON.stringify(open)) as SamokState;
     expect(resumed.vote).toEqual(open.vote);
-    expect(nextVoteDeadline(resumed)).toBe(7_000);
+    expect(nextVoteDeadline(resumed)).toBe(13_000);
     expect(authorityVoteDeadline(resumed, false)).toBeNull();
-    expect(authorityVoteDeadline(resumed, true)).toBe(7_000);
-    expect(reduceAuthorityVote(resumed, 6, actor('p3'), members, false, 7_000, () => 0)).toBe(resumed);
-    const pending = settleTeamVote(resumed, members, 7_000, () => 0.99);
+    expect(authorityVoteDeadline(resumed, true)).toBe(13_000);
+    expect(reduceAuthorityVote(resumed, 6, actor('p3'), members, false, 13_000, () => 0)).toBe(resumed);
+    const pending = settleTeamVote(resumed, members, 13_000, () => 0.99);
     const transferred = JSON.parse(JSON.stringify(pending)) as SamokState;
-    expect(transferred.resolvedVote).toMatchObject({ selected: 4, settledAt: 7_000 });
+    expect(transferred.resolvedVote).toMatchObject({ selected: 4, settledAt: 13_000 });
     expect(authorityResolvedVoteDeadline(transferred, false)).toBeNull();
-    expect(authorityResolvedVoteDeadline(transferred, true)).toBe(8_750);
-    expect(commitResolvedTeamVote(transferred, 8_749)).toBe(transferred);
-    const committed = commitResolvedTeamVote(transferred, 8_750);
+    expect(authorityResolvedVoteDeadline(transferred, true)).toBe(14_750);
+    expect(commitResolvedTeamVote(transferred, 14_749)).toBe(transferred);
+    const committed = commitResolvedTeamVote(transferred, 14_750);
     expect(committed.board[0]?.[4]).toBe(1);
     expect(commitResolvedTeamVote(committed, 9_000)).toBe(committed);
   });

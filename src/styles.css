@@ -84,6 +84,7 @@ label { display: block; font-weight: 700; }
 .team-headings, .participant-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem; }
 .team-headings strong { text-align: center; }
 .team-headings input { margin-top: .15rem; }
+.ai-opponent-banner { margin: 0; text-align: center; font-weight: 900; }
 .participant-grid { grid-template-rows: repeat(3, minmax(86px, 112px)); align-content: start; }
 .participant { display: flex; flex-direction: column; justify-content: center; gap: .25rem; min-width: 0; max-height: 112px; border: 2px solid var(--line); border-radius: 12px; padding: .55rem; }
 .participant > span { color: var(--muted); }
@@ -95,6 +96,9 @@ label { display: block; font-weight: 700; }
 .lobby-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; padding-bottom: max(.5rem, env(safe-area-inset-bottom)); }
 .lobby-actions strong { grid-column: 1 / -1; text-align: center; }
 .update-banner { position: fixed; z-index: 10; right: max(1rem, env(safe-area-inset-right)); bottom: max(1rem, env(safe-area-inset-bottom)); left: max(1rem, env(safe-area-inset-left)); display: flex; align-items: center; justify-content: center; gap: 1rem; border: 3px solid var(--line); border-radius: 12px; padding: .75rem; background: var(--accent); box-shadow: 0 5px 0 var(--line); font-weight: 800; }
+.viewport-vignette { position: fixed; z-index: 8; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 62%, rgb(0 0 0 / calc(var(--vignette-intensity) * .35)) 82%, rgb(0 0 0 / var(--vignette-intensity)) 100%); animation: vignette-flash var(--vignette-period) ease-in-out infinite alternate; }
+.viewport-countdown { position: fixed; z-index: 9; bottom: max(.2rem, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); color: var(--ink); font-size: clamp(1.5rem, 7vw, 3rem); font-weight: 900; line-height: 1; text-shadow: 0 1px var(--paper); }
+@keyframes vignette-flash { from { opacity: .2; } to { opacity: 1; } }
 @media (max-width: 600px) {
   .choice-grid { grid-template-columns: 1fr; }
   .join-box { grid-row: auto; }
@@ -112,4 +116,5 @@ label { display: block; font-weight: 700; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; }
+  .viewport-vignette { animation: none; opacity: .3; }
 }

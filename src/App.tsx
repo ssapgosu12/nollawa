@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { requestSamokMove } from './ai/samok-client';
 import { Board } from './components/Board';
+import { Countdown, Vignette } from './components/TableEffects';
 import { reduceRematchConsent, rematchProgress, type RematchMember } from './game/rematch-consent';
 import { samok, type SamokAction, type SamokState, type Seat } from './game/samok';
 import { authorityResolvedVoteDeadline, authorityVoteDeadline, commitResolvedTeamVote, reduceAuthorityVote, roulettePlan, settleTeamVote, type VoteMember } from './game/team-vote';
@@ -34,6 +35,11 @@ export const applyAuthorityRematch = (state: SamokState, actor: ActionActor | un
 export const shouldRequestAiMove = (mode: PlayMode, room: RoomSnapshot | null, authority: boolean): boolean => mode === 'ai' || (mode === 'remote' && room?.settings.aiOpponent === true && authority);
 export const applyAuthorityAiMove = (state: SamokState, column: number, authority: boolean): SamokState => authority ? samok.reduce(state, { type: 'drop', column }) : state;
 export const AI_MOVE_DELAY_MS = 1_000;
+export function voteTimerPresentation(state: SamokState, now: number) {
+  if (!state.vote || state.vote.effectsSuppressed) return { remaining: 0, visible: false, intensity: 0, periodMs: 1_000 };
+  const remaining = Math.max(0, Math.ceil((state.vote.deadline - now) / 1_000));
+  return { remaining, visible: remaining > 0 && remaining <= 5, intensity: .12, periodMs: remaining <= 3 ? 250 : 1_000 };
+}
 export const returnToLobby = (send: (command: RoomCommand) => void) => send({ command: 'return-lobby' });
 export function leaveForTitle(send: (command: RoomCommand) => void, close: () => void, showTitle: () => void) {
   send({ command: 'leave-room' });
@@ -70,6 +76,7 @@ export function App() {
   const [authority, setAuthority] = useState(false);
   const [rouletteColumn, setRouletteColumn] = useState<number | null>(null);
   const [restartNotice, setRestartNotice] = useState('');
+  const [clock, setClock] = useState(() => Date.now());
   const transportRef = useRef<Transport<GameMessage> | null>(null);
   const clientId = useRef<string | null>(null);
   const localSeatRef = useRef<Seat | null>(null);
@@ -215,6 +222,13 @@ export function App() {
     return () => window.clearTimeout(timer);
   }, [authority, mode, room, screen, state]);
   useEffect(() => {
+    if (mode !== 'remote' || screen !== 'play' || !state.vote || state.vote.effectsSuppressed) return;
+    const update = () => setClock(Date.now());
+    update();
+    const timer = window.setInterval(update, 250);
+    return () => window.clearInterval(timer);
+  }, [mode, screen, state.vote?.deadline, state.vote?.effectsSuppressed]);
+  useEffect(() => {
     const plan = roulettePlan(state.resolvedVote);
     if (!plan.length) { setRouletteColumn(null); return; }
     const age = Math.max(0, Date.now() - state.resolvedVote!.settledAt);
@@ -230,6 +244,7 @@ export function App() {
   useEffect(() => () => transportRef.current?.close(), []);
   const outcome = state.winner ? `${state.winner}번 승리` : state.draw ? '무승부' : `${state.turn}번 차례`;
   const rematch = remoteRematchPresentation(state, room, selfId);
+  const voteTimer = voteTimerPresentation(state, clock);
   return <main class="app-shell">
     <header class="topbar"><button class="brand" onClick={() => { closeTransport(); setScreen('name'); }}>Nollawa party games</button><span class="build-hash" aria-label={`빌드 ${__BUILD_HASH__}`}>빌드 {__BUILD_HASH__}</span></header>
     {screen === 'name' && <section class="panel narrow" aria-labelledby="name-title"><p class="eyebrow">네 줄을 먼저 이어 보세요</p><h1 id="name-title">이름을 알려 주세요</h1><label>표시 이름<input value={name} maxLength={16} autoComplete="nickname" onInput={(event) => setName(event.currentTarget.value)} /></label><button class="primary" disabled={!name.trim()} onClick={() => setScreen('room')}>계속</button></section>}
@@ -247,6 +262,8 @@ export function App() {
       </div></article>)}
     </div></section>}
     {screen === 'play' && <section class="play-layout" aria-labelledby="play-title"><div class="game-status"><div><p class="eyebrow">{connection}</p><h1 id="play-title">{outcome}</h1>{mode === 'remote' && <p class={`seat-badge ${localSeat ? `player-${localSeat}` : ''}`}>{remoteSeatLabel(localSeat)}</p>}{restartNotice && <p class="restart-notice" role="status">{restartNotice}</p>}</div>{mode === 'remote' ? <div><button onClick={() => returnToLobby(sendRoom)}>로비로 돌아가기</button><button onClick={() => leaveForTitle(sendRoom, closeTransport, () => setScreen('name'))}>타이틀로 나가기</button></div> : <button onClick={() => setScreen('games')}>게임 목록</button>}</div><Board state={state} selfId={mode === 'remote' ? selfId : null} seat={localSeat} rouletteColumn={rouletteColumn} disabled={(mode === 'remote' && remoteBoardDisabled(state, localSeat)) || (mode !== 'remote' && (samok.terminal(state).ended || (mode === 'ai' && state.turn === 2)))} onDrop={(column) => send({ type: 'action', action: { type: mode === 'remote' ? 'vote' : 'drop', column } })} /><p class="hint">열을 누르거나 키보드로 선택하세요. ● 1번 · ■ 2번</p>{samok.terminal(state).ended && <div class="rematch"><div>{mode === 'remote' && room && <><p>{rematch.ready}/{rematch.total} 다음 판 준비</p><p>아직: {rematch.pendingNames.join(', ')}</p></>}</div><button class="primary restart" disabled={mode === 'remote' && (localSeat === null || rematch.selfReady)} onClick={() => send({ type: 'action', action: { type: 'restart' } })}>다음 판</button></div>}</section>}
+    {screen === 'play' && voteTimer.visible && <Vignette intensity={voteTimer.intensity} periodMs={voteTimer.periodMs} />}
+    {screen === 'play' && <Countdown remaining={voteTimer.remaining} visible={voteTimer.visible} />}
     <UpdateBanner />
   </main>;
 }

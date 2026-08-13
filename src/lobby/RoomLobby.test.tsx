@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { RoomLobby } from './RoomLobby';
 import type { RoomSnapshot } from './room-state';
 
-const room = (readyGuests: number, aiOpponent = true): RoomSnapshot => ({
+const room = (readyGuests: number, aiOpponent = true, total = 4): RoomSnapshot => ({
   code: 'ABC-67', hostId: 'p1', game: 'samok', teamNames: ['콜라', '사이다'], settings: { aiOpponent }, phase: 'lobby',
-  participants: [1, 2, 3, 4].map((slot, index) => ({ id: `p${slot}`, slot, name: `사람 ${slot}`, ready: index > 0 && index <= readyGuests, present: true })),
+  participants: Array.from({ length: total }, (_, index) => index + 1).map((slot, index) => ({ id: `p${slot}`, slot, name: `사람 ${slot}`, ready: index > 0 && index <= readyGuests, present: true })),
 });
 
 function tree(node: unknown): any[] {
@@ -54,12 +54,17 @@ describe('N6: RoomLobby authoritative AI setting control', () => {
   });
 });
 
-describe('N4 AI-ON/OFF: lobby side headings', () => {
-  it('AI-on은 편집 팀명 대신 사람 편과 AI를 보이고 AI-off 방장은 두 팀명을 계속 편집한다', () => {
-    const aiTree = tree(RoomLobby({ room: room(2, true), selfId: 'p1', send() {}, openGames() {} }));
-    const aiHeadings = aiTree.find((node) => node.type === 'div' && node.props.class === 'team-headings');
-    expect(text(aiHeadings)).toBe('사람 편AI');
-    expect(tree(aiHeadings).filter((node) => node.type === 'input')).toHaveLength(0);
+describe('A1: AI 대전은 사람 전원 한 팀', () => {
+  it('AI-on은 한 줄 안내와 사람 슬롯 6개만 렌더하고 전부 1번 팀이며 준비 분모를 보존한다', () => {
+    const aiTree = tree(RoomLobby({ room: room(5, true, 6), selfId: 'p1', send() {}, openGames() {} }));
+    const banner = aiTree.find((node) => node.type === 'p' && node.props.class === 'ai-opponent-banner');
+    expect(text(banner)).toBe('모두 함께 AI와 대전 중');
+    expect(aiTree.find((node) => node.type === 'div' && node.props.class === 'team-headings')).toBeUndefined();
+    const cells = aiTree.filter((node) => node.type === 'article' && String(node.props.class).includes('participant'));
+    expect(cells).toHaveLength(6);
+    expect(cells.every((node) => node.props.class === 'participant team-1')).toBe(true);
+    expect(cells.map(text).join('')).not.toContain('빈 자리');
+    expect(text(aiTree)).toContain('5/5 준비됨');
     const teamHeadings = tree(RoomLobby({ room: room(2, false), selfId: 'p1', send() {}, openGames() {} })).find((node) => node.type === 'div' && node.props.class === 'team-headings');
     expect(tree(teamHeadings).filter((node) => node.type === 'input')).toHaveLength(2);
   });
