@@ -31,3 +31,9 @@ describe('L6 TEAM VOTE: 열 아래 dot과 CSS player 변수', () => {
     expect(css).toMatch(/\.vote-dot\.own-vote\.player-2\s*{\s*fill:\s*var\(--player-2\)/);
   });
 });
+
+describe('R2: 못 누르는 버튼은 강조되지 않는다', () => {
+  it('button:disabled가 강조 배경을 되돌린다 — primary 클래스가 붙은 버튼도 포함', () => {
+    expect(css).toMatch(/button:disabled\s*{[^}]*background:/);
+  });
+});

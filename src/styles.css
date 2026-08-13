@@ -18,7 +18,7 @@ button, input { font: inherit; color: inherit; }
 button { min-height: 44px; border: 2px solid var(--line); border-radius: 10px; background: var(--paper); padding: .65rem 1rem; cursor: pointer; }
 button:hover { background: #f5f5f0; }
 button:focus-visible, input:focus-visible, [role="button"]:focus-visible { outline: 4px solid #3278c6; outline-offset: 3px; }
-button:disabled { color: #777; cursor: not-allowed; }
+button:disabled { color: #777; cursor: not-allowed; background: var(--paper); box-shadow: none; }
 input { width: 100%; min-height: 46px; margin-top: .4rem; border: 2px solid var(--line); border-radius: 8px; padding: .65rem .75rem; background: var(--paper); }
 h1, h2, p { margin-top: 0; }
 h1 { font-size: clamp(1.65rem, 5vw, 2.6rem); line-height: 1.15; }

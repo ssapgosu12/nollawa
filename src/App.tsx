@@ -4,7 +4,7 @@ import { Board } from './components/Board';
 import { reduceRematchConsent, rematchProgress, type RematchMember } from './game/rematch-consent';
 import { samok, type SamokAction, type SamokState, type Seat } from './game/samok';
 import { authorityResolvedVoteDeadline, authorityVoteDeadline, commitResolvedTeamVote, reduceAuthorityVote, roulettePlan, settleTeamVote, type VoteMember } from './game/team-vote';
-import { normalizeRoomCode, reserveRoomCode } from './lobby/room-code';
+import { normalizeRoomCode, requestReservation, reserveRoomCode } from './lobby/room-code';
 import { RoomLobby } from './lobby/RoomLobby';
 import { isRoomHost, MAIN_DESTINATIONS, reuseRemoteTransport, roomScreen, teamForSlot, type RoomCommand, type RoomSnapshot } from './lobby/room-state';
 import { deviceReconnectKey, LoopbackTransport, WebSocketTransport, type Transport } from './transport/transport';
@@ -156,12 +156,11 @@ export function App() {
     setCreatingRoom(true);
     setRoomError('');
     try {
-      const code = await reserveRoomCode(async (candidate) => {
-        const response = await fetch(reservationUrl(candidate), { method: 'POST' });
-        if (response.status === 409) return false;
-        if (!response.ok) throw new Error('방 코드를 확인하지 못했습니다. 다시 시도해 주세요.');
-        return true;
-      });
+      const code = await reserveRoomCode((candidate) => requestReservation(
+        reservationUrl(candidate),
+        (url, init) => fetch(url, init),
+        (ms) => new Promise((resolve) => { window.setTimeout(resolve, ms); }),
+      ));
       await enterRemote(code);
     } catch (error) { setRoomError(error instanceof Error ? error.message : '방을 만들지 못했습니다.'); }
     finally { setCreatingRoom(false); }

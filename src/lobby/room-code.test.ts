@@ -4,6 +4,8 @@ import {
   createRoomCode,
   isForbiddenRoomCode,
   normalizeRoomCode,
+  RESERVATION_TRIES,
+  requestReservation,
   reserveRoomCode,
 } from './room-code';
 
@@ -46,5 +48,36 @@ describe('방 코드', () => {
     await expect(reserveRoomCode(async () => {
       throw new Error('network down');
     }, () => 0)).rejects.toThrow('network down');
+  });
+});
+
+describe('R1: 릴레이 cold start 실패에 재시도한다', () => {
+  const noWait = async () => {};
+
+  it('내부 오류 두 번 뒤 성공하면 예약된 것으로 본다', async () => {
+    const seen: number[] = [];
+    let call = 0;
+    const send = async () => {
+      call += 1;
+      seen.push(call);
+      if (call < 3) return { status: 500, ok: false };
+      return { status: 201, ok: true };
+    };
+    await expect(requestReservation('https://relay.example/room/ABC-67', send, noWait)).resolves.toBe(true);
+    expect(seen).toEqual([1, 2, 3]);
+  });
+
+  it('응답조차 못 받아도 재시도하고, 끝까지 실패하면 사용자에게 알린다', async () => {
+    let call = 0;
+    const send = async () => { call += 1; throw new TypeError('Failed to fetch'); };
+    await expect(requestReservation('https://relay.example/room/ABC-67', send, noWait)).rejects.toThrow('방 코드를 확인하지 못했습니다. 다시 시도해 주세요.');
+    expect(call).toBe(RESERVATION_TRIES);
+  });
+
+  it('이미 쓰이는 코드(409)는 재시도하지 않고 곧바로 다음 후보로 넘긴다', async () => {
+    let call = 0;
+    const send = async () => { call += 1; return { status: 409, ok: false }; };
+    await expect(requestReservation('https://relay.example/room/ABC-67', send, noWait)).resolves.toBe(false);
+    expect(call).toBe(1);
   });
 });
