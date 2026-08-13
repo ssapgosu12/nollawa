@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Room } from '../../relay/worker.js';
 import { samok } from './samok';
-import { reduceAuthorityVote, settleTeamVote } from './team-vote';
+import { commitResolvedTeamVote, reduceAuthorityVote, settleTeamVote } from './team-vote';
 
 function relaySocket() {
   let attachment = {};
@@ -31,7 +31,7 @@ function harness() {
 }
 
 describe('L6 INTEGRATION: opaque action → authority snapshot → identical consumers', () => {
-  it('비권위 vote와 forged actor는 snapshot을 못 바꾸고 권위의 단일 선택만 두 소비자에게 동일 전파된다', async () => {
+  it('P1: 비권위 입력은 무시하고 권위의 pending 결과와 deadline 뒤 단일 착수를 동일 전파한다', async () => {
     const { room, values } = harness();
     const authority = relaySocket();
     const opponent = relaySocket();
@@ -58,8 +58,18 @@ describe('L6 INTEGRATION: opaque action → authority snapshot → identical con
 
     const opponentSnapshot = opponent.messages.findLast((message) => message.type === 'snapshot');
     const teammateSnapshot = teammate.messages.findLast((message) => message.type === 'snapshot');
-    expect(values.snapshot.moves).toBe(1);
+    expect(values.snapshot.moves).toBe(0);
     expect(opponentSnapshot.state).toEqual(teammateSnapshot.state);
     expect(opponentSnapshot.state.resolvedVote).toEqual({ turn: 1, selected: 5, presentation: [5, 1], settledAt: 5_001 });
+    expect(commitResolvedTeamVote(state, 6_750)).toBe(state);
+
+    state = commitResolvedTeamVote(state, 6_751);
+    await room.webSocketMessage(authority, JSON.stringify({ type: 'snapshot', state }));
+    const committedForOpponent = opponent.messages.findLast((message) => message.type === 'snapshot');
+    const committedForTeammate = teammate.messages.findLast((message) => message.type === 'snapshot');
+    expect(values.snapshot.moves).toBe(1);
+    expect(values.snapshot.board[0][5]).toBe(1);
+    expect(committedForOpponent.state).toEqual(committedForTeammate.state);
+    expect(commitResolvedTeamVote(state, 99_000)).toBe(state);
   });
 });

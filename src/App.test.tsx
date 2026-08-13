@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { applyAuthorityAiMove, applyAuthorityRematch, identitySeat, remoteBoardDisabled, remoteRematchPresentation, remoteSeatLabel, restartNoticeFor, roomVoteMembers, shouldRequestAiMove } from './App';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { AI_MOVE_DELAY_MS, applyAuthorityAiMove, applyAuthorityRematch, identitySeat, remoteBoardDisabled, remoteRematchPresentation, remoteSeatLabel, restartNoticeFor, roomVoteMembers, shouldRequestAiMove, waitForAiMoveGate } from './App';
 import { samok, type SamokState } from './game/samok';
 
 function terminalState(): SamokState {
@@ -101,5 +101,32 @@ describe('N4 AI-ON/OFF: authoritative voters and AI turn owner', () => {
     const moved = applyAuthorityAiMove(aiTurn, 1, true);
     expect(moved).toMatchObject({ turn: 1, moves: 2 });
     expect(moved.board[0]?.[1]).toBe(2);
+  });
+});
+
+describe('P2 AI 착수 공통 최소 지연과 stale 취소', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('P2: local과 remote 분기 앞의 공통 gate는 1000ms 전에는 열리지 않는다', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(5_000);
+    let opened = false;
+    const gate = waitForAiMoveGate(Date.now()).then((value) => { opened = value; });
+    await vi.advanceTimersByTimeAsync(AI_MOVE_DELAY_MS - 1);
+    expect(opened).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await gate;
+    expect(opened).toBe(true);
+  });
+
+  it('P2: 화면·상태·authority 변경으로 취소된 stale gate는 AI 수를 허용하지 않는다', async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    const gate = waitForAiMoveGate(Date.now(), controller.signal);
+    await vi.advanceTimersByTimeAsync(999);
+    controller.abort();
+    expect(await gate).toBe(false);
+    await vi.runAllTimersAsync();
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

@@ -43,9 +43,11 @@ function finalize(state: SamokState, vote: TeamVoteState, members: readonly Vote
   if (!tied.length) return { ...state, vote: undefined };
   const selected = tied.length === 1 ? tied[0]! : tied[Math.min(tied.length - 1, Math.floor(random() * tied.length))]!;
   const presentation = tied.length === 1 ? [selected] : [selected, ...tied.filter((column) => column !== selected)].slice(0, 3);
+  const resolvedVote = { turn: state.turn, selected, presentation, settledAt: now };
+  if (tied.length > 1) return { ...state, vote: undefined, resolvedVote };
   const dropped = samok.reduce(state, { type: 'drop', column: selected });
   if (dropped === state) return { ...state, vote: undefined };
-  return { ...dropped, vote: undefined, resolvedVote: { turn: state.turn, selected, presentation, settledAt: now } };
+  return { ...dropped, vote: undefined, resolvedVote };
 }
 
 export function nextVoteDeadline(state: SamokState): number | null {
@@ -54,6 +56,19 @@ export function nextVoteDeadline(state: SamokState): number | null {
 }
 
 export const authorityVoteDeadline = (state: SamokState, authority: boolean): number | null => authority ? nextVoteDeadline(state) : null;
+
+export function resolvedVoteDeadline(state: SamokState): number | null {
+  const plan = roulettePlan(state.resolvedVote);
+  return state.resolvedVote && plan.length ? state.resolvedVote.settledAt + plan.reduce((total, step) => total + step.dwellMs, 0) : null;
+}
+
+export const authorityResolvedVoteDeadline = (state: SamokState, authority: boolean): number | null => authority ? resolvedVoteDeadline(state) : null;
+
+export function commitResolvedTeamVote(state: SamokState, now: number): SamokState {
+  const deadline = resolvedVoteDeadline(state);
+  if (deadline === null || now < deadline || state.resolvedVote?.turn !== state.turn) return state;
+  return samok.reduce(state, { type: 'drop', column: state.resolvedVote.selected });
+}
 
 export function settleTeamVote(state: SamokState, members: readonly VoteMember[], now: number, random: () => number): SamokState {
   const deadline = nextVoteDeadline(state);

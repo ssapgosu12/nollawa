@@ -3,7 +3,7 @@ import { requestSamokMove } from './ai/samok-client';
 import { Board } from './components/Board';
 import { reduceRematchConsent, rematchProgress, type RematchMember } from './game/rematch-consent';
 import { samok, type SamokAction, type SamokState, type Seat } from './game/samok';
-import { authorityVoteDeadline, reduceAuthorityVote, roulettePlan, settleTeamVote, type VoteMember } from './game/team-vote';
+import { authorityResolvedVoteDeadline, authorityVoteDeadline, commitResolvedTeamVote, reduceAuthorityVote, roulettePlan, settleTeamVote, type VoteMember } from './game/team-vote';
 import { normalizeRoomCode, reserveRoomCode } from './lobby/room-code';
 import { RoomLobby } from './lobby/RoomLobby';
 import { isRoomHost, MAIN_DESTINATIONS, reuseRemoteTransport, teamForSlot, type RoomCommand, type RoomSnapshot } from './lobby/room-state';
@@ -33,6 +33,15 @@ export const remoteRematchPresentation = (state: SamokState, room: RoomSnapshot 
 export const applyAuthorityRematch = (state: SamokState, actor: ActionActor | undefined, room: RoomSnapshot | null, authority: boolean): SamokState => authority && actor ? reduceRematchConsent(state, actor.id, roomRematchMembers(room)) : state;
 export const shouldRequestAiMove = (mode: PlayMode, room: RoomSnapshot | null, authority: boolean): boolean => mode === 'ai' || (mode === 'remote' && room?.settings.aiOpponent === true && authority);
 export const applyAuthorityAiMove = (state: SamokState, column: number, authority: boolean): SamokState => authority ? samok.reduce(state, { type: 'drop', column }) : state;
+export const AI_MOVE_DELAY_MS = 1_000;
+export function waitForAiMoveGate(startedAt: number, signal?: AbortSignal): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (signal?.aborted) { resolve(false); return; }
+    const timer = globalThis.setTimeout(() => { signal?.removeEventListener('abort', cancel); resolve(true); }, Math.max(0, startedAt + AI_MOVE_DELAY_MS - Date.now()));
+    const cancel = () => { globalThis.clearTimeout(timer); resolve(false); };
+    signal?.addEventListener('abort', cancel, { once: true });
+  });
+}
 function relayUrl(code: string): string {
   const base = import.meta.env.VITE_RELAY_URL ?? `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}`;
   return `${base.replace(/\/$/, '')}/room/${code}`;
@@ -61,6 +70,7 @@ export function App() {
   const roomRef = useRef<RoomSnapshot | null>(null);
   const isAuthority = useRef(false);
   const aiThinking = useRef(false);
+  const aiRequest = useRef(0);
   const visibleGames = useMemo(() => GAMES.filter((game) => `${game.name} ${game.people} ${game.tags.join(' ')}`.toLowerCase().includes(query.toLowerCase())), [query]);
   const isHost = room ? isRoomHost(room, selfId) : false;
   function bindTransport(transport: Transport<GameMessage>, nextMode: PlayMode) {
@@ -170,24 +180,30 @@ export function App() {
   const sendRoom = (command: RoomCommand) => send({ type: 'room-command', ...command });
   useEffect(() => {
     if (screen !== 'play' || !shouldRequestAiMove(mode, room, authority) || state.turn !== 2 || samok.terminal(state).ended || aiThinking.current) return;
+    const requestId = ++aiRequest.current;
+    const controller = new AbortController();
+    const startedAt = Date.now();
     aiThinking.current = true;
-    void requestSamokMove(state).then((column) => {
+    void Promise.all([requestSamokMove(state), waitForAiMoveGate(startedAt, controller.signal)]).then(([column, current]) => {
+      if (!current || requestId !== aiRequest.current) return;
       if (column !== null && mode === 'remote') setState((current) => {
         const next = applyAuthorityAiMove(current, column, isAuthority.current);
         if (next !== current) queueMicrotask(() => send({ type: 'snapshot', state: next }));
         return next;
       });
       else if (column !== null) send({ type: 'action', action: { type: 'drop', column } });
-      aiThinking.current = false;
-    });
+    }).finally(() => { if (requestId === aiRequest.current) aiThinking.current = false; });
+    return () => { aiRequest.current += 1; controller.abort(); aiThinking.current = false; };
   }, [authority, mode, room, screen, state]);
   useEffect(() => {
     if (mode !== 'remote' || screen !== 'play' || !authority) return;
-    const deadline = authorityVoteDeadline(state, authority);
-    if (deadline === null) return;
+    const deadlines = [authorityVoteDeadline(state, authority), authorityResolvedVoteDeadline(state, authority)].filter((value): value is number => value !== null);
+    if (!deadlines.length) return;
+    const deadline = Math.min(...deadlines);
     const timer = window.setTimeout(() => setState((current) => {
       if (!isAuthority.current) return current;
-      const next = settleTeamVote(current, roomVoteMembers(roomRef.current, current.turn), Date.now(), Math.random);
+      const settled = settleTeamVote(current, roomVoteMembers(roomRef.current, current.turn), Date.now(), Math.random);
+      const next = commitResolvedTeamVote(settled, Date.now());
       if (next !== current) queueMicrotask(() => send({ type: 'snapshot', state: next }));
       return next;
     }), Math.max(0, deadline - Date.now()));
@@ -196,12 +212,14 @@ export function App() {
   useEffect(() => {
     const plan = roulettePlan(state.resolvedVote);
     if (!plan.length) { setRouletteColumn(null); return; }
+    const age = Math.max(0, Date.now() - state.resolvedVote!.settledAt);
     let elapsed = 0;
-    const timers = plan.map((step) => {
-      const timer = window.setTimeout(() => setRouletteColumn(step.column), elapsed);
+    const timers: number[] = [];
+    for (const step of plan) {
+      if (age >= elapsed) setRouletteColumn(step.column);
+      else timers.push(window.setTimeout(() => setRouletteColumn(step.column), elapsed - age));
       elapsed += step.dwellMs;
-      return timer;
-    });
+    }
     return () => timers.forEach((timer) => window.clearTimeout(timer));
   }, [state.resolvedVote]);
   useEffect(() => () => transportRef.current?.close(), []);
