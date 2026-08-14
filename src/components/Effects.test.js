@@ -52,7 +52,12 @@ describe('E3: caller-supplied six-sided dice results', () => {
     expect(source.match(/export function DiceResults[\s\S]*?\n}/)?.[0]).not.toMatch(/Math\.random|demoDiceOutcomes/);
   });
 
-  it('hides final pips through the landing and bounce while a separate pip scramble changes', () => {
+  it('synchronizes all 6 dice bodies, final pip reveals, and scrambles to the inherited per-die delay', () => {
+    const rendered = children(DiceResults({ outcomes: [1, 2, 3, 4, 5, 6], replayKey: 4 }));
+    expect(rendered.map((die) => die.props.style)).toEqual(Array.from({ length: 6 }, (_, index) => `--effect-index:${index}`));
+    expect(css).toMatch(/\.effect-coin, \.effect-die\s*{[^}]*animation-delay:\s*calc\(var\(--effect-index\) \* 55ms\)/);
+    expect(css).toMatch(/\.die-pip\.is-on\s*{[^}]*animation-delay:\s*calc\(var\(--effect-index\) \* 55ms\)/);
+    expect(css).toMatch(/\.die-pip::before\s*{[^}]*animation-delay:\s*calc\(var\(--effect-index\) \* 55ms\)/);
     expect(css).toMatch(/@keyframes die-roll[\s\S]*50%[^{]*{[^}]*translateY\(7px\)[\s\S]*62%[^{]*{[^}]*translateY\(-18px\)[\s\S]*72%[^{]*{[^}]*translateY\(0\)/);
     expect(css).toMatch(/\.die-pip\.is-on\s*{[^}]*animation:\s*die-pip-reveal/);
     expect(css).toMatch(/@keyframes die-pip-reveal\s*{[\s\S]*?0%, 72%[^}]*transparent[\s\S]*?73%, 100%[^}]*var\(--ink\)/);

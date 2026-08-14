@@ -123,8 +123,8 @@ label { display: block; font-weight: 700; }
 .effect-coin.face-T { color: var(--paper); background: var(--ink); }
 .effect-die { display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); border: 3px solid var(--line); border-radius: 12px; padding: 7px; background: var(--paper); box-shadow: 0 3px 0 var(--line); animation-name: die-roll; animation-duration: 650ms; }
 .die-pip { position: relative; align-self: center; justify-self: center; width: min(9px, 60%); aspect-ratio: 1; border-radius: 50%; background: transparent; }
-.die-pip.is-on { animation: die-pip-reveal 650ms steps(1, end) both; }
-.die-pip::before { position: absolute; inset: 0; border-radius: 50%; background: var(--ink); content: ""; animation: die-pip-scramble-a 650ms steps(1, end) both; }
+.die-pip.is-on { animation: die-pip-reveal 650ms steps(1, end) both; animation-delay: calc(var(--effect-index) * 55ms); }
+.die-pip::before { position: absolute; inset: 0; border-radius: 50%; background: var(--ink); content: ""; animation: die-pip-scramble-a 650ms steps(1, end) both; animation-delay: calc(var(--effect-index) * 55ms); }
 .die-pip:nth-child(3n + 2)::before { animation-name: die-pip-scramble-b; }
 .die-pip:nth-child(3n)::before { animation-name: die-pip-scramble-c; }
 .effect-controls { display: flex; align-items: center; gap: .8rem; margin-top: .75rem; }
