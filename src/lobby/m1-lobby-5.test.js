@@ -9,9 +9,12 @@ describe('M1-LOBBY-5 acceptance', () => {
     expect(css).toMatch(/\.game-list\s*\{[^}]*display:\s*grid;[^}]*gap:\s*1\.25rem;/);
   });
 
-  it('S4-AI-RETURN: AI 대전 뒤 목록 복귀는 local 모드로 돌아가 AI와 시작 조건을 복구한다', () => {
+  it('S4-AI-RETURN-SCREEN-EFFECT: screen이 games가 되면 mode를 local로 정규화해 AI와 시작을 보인다', () => {
+    const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8');
     expect(gameListModeAfterPlay('ai')).toBe('local');
     expect(gameListModeAfterPlay('local')).toBe('local');
+    expect(app).toContain("if (screen === 'games') setMode((current) => gameListModeAfterPlay(current));");
+    expect(app).toContain("{mode === 'local' && <button onClick={() => void startLocal('ai', game.id)}>AI와 시작</button>}");
   });
 
   it('S5-COIN: 로컬 시작은 동전으로 선공을 정하고 원격 참가자는 authority의 같은 결과를 받는다', async () => {
