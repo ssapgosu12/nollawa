@@ -24,27 +24,51 @@ const PIP_SCRAMBLE_CLASS = Array.from({ length: 9 }, (_, pip) => `scramble-${DIC
 
 export interface DeckSettings {
   cardFallMs: number; cardStaggerMs: number; cardFadeMs: number; spawnWaitMs: number;
-  gatherMs: number; firstSplitMs: number; firstHoldMs: number; repeatSplitMs: number;
+  firstSplitMs: number; firstHoldMs: number; repeatSplitMs: number;
   cycleWaitMs: number; joinMs: number; exitMs: number; stackOffsetPct: number; fallStartPct: number;
 }
 export const DECK_DEFAULTS: DeckSettings = {
   cardFallMs: 300, cardStaggerMs: 70, cardFadeMs: 150, spawnWaitMs: 300,
-  gatherMs: 150, firstSplitMs: 150, firstHoldMs: 100, repeatSplitMs: 100,
+  firstSplitMs: 150, firstHoldMs: 100, repeatSplitMs: 100,
   cycleWaitMs: 70, joinMs: 100, exitMs: 400, stackOffsetPct: 2, fallStartPct: 120,
 };
 export const DECK_CONTROLS: readonly [keyof DeckSettings, string, number, number][] = [
   ['cardFallMs', '카드 낙하 ms', 50, 800], ['cardStaggerMs', '카드 간격 ms', 0, 250], ['cardFadeMs', '페이드인 ms', 0, 500],
-  ['spawnWaitMs', '스폰 후 대기 ms', 0, 800], ['gatherMs', '모이기 ms', 50, 500], ['firstSplitMs', '첫 분리 ms', 50, 500],
+  ['spawnWaitMs', '스폰 후 대기 ms', 0, 800], ['firstSplitMs', '첫 분리 ms', 50, 500],
   ['firstHoldMs', '첫 분리 대기 ms', 0, 500], ['repeatSplitMs', '반복 분리 ms', 50, 500], ['cycleWaitMs', '반복 대기 ms', 0, 500],
   ['joinMs', '합치기 ms', 50, 500], ['exitMs', '소멸 ms', 50, 900], ['stackOffsetPct', '카드 상단 오프셋 %', 0, 10], ['fallStartPct', '낙하 시작 높이 %', 20, 240],
 ];
 export const deriveDeckTimeline = (s: DeckSettings) => {
-  const spawnEnd = s.cardStaggerMs * 7 + s.cardFallMs, gatherStart = spawnEnd + s.spawnWaitMs, shuffleStart = gatherStart + s.gatherMs;
+  const spawnEnd = s.cardStaggerMs * 7 + s.cardFallMs, shuffleStart = spawnEnd + s.spawnWaitMs;
   const split1 = shuffleStart, join1 = split1 + s.firstSplitMs + s.firstHoldMs;
   const split2 = join1 + s.joinMs + s.cycleWaitMs, join2 = split2 + s.repeatSplitMs + s.cycleWaitMs;
   const split3 = join2 + s.joinMs + s.cycleWaitMs, join3 = split3 + s.repeatSplitMs + s.cycleWaitMs;
   const exitStart = join3 + s.joinMs;
-  return { spawnEnd, gatherStart, shuffleStart, splitStarts: [split1, split2, split3], joinStarts: [join1, join2, join3], directions: ['right', 'left', 'right'] as const, exitStart, total: exitStart + s.exitMs };
+  return {
+    spawnEnd, shuffleStart, splitStarts: [split1, split2, split3] as const,
+    splitEnds: [split1 + s.firstSplitMs, split2 + s.repeatSplitMs, split3 + s.repeatSplitMs] as const,
+    joinStarts: [join1, join2, join3] as const, joinEnds: [join1 + s.joinMs, join2 + s.joinMs, join3 + s.joinMs] as const,
+    directions: ['right', 'left', 'right'] as const, exitStart, shuffleMs: exitStart - shuffleStart, total: exitStart + s.exitMs,
+  };
+};
+
+type PileSide = 'left' | 'right';
+export const buildPileTimeline = (name: string, side: PileSide, timeline: ReturnType<typeof deriveDeckTimeline>) => {
+  const at = (absoluteMs: number) => `${Number((((absoluteMs - timeline.shuffleStart) / timeline.shuffleMs) * 100).toFixed(4))}%`;
+  const split = side === 'right' ? 'translateX(30%) rotate(20deg)' : 'translateX(-30%) rotate(-20deg)';
+  const depth = (cycle: number) => timeline.directions[cycle] === side ? 3 : 2;
+  const frames = [`0% { transform: none; z-index: ${depth(0)}; animation-timing-function: cubic-bezier(.2, .75, .3, 1); }`];
+  for (const cycle of [0, 1, 2] as const) {
+    frames.push(`${at(timeline.splitEnds[cycle])} { transform: ${split}; z-index: ${depth(cycle)}; animation-timing-function: linear; }`);
+    frames.push(`${at(timeline.joinStarts[cycle])} { transform: ${split}; z-index: ${depth(cycle)}; animation-timing-function: cubic-bezier(.2, .75, .3, 1); }`);
+    frames.push(`${at(timeline.joinEnds[cycle])} { transform: none; z-index: ${depth(cycle)}; animation-timing-function: linear; }`);
+    if (cycle < 2) {
+      const nextCycle = cycle === 0 ? 1 : 2;
+      frames.push(`${at(timeline.splitStarts[nextCycle])} { transform: none; z-index: ${depth(nextCycle)}; animation-timing-function: cubic-bezier(.2, .75, .3, 1); }`);
+    }
+  }
+  frames.push('100% { transform: none; visibility: hidden; }');
+  return `@keyframes ${name} { ${frames.join(' ')} }`;
 };
 
 export function CoinResults({ outcomes, replayKey = 0 }: CoinResultsProps) {
@@ -63,13 +87,16 @@ export function DiceResults({ outcomes, replayKey = 0 }: DiceResultsProps) {
 
 export function DeckShuffle({ deckName, replayKey = 0, settings }: DeckShuffleProps) {
   const resolved = { ...DECK_DEFAULTS, ...settings }, timeline = deriveDeckTimeline(resolved);
-  const timing = `--fall-ms:${resolved.cardFallMs}ms;--fade-ms:${resolved.cardFadeMs}ms;--gather-ms:${resolved.gatherMs}ms;--split-1-ms:${resolved.firstSplitMs}ms;--split-ms:${resolved.repeatSplitMs}ms;--join-ms:${resolved.joinMs}ms;--exit-ms:${resolved.exitMs}ms;--gather-start:${timeline.gatherStart}ms;--shuffle-start:${timeline.shuffleStart}ms;--split-1-start:${timeline.splitStarts[0]}ms;--join-1-start:${timeline.joinStarts[0]}ms;--split-2-start:${timeline.splitStarts[1]}ms;--join-2-start:${timeline.joinStarts[1]}ms;--split-3-start:${timeline.splitStarts[2]}ms;--join-3-start:${timeline.joinStarts[2]}ms;--exit-start:${timeline.exitStart}ms;--total-ms:${timeline.total}ms;--fall-start:${resolved.fallStartPct}%`;
+  const timing = `--fall-ms:${resolved.cardFallMs}ms;--fade-ms:${resolved.cardFadeMs}ms;--shuffle-ms:${timeline.shuffleMs}ms;--exit-ms:${resolved.exitMs}ms;--shuffle-start:${timeline.shuffleStart}ms;--exit-start:${timeline.exitStart}ms;--total-ms:${timeline.total}ms;--fall-start:${resolved.fallStartPct}%`;
+  const suffix = Math.abs(Math.trunc(replayKey)), oddName = `deck-shuffle-odd-${suffix}`, evenName = `deck-shuffle-even-${suffix}`;
+  const cards = Array.from({ length: 8 }, (_, index) => ({ index, order: index + 1, pile: (index + 1) % 2 ? 'odd' : 'even' }));
   return <div class="deck-shuffle-overlay" role="status" aria-label={`${deckName} 덱 섞기`} key={`${deckName}-${replayKey}`} style={timing}>
+    <style>{`${buildPileTimeline(oddName, 'left', timeline)} ${buildPileTimeline(evenName, 'right', timeline)}`}</style>
     <div class="shuffle-scene">
-      <div class="shuffle-deck" aria-hidden="true" data-spawn-cards="8" data-shuffle-cards="2">
-        {Array.from({ length: 8 }, (_, index) => <i class="shuffle-card spawn-card" style={`--card-delay:${index * resolved.cardStaggerMs}ms;--stack-y:${index * resolved.stackOffsetPct}%;--gather-y:${3 * resolved.stackOffsetPct}%;--card-order:${index + 1}`} />)}
-        <i class="shuffle-card shuffle-card-a" data-top-cycles="right,right" />
-        <i class="shuffle-card shuffle-card-b" data-top-cycles="left" />
+      <div class="shuffle-deck" aria-hidden="true" data-spawn-cards="8" data-shuffle-cards="8">
+        {(['odd', 'even'] as const).map((pile) => <span class={`shuffle-pile shuffle-pile-${pile}`} data-members={cards.filter((card) => card.pile === pile).map((card) => card.order).join(',')} data-top-cycles={pile === 'even' ? 'right,right' : 'left'} style={`animation-name:${pile === 'odd' ? oddName : evenName}`}>
+          {cards.filter((card) => card.pile === pile).map((card) => <i class="shuffle-card spawn-card pile-card" data-card-index={card.order} style={`--card-delay:${card.index * resolved.cardStaggerMs}ms;--stack-y:${card.index * resolved.stackOffsetPct}%;--card-order:${card.order}`} />)}
+        </span>)}
         <i class="shuffle-card exit-band exit-left" />
         <i class="shuffle-card exit-band exit-right" />
       </div>

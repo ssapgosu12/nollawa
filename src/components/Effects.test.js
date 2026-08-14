@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { CoinResults, DECK_CONTROLS, DECK_DEFAULTS, DICE_SCRAMBLE_PHASES, DeckShuffle, DiceResults, demoCoinOutcomes, demoDiceOutcomes, deriveDeckTimeline } from './Effects';
+import { CoinResults, DECK_CONTROLS, DECK_DEFAULTS, DICE_SCRAMBLE_PHASES, DeckShuffle, DiceResults, buildPileTimeline, demoCoinOutcomes, demoDiceOutcomes, deriveDeckTimeline } from './Effects';
 
 const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8');
 const source = readFileSync(new URL('./Effects.tsx', import.meta.url), 'utf8');
@@ -85,75 +85,100 @@ describe('E3: caller-supplied six-sided dice results', () => {
 describe('E4: full deck-shuffle sequence', () => {
   const renderedDeck = () => {
     const overlay = DeckShuffle({ deckName: '테스트 카드', replayKey: 3 });
-    const scene = children(overlay);
+    const [timelineStyle, scene] = children(overlay);
     const [deck, caption] = children(scene);
-    return { overlay, deck, caption, cards: children(deck).flat(Infinity) };
+    const deckChildren = children(deck).flat(Infinity);
+    const piles = deckChildren.filter((node) => node.props.class?.startsWith('shuffle-pile '));
+    const cards = piles.flatMap((pile) => children(pile)).flat(Infinity);
+    return { overlay, timelineCss: children(timelineStyle), deck, caption, piles, cards, deckChildren };
   };
 
-  it('E4-STAGE-COUNTS: renders exactly 8 whole spawn cards then 2 whole shuffle cards', () => {
-    const { overlay, deck, cards } = renderedDeck();
+  it('E4-ODD-EVEN-MEMBERSHIP: keeps all 8 spawned whole cards as alternating four-card piles', () => {
+    const { overlay, deck, piles, cards } = renderedDeck();
     expect(overlay.props).toMatchObject({ class: 'deck-shuffle-overlay', role: 'status', 'aria-label': '테스트 카드 덱 섞기' });
-    expect(deck.props).toMatchObject({ 'data-spawn-cards': '8', 'data-shuffle-cards': '2' });
-    expect(cards.filter((card) => card.props.class === 'shuffle-card spawn-card')).toHaveLength(8);
-    expect(cards.filter((card) => /shuffle-card-[ab]$/.test(card.props.class))).toHaveLength(2);
+    expect(deck.props).toMatchObject({ 'data-spawn-cards': '8', 'data-shuffle-cards': '8' });
+    expect(piles.map((pile) => pile.props['data-members'])).toEqual(['1,3,5,7', '2,4,6,8']);
+    expect(piles.map((pile) => children(pile).length)).toEqual([4, 4]);
+    expect(cards.map((card) => card.props['data-card-index']).sort()).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(cards.every((card) => card.props.class === 'shuffle-card spawn-card pile-card')).toBe(true);
   });
 
-  it('E4-DEFAULTS-TIMELINE-ORDER: preserves all exact defaults and derives the 2670ms ordered timeline', () => {
-    expect(DECK_DEFAULTS).toEqual({ cardFallMs: 300, cardStaggerMs: 70, cardFadeMs: 150, spawnWaitMs: 300, gatherMs: 150, firstSplitMs: 150, firstHoldMs: 100, repeatSplitMs: 100, cycleWaitMs: 70, joinMs: 100, exitMs: 400, stackOffsetPct: 2, fallStartPct: 120 });
-    expect(deriveDeckTimeline(DECK_DEFAULTS)).toEqual({ spawnEnd: 790, gatherStart: 1090, shuffleStart: 1240, splitStarts: [1240, 1660, 2000], joinStarts: [1490, 1830, 2170], directions: ['right', 'left', 'right'], exitStart: 2270, total: 2670 });
+  it('E4-DEFAULTS-TIMELINE-ORDER: preserves exact remaining defaults and derives the 790ms spawn plus 1030ms shuffle', () => {
+    expect(DECK_DEFAULTS).toEqual({ cardFallMs: 300, cardStaggerMs: 70, cardFadeMs: 150, spawnWaitMs: 300, firstSplitMs: 150, firstHoldMs: 100, repeatSplitMs: 100, cycleWaitMs: 70, joinMs: 100, exitMs: 400, stackOffsetPct: 2, fallStartPct: 120 });
+    expect(deriveDeckTimeline(DECK_DEFAULTS)).toEqual({ spawnEnd: 790, shuffleStart: 1090, splitStarts: [1090, 1510, 1850], splitEnds: [1240, 1610, 1950], joinStarts: [1340, 1680, 2020], joinEnds: [1440, 1780, 2120], directions: ['right', 'left', 'right'], exitStart: 2120, shuffleMs: 1030, total: 2520 });
   });
 
   it('E4-CORRECTION-SPAWN-DIRECTION: places each later spawn card above its predecessor at exactly 0 through 14 percent', () => {
     const { cards } = renderedDeck();
-    const spawnStyles = cards.filter((card) => card.props.class === 'shuffle-card spawn-card').map((card) => card.props.style);
+    const spawnStyles = cards.slice().sort((a, b) => a.props['data-card-index'] - b.props['data-card-index']).map((card) => card.props.style);
     expect(spawnStyles.map((style) => Number(style.match(/--stack-y:(\d+)%/)?.[1]))).toEqual([0, 2, 4, 6, 8, 10, 12, 14]);
   });
 
-  it('E4-CORRECTION-FOURTH-FROM-BOTTOM-GATHER: gathers all eight cards at the zero-based fourth position of 6 percent', () => {
-    const { cards } = renderedDeck();
-    const spawnStyles = cards.filter((card) => card.props.class === 'shuffle-card spawn-card').map((card) => card.props.style);
-    expect(spawnStyles.map((style) => Number(style.match(/--gather-y:(\d+)%/)?.[1]))).toEqual(Array(8).fill(6));
+  it('E4-GATHER-REMOVED: has no gather phase, timing value, slider, keyframe, or replacement cards', () => {
+    const { deckChildren } = renderedDeck();
+    expect(source).not.toMatch(/gather|모이기/i);
+    expect(css).not.toMatch(/gather/i);
+    expect(DECK_CONTROLS.map(([key]) => key)).not.toContain('gatherMs');
+    expect(deckChildren.filter((node) => /shuffle-card-[ab]/.test(node.props.class ?? ''))).toHaveLength(0);
   });
 
-  it('E4-ALTERNATING-TOP: records the top-card direction as right-left-right and switches z-order per cycle', () => {
-    const { cards } = renderedDeck();
+  it('E4-RIGHT-LEFT-RIGHT-TOP: moves the actual top pile right, left, right by switching timeline depth', () => {
+    const { piles, timelineCss } = renderedDeck();
     expect(deriveDeckTimeline(DECK_DEFAULTS).directions).toEqual(['right', 'left', 'right']);
-    expect(cards.find((card) => card.props.class === 'shuffle-card shuffle-card-a').props['data-top-cycles']).toBe('right,right');
-    expect(cards.find((card) => card.props.class === 'shuffle-card shuffle-card-b').props['data-top-cycles']).toBe('left');
-    expect(css).toMatch(/\.shuffle-card-a[^}]*deck-lower[^}]*--split-2-start[^}]*deck-raise[^}]*--split-3-start/);
-    expect(css).toMatch(/\.shuffle-card-b[^}]*deck-raise[^}]*--split-2-start[^}]*deck-lower[^}]*--split-3-start/);
+    expect(piles.map((pile) => pile.props['data-top-cycles'])).toEqual(['left', 'right,right']);
+    expect(timelineCss).toMatch(/deck-shuffle-even-3[\s\S]*0%[^}]*z-index: 3[\s\S]*40\.7767%[^}]*z-index: 2[\s\S]*73\.7864%[^}]*z-index: 3/);
+    expect(timelineCss).toMatch(/deck-shuffle-odd-3[\s\S]*0%[^}]*z-index: 2[\s\S]*40\.7767%[^}]*z-index: 3[\s\S]*73\.7864%[^}]*z-index: 2/);
   });
 
-  it('E4-SIMULTANEOUS-TRANSFORM: moves 30% and rotates 20deg in the same split keyframes', () => {
-    expect(css).toMatch(/@keyframes deck-split-right[\s\S]*?to\s*{[^}]*translate\(calc\(-50% \+ 30%\), -50%\) rotate\(20deg\)/);
-    expect(css).toMatch(/@keyframes deck-split-left[\s\S]*?to\s*{[^}]*translate\(calc\(-50% - 30%\), -50%\) rotate\(-20deg\)/);
+  it('E4-SIMULTANEOUS-30PCT-20DEG: puts exact width-relative translation and rotation in each split endpoint', () => {
+    const { timelineCss } = renderedDeck();
+    expect(timelineCss).toMatch(/translateX\(30%\) rotate\(20deg\)/);
+    expect(timelineCss).toMatch(/translateX\(-30%\) rotate\(-20deg\)/);
+    expect(timelineCss.match(/translateX\(30%\) rotate\(20deg\)/g)).toHaveLength(6);
+    expect(timelineCss.match(/translateX\(-30%\) rotate\(-20deg\)/g)).toHaveLength(6);
   });
 
-  it('E4-CURVES: uses initial-velocity spring drop and spring shuffle while exit motion and fade stay linear', () => {
+  it('E4-SINGLE-TIMELINE-NO-OVERLAP: gives each pile one computed timeline and keeps all split/join intervals disjoint', () => {
+    const timeline = deriveDeckTimeline(DECK_DEFAULTS);
+    const intervals = timeline.splitStarts.map((start, index) => [start, timeline.splitEnds[index]]).concat(timeline.joinStarts.map((start, index) => [start, timeline.joinEnds[index]])).sort((a, b) => a[0] - b[0]);
+    expect(intervals.every((interval, index) => index === intervals.length - 1 || interval[1] <= intervals[index + 1][0])).toBe(true);
+    const { piles, timelineCss } = renderedDeck();
+    expect(piles.map((pile) => pile.props.style)).toEqual(['animation-name:deck-shuffle-odd-3', 'animation-name:deck-shuffle-even-3']);
+    expect(timelineCss.match(/@keyframes deck-shuffle-(?:odd|even)-3/g)).toHaveLength(2);
+    expect(css.match(/\.shuffle-pile\s*{[^}]*animation-duration:[^}]*animation-delay:[^}]*animation-fill-mode:[^}]*}/)?.[0]).not.toContain(',');
+    expect(css).not.toMatch(/deck-split|deck-join|deck-raise|deck-lower/);
+  });
+
+  it('E4-NON-OVERSHOOTING-CURVE: keeps the initial-velocity spawn while shuffle cannot cancel displacement by overshooting', () => {
+    const right = buildPileTimeline('right-test', 'right', deriveDeckTimeline(DECK_DEFAULTS));
     expect(css).toMatch(/\.spawn-card[^}]*deck-card-spring-drop[^}]*cubic-bezier/);
-    expect(css).toMatch(/\.shuffle-card-a[^}]*deck-split-right[^}]*cubic-bezier[^}]*deck-join-right[^}]*cubic-bezier/);
+    expect(right).toMatch(/cubic-bezier\(\.2, \.75, \.3, 1\)/);
+    expect(right).not.toMatch(/1\.1[28]/);
     expect(css).toMatch(/\.exit-band[^}]*animation-timing-function:\s*linear/);
     expect(css).toMatch(/@keyframes deck-exit-left[\s\S]*?from\s*{[^}]*opacity:\s*1[\s\S]*?to\s*{[^}]*opacity:\s*0[^}]*translate/);
   });
 
-  it('E4-CORRECTION-CARD-WIDTH-CAPTION-GAP: puts the caption directly below the deck at exactly 20% of card width', () => {
+  it('E4-PRESERVED-LAYOUT-EXIT-INVARIANTS: keeps independent card width, exact caption gap, and 10px linear exit', () => {
     const { caption } = renderedDeck();
     expect(caption.props.children.join('')).toBe('테스트 카드 덱이 섞이고 있습니다');
     expect(css).toMatch(/\.shuffle-scene\s*{[^}]*gap:\s*min\(7\.6vw, 30px\)/);
     expect(css).toMatch(/\.shuffle-deck\s*{[^}]*width:\s*min\(38vw, 150px\)/);
     expect(css.match(/\.shuffle-scene\s*{[^}]*}/)?.[0]).not.toMatch(/gap:\s*20%/);
     expect(css.match(/\.shuffle-caption\s*{[^}]*}/)?.[0]).not.toMatch(/position|bottom/);
+    expect(css).toMatch(/\.exit-left\s*{[^}]*repeating-linear-gradient\(to bottom, var\(--ink\) 0 10px, transparent 10px 20px\)/);
+    expect(css).toMatch(/\.exit-right\s*{[^}]*repeating-linear-gradient\(to bottom, transparent 0 10px, var\(--ink\) 10px 20px\)/);
+    expect(css).toMatch(/\.exit-band\s*{[^}]*animation-timing-function:\s*linear/);
   });
 
-  it('E4-SLIDERS: exposes every specified ms and all four proposed defaults only on EffectsTestPage', () => {
-    expect(DECK_CONTROLS.map(([key]) => key)).toEqual(['cardFallMs', 'cardStaggerMs', 'cardFadeMs', 'spawnWaitMs', 'gatherMs', 'firstSplitMs', 'firstHoldMs', 'repeatSplitMs', 'cycleWaitMs', 'joinMs', 'exitMs', 'stackOffsetPct', 'fallStartPct']);
+  it('E4-SLIDERS: exposes every remaining specified timing and layout default only on EffectsTestPage', () => {
+    expect(DECK_CONTROLS.map(([key]) => key)).toEqual(['cardFallMs', 'cardStaggerMs', 'cardFadeMs', 'spawnWaitMs', 'firstSplitMs', 'firstHoldMs', 'repeatSplitMs', 'cycleWaitMs', 'joinMs', 'exitMs', 'stackOffsetPct', 'fallStartPct']);
     expect(source).toMatch(/DECK_CONTROLS\.map[\s\S]*type="range"[\s\S]*settings={deckSettings}/);
     expect(app).not.toMatch(/DECK_CONTROLS|deck-timing-controls|type="range"/);
   });
 
   it('E4-EXIT-10PX: exits only after the last join using complementary 10px bands and linear motion', () => {
     const { overlay } = renderedDeck();
-    expect(overlay.props.style).toMatch(/--join-3-start:2170ms;--exit-start:2270ms/);
+    expect(overlay.props.style).toMatch(/--shuffle-ms:1030ms;--exit-ms:400ms;--shuffle-start:1090ms;--exit-start:2120ms;--total-ms:2520ms/);
     expect(css).toMatch(/\.exit-left\s*{[^}]*repeating-linear-gradient\(to bottom, var\(--ink\) 0 10px, transparent 10px 20px\)/);
     expect(css).toMatch(/\.exit-right\s*{[^}]*repeating-linear-gradient\(to bottom, transparent 0 10px, var\(--ink\) 10px 20px\)/);
   });
@@ -163,14 +188,14 @@ describe('E4: full deck-shuffle sequence', () => {
     expect(source.match(/<DeckShuffle deckName="Nollawa 카드" replayKey={shuffleKey}/g)).toHaveLength(1);
   });
 
-  it('E4-REDUCED-MOTION: removes all card motion and shows only whole joined cards', () => {
-    expect(css).toMatch(/prefers-reduced-motion:\s*reduce[\s\S]*\.shuffle-card[^}]*animation:\s*none/);
-    expect(css).toMatch(/prefers-reduced-motion:\s*reduce[\s\S]*\.spawn-card\s*{[^}]*opacity:\s*0[\s\S]*\.shuffle-card-a, \.shuffle-card-b\s*{[^}]*opacity:\s*1[\s\S]*\.exit-band\s*{[^}]*display:\s*none/);
+  it('E4-REDUCED-MOTION: removes pile and card motion while keeping whole joined cards', () => {
+    expect(css).toMatch(/prefers-reduced-motion:\s*reduce[\s\S]*\.shuffle-pile, \.shuffle-card[^}]*animation:\s*none/);
+    expect(css).toMatch(/prefers-reduced-motion:\s*reduce[\s\S]*\.spawn-card\s*{[^}]*opacity:\s*0[\s\S]*\.pile-card\s*{[^}]*opacity:\s*1[\s\S]*\.exit-band\s*{[^}]*display:\s*none/);
   });
 
-  it('E4-NO-JOINED-HALVES: joined states are whole cards with no clipped half-card borders or seam', () => {
+  it('E4-NO-JOINED-HALVES: every pile member is a whole card with no clipped half-card borders or seam', () => {
     const { cards } = renderedDeck();
-    expect(cards.filter((card) => /shuffle-card-[ab]$/.test(card.props.class)).every((card) => !/half|left|right|stripe/.test(card.props.class))).toBe(true);
+    expect(cards.every((card) => !/half|left|right|stripe/.test(card.props.class))).toBe(true);
     expect(css).not.toMatch(/clip-path|shuffle-half|shuffle-piece/);
     expect(css.match(/\.shuffle-card\s*{[^}]*}/)?.[0]).toMatch(/border:\s*3px solid[^}]*background:\s*var\(--effect-card\)/);
   });
@@ -182,7 +207,7 @@ describe('E5: manual and automatic coin and dice execution', () => {
     expect(source.match(/>던지기!<\/button>/g)).toHaveLength(1);
     expect(source).toMatch(/demoCoinOutcomes\(coinCount\)[\s\S]*demoDiceOutcomes\(diceCount\)/);
     expect(source).toMatch(/type="checkbox"[\s\S]*자동/);
-    expect(css).toMatch(/prefers-reduced-motion:\s*reduce[\s\S]*\.effect-coin, \.effect-die, \.die-pip, \.die-pip::before, \.shuffle-card, \.shuffle-caption\s*{\s*animation:\s*none/);
+    expect(css).toMatch(/prefers-reduced-motion:\s*reduce[\s\S]*\.effect-coin, \.effect-die, \.die-pip, \.die-pip::before, \.shuffle-pile, \.shuffle-card, \.shuffle-caption\s*{\s*animation:\s*none/);
     expect(css).toMatch(/prefers-reduced-motion:\s*reduce[\s\S]*\.die-pip::before\s*{\s*display:\s*none/);
     expect(css).toMatch(/prefers-reduced-motion:\s*reduce[\s\S]*\.die-pip\.is-on\s*{\s*background:\s*var\(--ink\)/);
     expect(source).not.toMatch(/#[\da-f]{3,8}\b/i);
