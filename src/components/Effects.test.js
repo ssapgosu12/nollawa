@@ -113,6 +113,22 @@ describe('E4: full deck-shuffle sequence', () => {
     expect(cards.every((card) => card.props.class === 'shuffle-card spawn-card pile-card')).toBe(true);
   });
 
+  it('E4-CARD-BACK-TEXTURE: gives every pile card monochrome hatching and a centered Nollawa banner without changing its frame', () => {
+    const cardRule = css.match(/\.shuffle-card\s*{[^}]*}/)?.[0] ?? '';
+    const hatchRule = css.match(/\.pile-card::before\s*{[^}]*}/)?.[0] ?? '';
+    const bannerRule = css.match(/\.pile-card::after\s*{[^}]*}/)?.[0] ?? '';
+    expect(hatchRule).toMatch(/repeating-linear-gradient\(135deg,[^)]*var\(--ink\)/);
+    expect(bannerRule).toMatch(/top:\s*50%[^}]*left:\s*50%[^}]*content:\s*"Nollawa"[^}]*translate\(-50%, -50%\)/);
+    expect(cardRule).toMatch(/border:\s*3px solid var\(--line\)/);
+    expect(cardRule).toMatch(/border-radius:\s*12px/);
+    expect(cardRule).toMatch(/box-shadow:\s*inset 0 0 0 7px var\(--paper\), inset 0 0 0 9px var\(--line\), 0 2px 0 var\(--line\)/);
+    expect(`${hatchRule} ${bannerRule}`).toMatch(/var\(--(?:ink|line|paper)\)/);
+    expect(`${hatchRule} ${bannerRule}`).not.toMatch(/#[\da-f]{3,8}\b/i);
+    expect(css).not.toMatch(/url\s*\(/i);
+    expect(source).not.toMatch(/<img\b|\.(?:avif|gif|jpe?g|png|svg|webp)\b/i);
+    expect(source).not.toMatch(/#[\da-f]{3,8}\b/i);
+  });
+
   it('E4-CARD-LEVEL-RIPPLE: exposes eight direct sibling z orders and permits only original or adjacent-pair order', () => {
     const { tracks } = renderedDeck();
     const zOrderedCards = tracks.slice().sort((a, b) => a.props['data-z-order'] - b.props['data-z-order']).map((track) => track.props['data-card-index']);
