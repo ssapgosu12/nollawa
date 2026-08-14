@@ -13,10 +13,38 @@ export const demoDiceOutcomes = (count: number, random: () => number = Math.rand
 interface ReplayProps { replayKey?: number }
 interface CoinResultsProps extends ReplayProps { outcomes: readonly CoinFace[] }
 interface DiceResultsProps extends ReplayProps { outcomes: readonly DieFace[] }
-interface DeckShuffleProps extends ReplayProps { deckName: string }
+interface DeckShuffleProps extends ReplayProps { deckName: string; settings?: Partial<DeckSettings> }
 
 const PIPS: Record<DieFace, readonly number[]> = {
   1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8],
+};
+
+export const DICE_SCRAMBLE_PHASES = [[0, 4, 8], [0, 2, 6, 8], [0, 2, 4, 6, 8]] as const;
+const PIP_SCRAMBLE_CLASS = Array.from({ length: 9 }, (_, pip) => `scramble-${DICE_SCRAMBLE_PHASES.map((phase) => phase.includes(pip as never) ? 1 : 0).join('')}`);
+
+export interface DeckSettings {
+  cardFallMs: number; cardStaggerMs: number; cardFadeMs: number; spawnWaitMs: number;
+  gatherMs: number; firstSplitMs: number; firstHoldMs: number; repeatSplitMs: number;
+  cycleWaitMs: number; joinMs: number; exitMs: number; stackOffsetPct: number; fallStartPct: number;
+}
+export const DECK_DEFAULTS: DeckSettings = {
+  cardFallMs: 300, cardStaggerMs: 70, cardFadeMs: 150, spawnWaitMs: 300,
+  gatherMs: 150, firstSplitMs: 150, firstHoldMs: 100, repeatSplitMs: 100,
+  cycleWaitMs: 70, joinMs: 100, exitMs: 400, stackOffsetPct: 2, fallStartPct: 120,
+};
+export const DECK_CONTROLS: readonly [keyof DeckSettings, string, number, number][] = [
+  ['cardFallMs', '카드 낙하 ms', 50, 800], ['cardStaggerMs', '카드 간격 ms', 0, 250], ['cardFadeMs', '페이드인 ms', 0, 500],
+  ['spawnWaitMs', '스폰 후 대기 ms', 0, 800], ['gatherMs', '모이기 ms', 50, 500], ['firstSplitMs', '첫 분리 ms', 50, 500],
+  ['firstHoldMs', '첫 분리 대기 ms', 0, 500], ['repeatSplitMs', '반복 분리 ms', 50, 500], ['cycleWaitMs', '반복 대기 ms', 0, 500],
+  ['joinMs', '합치기 ms', 50, 500], ['exitMs', '소멸 ms', 50, 900], ['stackOffsetPct', '카드 상단 오프셋 %', 0, 10], ['fallStartPct', '낙하 시작 높이 %', 20, 240],
+];
+export const deriveDeckTimeline = (s: DeckSettings) => {
+  const spawnEnd = s.cardStaggerMs * 7 + s.cardFallMs, gatherStart = spawnEnd + s.spawnWaitMs, shuffleStart = gatherStart + s.gatherMs;
+  const split1 = shuffleStart, join1 = split1 + s.firstSplitMs + s.firstHoldMs;
+  const split2 = join1 + s.joinMs + s.cycleWaitMs, join2 = split2 + s.repeatSplitMs + s.cycleWaitMs;
+  const split3 = join2 + s.joinMs + s.cycleWaitMs, join3 = split3 + s.repeatSplitMs + s.cycleWaitMs;
+  const exitStart = join3 + s.joinMs;
+  return { spawnEnd, gatherStart, shuffleStart, splitStarts: [split1, split2, split3], joinStarts: [join1, join2, join3], directions: ['right', 'left', 'right'] as const, exitStart, total: exitStart + s.exitMs };
 };
 
 export function CoinResults({ outcomes, replayKey = 0 }: CoinResultsProps) {
@@ -28,20 +56,25 @@ export function CoinResults({ outcomes, replayKey = 0 }: CoinResultsProps) {
 export function DiceResults({ outcomes, replayKey = 0 }: DiceResultsProps) {
   return <output class="effect-grid dice-results" aria-label="주사위 결과" data-replay={replayKey}>
     {outcomes.slice(0, 6).map((face, index) => <span class="effect-die" data-value={face} style={`--effect-index:${index}`} aria-label={`주사위 ${face}`} key={`${replayKey}-${index}`}>
-      {Array.from({ length: 9 }, (_, pip) => <i class={PIPS[face].includes(pip) ? 'die-pip is-on' : 'die-pip'} style={`--pip-index:${pip}`} aria-hidden="true" />)}
+      {Array.from({ length: 9 }, (_, pip) => <i class={`die-pip ${PIP_SCRAMBLE_CLASS[pip]}${PIPS[face].includes(pip) ? ' is-on' : ''}`} aria-hidden="true" />)}
     </span>)}
   </output>;
 }
 
-export function DeckShuffle({ deckName, replayKey = 0 }: DeckShuffleProps) {
-  return <div class="deck-shuffle-overlay" role="status" aria-label={`${deckName} 덱 섞기`} key={`${deckName}-${replayKey}`}>
-    <div class="shuffle-deck" aria-hidden="true">
-      <i class="shuffle-piece shuffle-half shuffle-left" />
-      <i class="shuffle-piece shuffle-half shuffle-right" />
-      <i class="shuffle-piece shuffle-stripe stripe-left" />
-      <i class="shuffle-piece shuffle-stripe stripe-right" />
+export function DeckShuffle({ deckName, replayKey = 0, settings }: DeckShuffleProps) {
+  const resolved = { ...DECK_DEFAULTS, ...settings }, timeline = deriveDeckTimeline(resolved);
+  const timing = `--fall-ms:${resolved.cardFallMs}ms;--fade-ms:${resolved.cardFadeMs}ms;--gather-ms:${resolved.gatherMs}ms;--split-1-ms:${resolved.firstSplitMs}ms;--split-ms:${resolved.repeatSplitMs}ms;--join-ms:${resolved.joinMs}ms;--exit-ms:${resolved.exitMs}ms;--gather-start:${timeline.gatherStart}ms;--shuffle-start:${timeline.shuffleStart}ms;--split-1-start:${timeline.splitStarts[0]}ms;--join-1-start:${timeline.joinStarts[0]}ms;--split-2-start:${timeline.splitStarts[1]}ms;--join-2-start:${timeline.joinStarts[1]}ms;--split-3-start:${timeline.splitStarts[2]}ms;--join-3-start:${timeline.joinStarts[2]}ms;--exit-start:${timeline.exitStart}ms;--total-ms:${timeline.total}ms;--fall-start:${resolved.fallStartPct}%`;
+  return <div class="deck-shuffle-overlay" role="status" aria-label={`${deckName} 덱 섞기`} key={`${deckName}-${replayKey}`} style={timing}>
+    <div class="shuffle-scene">
+      <div class="shuffle-deck" aria-hidden="true" data-spawn-cards="8" data-shuffle-cards="2">
+        {Array.from({ length: 8 }, (_, index) => <i class="shuffle-card spawn-card" style={`--card-delay:${index * resolved.cardStaggerMs}ms;--stack-y:${index * resolved.stackOffsetPct}%;--gather-y:${3 * resolved.stackOffsetPct}%;--card-order:${index + 1}`} />)}
+        <i class="shuffle-card shuffle-card-a" data-top-cycles="right,right" />
+        <i class="shuffle-card shuffle-card-b" data-top-cycles="left" />
+        <i class="shuffle-card exit-band exit-left" />
+        <i class="shuffle-card exit-band exit-right" />
+      </div>
+      <p class="shuffle-caption">{deckName} 덱이 섞이고 있습니다</p>
     </div>
-    <p class="shuffle-caption">{deckName} 덱이 섞이고 있습니다</p>
   </div>;
 }
 
@@ -66,6 +99,7 @@ export function EffectsTestPage({ onBack }: { onBack: () => void }) {
   const [coinCount, setCoinCount] = useState(4);
   const [diceCount, setDiceCount] = useState(2);
   const [shuffleKey, setShuffleKey] = useState(0);
+  const [deckSettings, setDeckSettings] = useState(DECK_DEFAULTS);
   return <section class="panel effects-page" aria-labelledby="effects-title">
     <button onClick={onBack}>게임 목록</button><h1 id="effects-title">연출 테스트</h1>
     <div class="effect-selectors">
@@ -74,6 +108,6 @@ export function EffectsTestPage({ onBack }: { onBack: () => void }) {
     </div>
     <EffectDemo title="동전 던지기" deps={[coinCount]}>{(replayKey) => <CoinResults outcomes={demoCoinOutcomes(coinCount)} replayKey={replayKey} />}</EffectDemo>
     <EffectDemo title="주사위 굴리기" deps={[diceCount]}>{(replayKey) => <DiceResults outcomes={demoDiceOutcomes(diceCount)} replayKey={replayKey} />}</EffectDemo>
-    <article class="effect-demo"><h2>덱 섞기</h2><button onClick={() => setShuffleKey((value) => value + 1)}>덱 섞기</button>{shuffleKey > 0 && <DeckShuffle deckName="Nollawa 카드" replayKey={shuffleKey} />}</article>
+    <article class="effect-demo"><h2>덱 섞기</h2><div class="deck-timing-controls">{DECK_CONTROLS.map(([key, label, min, max]) => <label>{label}<input type="range" min={min} max={max} value={deckSettings[key]} onInput={(event) => setDeckSettings({ ...deckSettings, [key]: Number(event.currentTarget.value) })} /><output>{deckSettings[key]}</output></label>)}</div><button onClick={() => setShuffleKey((value) => value + 1)}>덱 섞기</button>{shuffleKey > 0 && <DeckShuffle deckName="Nollawa 카드" replayKey={shuffleKey} settings={deckSettings} />}</article>
   </section>;
 }

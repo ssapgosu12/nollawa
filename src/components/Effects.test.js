@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { CoinResults, DeckShuffle, DiceResults, demoCoinOutcomes, demoDiceOutcomes } from './Effects';
+import { CoinResults, DECK_CONTROLS, DECK_DEFAULTS, DICE_SCRAMBLE_PHASES, DeckShuffle, DiceResults, demoCoinOutcomes, demoDiceOutcomes, deriveDeckTimeline } from './Effects';
 
 const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8');
 const source = readFileSync(new URL('./Effects.tsx', import.meta.url), 'utf8');
@@ -39,7 +39,7 @@ describe('E3: caller-supplied six-sided dice results', () => {
     const supplied = [1, 2, 3, 4, 5, 6];
     const rendered = children(DiceResults({ outcomes: supplied, replayKey: 2 }));
     expect(rendered).toHaveLength(6);
-    expect(rendered.map((die) => children(die).filter((pip) => pip.props.class === 'die-pip is-on').length)).toEqual(supplied);
+    expect(rendered.map((die) => children(die).filter((pip) => pip.props.class.endsWith(' is-on')).length)).toEqual(supplied);
     expect(css).toMatch(/\.effect-die\s*{[^}]*background:\s*var\(--paper\)/);
     expect(css).toMatch(/\.die-pip\.is-on\s*{[^}]*animation:\s*die-pip-reveal/);
   });
@@ -52,69 +52,126 @@ describe('E3: caller-supplied six-sided dice results', () => {
     expect(source.match(/export function DiceResults[\s\S]*?\n}/)?.[0]).not.toMatch(/Math\.random|demoDiceOutcomes/);
   });
 
-  it('synchronizes all 6 dice bodies, final pip reveals, and scrambles to the inherited per-die delay', () => {
+  it('E3-BOUNCE-DELAY: synchronizes all 6 dice bodies, final pip reveals, and scrambles to the inherited per-die delay', () => {
     const rendered = children(DiceResults({ outcomes: [1, 2, 3, 4, 5, 6], replayKey: 4 }));
     expect(rendered.map((die) => die.props.style)).toEqual(Array.from({ length: 6 }, (_, index) => `--effect-index:${index}`));
     expect(css).toMatch(/\.effect-coin, \.effect-die\s*{[^}]*animation-delay:\s*calc\(var\(--effect-index\) \* 55ms\)/);
     expect(css).toMatch(/\.die-pip\.is-on\s*{[^}]*animation-delay:\s*calc\(var\(--effect-index\) \* 55ms\)/);
-    expect(css).toMatch(/\.die-pip::before\s*{[^}]*animation-delay:\s*calc\(var\(--effect-index\) \* 55ms\)/);
+    expect(css).toMatch(/\.die-pip::before\s*{[^}]*animation-duration:\s*650ms[^}]*animation-delay:\s*calc\(var\(--effect-index\) \* 55ms\)/);
     expect(css).toMatch(/@keyframes die-roll[\s\S]*50%[^{]*{[^}]*translateY\(7px\)[\s\S]*62%[^{]*{[^}]*translateY\(-18px\)[\s\S]*72%[^{]*{[^}]*translateY\(0\)/);
     expect(css).toMatch(/\.die-pip\.is-on\s*{[^}]*animation:\s*die-pip-reveal/);
     expect(css).toMatch(/@keyframes die-pip-reveal\s*{[\s\S]*?0%, 72%[^}]*transparent[\s\S]*?73%, 100%[^}]*var\(--ink\)/);
-    expect(css).toMatch(/\.die-pip::before\s*{[^}]*animation:\s*die-pip-scramble-a/);
-    expect(css.match(/@keyframes die-pip-scramble-[abc]/g)).toHaveLength(3);
+    expect(css.match(/@keyframes die-pip-scramble-(?:111|011|101)/g)).toHaveLength(3);
   });
 
-  it('limits scrambled pips to three face phases before the final reveal', () => {
-    const scrambles = [...css.matchAll(/@keyframes die-pip-scramble-[abc]\s*{[^\n]+}/g)].map((match) => match[0]);
-    expect(scrambles).toHaveLength(3);
-    expect(scrambles[0]).toMatch(/0%, 23%[\s\S]*24%, 47%[\s\S]*48%, 72%[\s\S]*73%, 100%/);
-    expect(scrambles[1]).toMatch(/0%, 23%[\s\S]*24%, 47%[\s\S]*48%, 100%/);
-    expect(scrambles[2]).toMatch(/0%, 47%[\s\S]*48%, 100%/);
-    expect(scrambles.every((keyframes) => !/\b(?:9|18|27|36|45|54|63)%/.test(keyframes))).toBe(true);
+  it('E3-REGRESSION-D024-DISTRIBUTED-PHASE-SETS: inspects actual selectors and rejects every complete 3x3 column', () => {
+    const columns = [[0, 3, 6], [1, 4, 7], [2, 5, 8]];
+    expect(DICE_SCRAMBLE_PHASES).toEqual([[0, 4, 8], [0, 2, 6, 8], [0, 2, 4, 6, 8]]);
+    expect(DICE_SCRAMBLE_PHASES.every((phase) => columns.every((column) => !column.every((pip) => phase.includes(pip))))).toBe(true);
+    const die = children(DiceResults({ outcomes: [6], replayKey: 9 }))[0];
+    expect(children(die).map((pip) => pip.props.class)).toEqual([
+      'die-pip scramble-111 is-on', 'die-pip scramble-000', 'die-pip scramble-011 is-on',
+      'die-pip scramble-000 is-on', 'die-pip scramble-101', 'die-pip scramble-000 is-on',
+      'die-pip scramble-011 is-on', 'die-pip scramble-000', 'die-pip scramble-111 is-on',
+    ]);
+    expect(css).not.toMatch(/nth-child\(3n/);
+    expect(source).toMatch(/PIP_SCRAMBLE_CLASS\[pip\]/);
+    expect(css.match(/\.die-pip\.scramble-(?:111|011|101)::before/g)).toHaveLength(3);
+    expect(css).toMatch(/@keyframes die-pip-scramble-101[\s\S]*0%, 23%[^{]*{[^}]*opacity:\s*1[\s\S]*24%, 47%[^{]*{[^}]*opacity:\s*0[\s\S]*48%, 72%[^{]*{[^}]*opacity:\s*1/);
     expect(css).toMatch(/@keyframes die-pip-reveal\s*{[\s\S]*73%, 100%[^}]*var\(--ink\)/);
   });
 });
 
 describe('E4: full deck-shuffle sequence', () => {
-  it('starts as one assembled deck and runs multiple contiguous split/rejoin phases without card drops or pauses', () => {
+  const renderedDeck = () => {
     const overlay = DeckShuffle({ deckName: '테스트 카드', replayKey: 3 });
+    const scene = children(overlay);
+    const [deck, caption] = children(scene);
+    return { overlay, deck, caption, cards: children(deck).flat(Infinity) };
+  };
+
+  it('E4-STAGE-COUNTS: renders exactly 8 whole spawn cards then 2 whole shuffle cards', () => {
+    const { overlay, deck, cards } = renderedDeck();
     expect(overlay.props).toMatchObject({ class: 'deck-shuffle-overlay', role: 'status', 'aria-label': '테스트 카드 덱 섞기' });
-    const [deck, caption] = children(overlay);
-    expect(children(deck).map((piece) => piece.props.class)).toEqual([
-      'shuffle-piece shuffle-half shuffle-left', 'shuffle-piece shuffle-half shuffle-right',
-      'shuffle-piece shuffle-stripe stripe-left', 'shuffle-piece shuffle-stripe stripe-right',
-    ]);
+    expect(deck.props).toMatchObject({ 'data-spawn-cards': '8', 'data-shuffle-cards': '2' });
+    expect(cards.filter((card) => card.props.class === 'shuffle-card spawn-card')).toHaveLength(8);
+    expect(cards.filter((card) => /shuffle-card-[ab]$/.test(card.props.class))).toHaveLength(2);
+  });
+
+  it('E4-DEFAULTS-TIMELINE-ORDER: preserves all exact defaults and derives the 2670ms ordered timeline', () => {
+    expect(DECK_DEFAULTS).toEqual({ cardFallMs: 300, cardStaggerMs: 70, cardFadeMs: 150, spawnWaitMs: 300, gatherMs: 150, firstSplitMs: 150, firstHoldMs: 100, repeatSplitMs: 100, cycleWaitMs: 70, joinMs: 100, exitMs: 400, stackOffsetPct: 2, fallStartPct: 120 });
+    expect(deriveDeckTimeline(DECK_DEFAULTS)).toEqual({ spawnEnd: 790, gatherStart: 1090, shuffleStart: 1240, splitStarts: [1240, 1660, 2000], joinStarts: [1490, 1830, 2170], directions: ['right', 'left', 'right'], exitStart: 2270, total: 2670 });
+  });
+
+  it('E4-CORRECTION-SPAWN-DIRECTION: places each later spawn card above its predecessor at exactly 0 through 14 percent', () => {
+    const { cards } = renderedDeck();
+    const spawnStyles = cards.filter((card) => card.props.class === 'shuffle-card spawn-card').map((card) => card.props.style);
+    expect(spawnStyles.map((style) => Number(style.match(/--stack-y:(\d+)%/)?.[1]))).toEqual([0, 2, 4, 6, 8, 10, 12, 14]);
+  });
+
+  it('E4-CORRECTION-FOURTH-FROM-BOTTOM-GATHER: gathers all eight cards at the zero-based fourth position of 6 percent', () => {
+    const { cards } = renderedDeck();
+    const spawnStyles = cards.filter((card) => card.props.class === 'shuffle-card spawn-card').map((card) => card.props.style);
+    expect(spawnStyles.map((style) => Number(style.match(/--gather-y:(\d+)%/)?.[1]))).toEqual(Array(8).fill(6));
+  });
+
+  it('E4-ALTERNATING-TOP: records the top-card direction as right-left-right and switches z-order per cycle', () => {
+    const { cards } = renderedDeck();
+    expect(deriveDeckTimeline(DECK_DEFAULTS).directions).toEqual(['right', 'left', 'right']);
+    expect(cards.find((card) => card.props.class === 'shuffle-card shuffle-card-a').props['data-top-cycles']).toBe('right,right');
+    expect(cards.find((card) => card.props.class === 'shuffle-card shuffle-card-b').props['data-top-cycles']).toBe('left');
+    expect(css).toMatch(/\.shuffle-card-a[^}]*deck-lower[^}]*--split-2-start[^}]*deck-raise[^}]*--split-3-start/);
+    expect(css).toMatch(/\.shuffle-card-b[^}]*deck-raise[^}]*--split-2-start[^}]*deck-lower[^}]*--split-3-start/);
+  });
+
+  it('E4-SIMULTANEOUS-TRANSFORM: moves 30% and rotates 20deg in the same split keyframes', () => {
+    expect(css).toMatch(/@keyframes deck-split-right[\s\S]*?to\s*{[^}]*translate\(calc\(-50% \+ 30%\), -50%\) rotate\(20deg\)/);
+    expect(css).toMatch(/@keyframes deck-split-left[\s\S]*?to\s*{[^}]*translate\(calc\(-50% - 30%\), -50%\) rotate\(-20deg\)/);
+  });
+
+  it('E4-CURVES: uses initial-velocity spring drop and spring shuffle while exit motion and fade stay linear', () => {
+    expect(css).toMatch(/\.spawn-card[^}]*deck-card-spring-drop[^}]*cubic-bezier/);
+    expect(css).toMatch(/\.shuffle-card-a[^}]*deck-split-right[^}]*cubic-bezier[^}]*deck-join-right[^}]*cubic-bezier/);
+    expect(css).toMatch(/\.exit-band[^}]*animation-timing-function:\s*linear/);
+    expect(css).toMatch(/@keyframes deck-exit-left[\s\S]*?from\s*{[^}]*opacity:\s*1[\s\S]*?to\s*{[^}]*opacity:\s*0[^}]*translate/);
+  });
+
+  it('E4-CORRECTION-CARD-WIDTH-CAPTION-GAP: puts the caption directly below the deck at exactly 20% of card width', () => {
+    const { caption } = renderedDeck();
     expect(caption.props.children.join('')).toBe('테스트 카드 덱이 섞이고 있습니다');
-    expect(css).toMatch(/@keyframes shuffle-halves[\s\S]*14%[^{]*{[^}]*translate\(-50%, -50%\)[\s\S]*22%[^{]*{[^}]*var\(--shuffle-split\)[\s\S]*30%[^{]*{[^}]*translate\(-50%, -50%\)[\s\S]*38%[^{]*{[^}]*var\(--shuffle-split\)[\s\S]*46%[^{]*{[^}]*translate\(-50%, -50%\)[\s\S]*54%[^{]*{[^}]*var\(--shuffle-split\)[\s\S]*62%[^{]*{[^}]*translate\(-50%, -50%\)/);
-    expect(css).not.toMatch(/shuffle-(?:piece|half)[^}]*animation-delay|translate\([^)]*-75vh/);
-    expect(css).toMatch(/@keyframes deck-overlay[\s\S]*100%\s*{[^}]*visibility:\s*hidden/);
+    expect(css).toMatch(/\.shuffle-scene\s*{[^}]*width:\s*min\(38vw, 150px\)[^}]*gap:\s*min\(7\.6vw, 30px\)/);
+    expect(css.match(/\.shuffle-scene\s*{[^}]*}/)?.[0]).not.toMatch(/gap:\s*20%/);
+    expect(css.match(/\.shuffle-caption\s*{[^}]*}/)?.[0]).not.toMatch(/position|bottom/);
   });
 
-  it('keeps both deck halves aligned as one until each split rejoins', () => {
-    expect(css).toMatch(/\.shuffle-left\s*{\s*--shuffle-split:\s*-.18rem/);
-    expect(css).toMatch(/\.shuffle-right\s*{\s*--shuffle-split:\s*\.18rem/);
-    const sequence = css.match(/@keyframes shuffle-halves\s*{[\s\S]*?\n}/)?.[0] ?? '';
-    expect(sequence).not.toMatch(/rotate\(/);
-    expect(sequence.match(/var\(--shuffle-split\)/g)).toHaveLength(3);
+  it('E4-SLIDERS: exposes every specified ms and all four proposed defaults only on EffectsTestPage', () => {
+    expect(DECK_CONTROLS.map(([key]) => key)).toEqual(['cardFallMs', 'cardStaggerMs', 'cardFadeMs', 'spawnWaitMs', 'gatherMs', 'firstSplitMs', 'firstHoldMs', 'repeatSplitMs', 'cycleWaitMs', 'joinMs', 'exitMs', 'stackOffsetPct', 'fallStartPct']);
+    expect(source).toMatch(/DECK_CONTROLS\.map[\s\S]*type="range"[\s\S]*settings={deckSettings}/);
+    expect(app).not.toMatch(/DECK_CONTROLS|deck-timing-controls|type="range"/);
   });
 
-  it('uses a restrained single-card back without a permanent diagonal repeat', () => {
-    const cardBack = css.match(/\.shuffle-piece\s*{[^}]*}/)?.[0] ?? '';
-    expect(cardBack).toMatch(/background:\s*var\(--effect-card\)/);
-    expect(cardBack).toMatch(/box-shadow:\s*inset/);
-    expect(cardBack).not.toMatch(/repeating-linear-gradient|45deg/);
+  it('E4-EXIT-10PX: exits only after the last join using complementary 10px bands and linear motion', () => {
+    const { overlay } = renderedDeck();
+    expect(overlay.props.style).toMatch(/--join-3-start:2170ms;--exit-start:2270ms/);
+    expect(css).toMatch(/\.exit-left\s*{[^}]*repeating-linear-gradient\(to bottom, var\(--ink\) 0 10px, transparent 10px 20px\)/);
+    expect(css).toMatch(/\.exit-right\s*{[^}]*repeating-linear-gradient\(to bottom, transparent 0 10px, var\(--ink\) 10px 20px\)/);
   });
 
-  it('exits as complementary interlaced bands grouped in exact 10px units', () => {
-    expect(css).toMatch(/\.stripe-left\s*{[^}]*repeating-linear-gradient\(to bottom, var\(--ink\) 0 10px, transparent 10px 20px\)/);
-    expect(css).toMatch(/\.stripe-right\s*{[^}]*repeating-linear-gradient\(to bottom, transparent 0 10px, var\(--ink\) 10px 20px\)/);
-    expect(css).toMatch(/@keyframes shuffle-stripes[\s\S]*67%[^{]*{[^}]*translate\(-50%, -50%\)[\s\S]*100%[^{]*{[^}]*var\(--stripe-exit\)/);
+  it('E4-TRIGGER-ONLY: opening the page does not mount or play the deck', () => {
+    expect(source).toMatch(/shuffleKey > 0 && <DeckShuffle deckName="Nollawa 카드" replayKey={shuffleKey} settings={deckSettings}/);
+    expect(source.match(/<DeckShuffle deckName="Nollawa 카드" replayKey={shuffleKey}/g)).toHaveLength(1);
   });
 
-  it('mounts the deck overlay only after its caller advances the trigger key', () => {
-    expect(source).toMatch(/shuffleKey > 0 && <DeckShuffle deckName="Nollawa 카드" replayKey={shuffleKey}/);
-    expect(source.match(/<DeckShuffle deckName="Nollawa 카드" replayKey={shuffleKey} \/>/g)).toHaveLength(1);
+  it('E4-REDUCED-MOTION: removes all card motion and shows only whole joined cards', () => {
+    expect(css).toMatch(/prefers-reduced-motion:\s*reduce[\s\S]*\.shuffle-card[^}]*animation:\s*none/);
+    expect(css).toMatch(/prefers-reduced-motion:\s*reduce[\s\S]*\.spawn-card\s*{[^}]*opacity:\s*0[\s\S]*\.shuffle-card-a, \.shuffle-card-b\s*{[^}]*opacity:\s*1[\s\S]*\.exit-band\s*{[^}]*display:\s*none/);
+  });
+
+  it('E4-NO-JOINED-HALVES: joined states are whole cards with no clipped half-card borders or seam', () => {
+    const { cards } = renderedDeck();
+    expect(cards.filter((card) => /shuffle-card-[ab]$/.test(card.props.class)).every((card) => !/half|left|right|stripe/.test(card.props.class))).toBe(true);
+    expect(css).not.toMatch(/clip-path|shuffle-half|shuffle-piece/);
+    expect(css.match(/\.shuffle-card\s*{[^}]*}/)?.[0]).toMatch(/border:\s*3px solid[^}]*background:\s*var\(--effect-card\)/);
   });
 });
 
@@ -124,7 +181,7 @@ describe('E5: manual and automatic coin and dice execution', () => {
     expect(source.match(/>던지기!<\/button>/g)).toHaveLength(1);
     expect(source).toMatch(/demoCoinOutcomes\(coinCount\)[\s\S]*demoDiceOutcomes\(diceCount\)/);
     expect(source).toMatch(/type="checkbox"[\s\S]*자동/);
-    expect(css).toMatch(/prefers-reduced-motion:\s*reduce[\s\S]*\.effect-coin, \.effect-die, \.die-pip, \.die-pip::before, \.shuffle-piece, \.shuffle-caption\s*{\s*animation:\s*none/);
+    expect(css).toMatch(/prefers-reduced-motion:\s*reduce[\s\S]*\.effect-coin, \.effect-die, \.die-pip, \.die-pip::before, \.shuffle-card, \.shuffle-caption\s*{\s*animation:\s*none/);
     expect(css).toMatch(/prefers-reduced-motion:\s*reduce[\s\S]*\.die-pip::before\s*{\s*display:\s*none/);
     expect(css).toMatch(/prefers-reduced-motion:\s*reduce[\s\S]*\.die-pip\.is-on\s*{\s*background:\s*var\(--ink\)/);
     expect(source).not.toMatch(/#[\da-f]{3,8}\b/i);
