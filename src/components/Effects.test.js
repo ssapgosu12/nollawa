@@ -121,7 +121,7 @@ describe('E4: full deck-shuffle sequence', () => {
     expect(bannerRule).toMatch(/top:\s*50%[^}]*left:\s*50%[^}]*content:\s*"Nollawa"[^}]*translate\(-50%, -50%\)/);
     expect(cardRule).toMatch(/border:\s*3px solid var\(--line\)/);
     expect(cardRule).toMatch(/border-radius:\s*12px/);
-    expect(cardRule).toMatch(/box-shadow:\s*inset 0 0 0 7px var\(--paper\), inset 0 0 0 9px var\(--line\), 0 2px 0 var\(--line\)/);
+    expect(cardRule).toMatch(/box-shadow:\s*inset 0 0 0 7px var\(--paper\), inset 0 0 0 9px var\(--line\), 0 1px 0 var\(--line\)/);
     expect(`${hatchRule} ${bannerRule}`).toMatch(/var\(--(?:ink|line|paper)\)/);
     expect(`${hatchRule} ${bannerRule}`).not.toMatch(/#[\da-f]{3,8}\b/i);
     expect(css).not.toMatch(/url\s*\(/i);
@@ -140,9 +140,9 @@ describe('E4: full deck-shuffle sequence', () => {
     expect(css).not.toMatch(/\.shuffle-pile\s*{/);
   });
 
-  it('E4-DEFAULTS-TIMELINE-ORDER: preserves the 12 confirmed defaults, adds follow 10, and derives a 1260ms shuffle', () => {
-    expect(DECK_DEFAULTS).toEqual({ cardFallMs: 300, cardStaggerMs: 70, cardFadeMs: 100, spawnWaitMs: 90, firstSplitMs: 50, firstHoldMs: 0, repeatSplitMs: 50, cycleWaitMs: 0, joinMs: 300, exitMs: 500, stackOffsetPct: 2, fallStartPct: 160, cardFollowMs: 10 });
-    expect(deriveDeckTimeline(DECK_DEFAULTS)).toEqual({ spawnEnd: 790, shuffleStart: 880, splitStarts: [880, 1300, 1720], splitEnds: [930, 1350, 1770], joinStarts: [930, 1350, 1770], joinEnds: [1300, 1720, 2140], directions: ['right', 'left', 'right'], joinMs: 300, cardFollowMs: 10, effectiveJoinMs: 370, exitStart: 2140, shuffleMs: 1260, total: 2640 });
+  it('E4-DEFAULTS-TIMELINE-ORDER: preserves the 12 confirmed defaults, adds follow 20 with split/tilt/exit-wait, and derives a 1210ms shuffle', () => {
+    expect(DECK_DEFAULTS).toEqual({ cardFallMs: 300, cardStaggerMs: 70, cardFadeMs: 100, spawnWaitMs: 90, firstSplitMs: 50, firstHoldMs: 0, repeatSplitMs: 50, cycleWaitMs: 0, joinMs: 180, exitMs: 500, stackOffsetPct: 2, fallStartPct: 160, cardFollowMs: 20, splitPct: 30, tiltDeg: 20, exitWaitMs: 100 });
+    expect(deriveDeckTimeline(DECK_DEFAULTS)).toEqual({ spawnEnd: 790, shuffleStart: 880, splitStarts: [880, 1250, 1620], splitEnds: [930, 1300, 1670], joinStarts: [930, 1300, 1670], joinEnds: [1250, 1620, 1990], directions: ['right', 'left', 'right'], joinMs: 180, cardFollowMs: 20, effectiveJoinMs: 320, exitWaitMs: 100, splitPct: 30, tiltDeg: 20, exitStart: 2090, shuffleMs: 1210, total: 2590 });
   });
 
   it('E4-CORRECTION-SPAWN-DIRECTION: places each later spawn card above its predecessor at exactly 0 through 14 percent', () => {
@@ -191,13 +191,16 @@ describe('E4: full deck-shuffle sequence', () => {
     expect(css).not.toMatch(/deck-split|deck-join|deck-raise|deck-lower/);
   });
 
-  it('E4-JOIN-FOLLOW-BOTTOM-UP: delays joins only bottom-to-top while retaining 300ms movement and simultaneous splits', () => {
+  it('E4-JOIN-FOLLOW-BOTTOM-UP: delays joins only bottom-to-top while retaining the configured movement and simultaneous splits', () => {
     const timeline = deriveDeckTimeline(DECK_DEFAULTS);
-    expect(deriveCardJoinWindows(timeline, 1)).toEqual([{ start: 930, end: 1230 }, { start: 1350, end: 1650 }, { start: 1770, end: 2070 }]);
-    expect(deriveCardJoinWindows(timeline, 8)).toEqual([{ start: 1000, end: 1300 }, { start: 1420, end: 1720 }, { start: 1840, end: 2140 }]);
-    expect(timeline.joinEnds.map((end, index) => end - timeline.joinStarts[index])).toEqual([370, 370, 370]);
-    expect(timeline.splitStarts).toEqual([880, 1300, 1720]);
+    expect(deriveCardJoinWindows(timeline, 1)).toEqual([{ start: 930, end: 1110 }, { start: 1300, end: 1480 }, { start: 1670, end: 1850 }]);
+    expect(deriveCardJoinWindows(timeline, 8)).toEqual([{ start: 1070, end: 1250 }, { start: 1440, end: 1620 }, { start: 1810, end: 1990 }]);
+    expect(timeline.joinEnds.map((end, index) => end - timeline.joinStarts[index])).toEqual([320, 320, 320]);
+    expect(timeline.splitStarts).toEqual([880, 1250, 1620]);
     expect(DECK_CONTROLS).toContainEqual(['cardFollowMs', '카드 추종 지연 ms', 0, 100]);
+    expect(DECK_CONTROLS).toContainEqual(['splitPct', '벌어짐 %', 0, 60]);
+    expect(DECK_CONTROLS).toContainEqual(['tiltDeg', '기울임 도', 0, 45]);
+    expect(DECK_CONTROLS).toContainEqual(['exitWaitMs', '소멸 전 대기 ms', 0, 600]);
   });
 
   it('E4-NON-OVERSHOOTING-CURVE: keeps the initial-velocity spawn while shuffle cannot cancel displacement by overshooting', () => {
@@ -222,14 +225,14 @@ describe('E4: full deck-shuffle sequence', () => {
   });
 
   it('E4-SLIDERS: exposes every remaining specified timing and layout default only on EffectsTestPage', () => {
-    expect(DECK_CONTROLS.map(([key]) => key)).toEqual(['cardFallMs', 'cardStaggerMs', 'cardFadeMs', 'spawnWaitMs', 'firstSplitMs', 'firstHoldMs', 'repeatSplitMs', 'cycleWaitMs', 'joinMs', 'exitMs', 'stackOffsetPct', 'fallStartPct', 'cardFollowMs']);
+    expect(DECK_CONTROLS.map(([key]) => key)).toEqual(['cardFallMs', 'cardStaggerMs', 'cardFadeMs', 'spawnWaitMs', 'firstSplitMs', 'firstHoldMs', 'repeatSplitMs', 'cycleWaitMs', 'joinMs', 'exitMs', 'stackOffsetPct', 'fallStartPct', 'cardFollowMs', 'splitPct', 'tiltDeg', 'exitWaitMs']);
     expect(source).toMatch(/DECK_CONTROLS\.map[\s\S]*type="range"[\s\S]*settings={deckSettings}/);
     expect(app).not.toMatch(/DECK_CONTROLS|deck-timing-controls|type="range"/);
   });
 
   it('E4-EXIT-10PX: exits only after the last join using complementary 10px bands and linear motion', () => {
     const { overlay } = renderedDeck();
-    expect(overlay.props.style).toMatch(/--shuffle-ms:1260ms;--exit-ms:500ms;--shuffle-start:880ms;--exit-start:2140ms;--total-ms:2640ms/);
+    expect(overlay.props.style).toMatch(/--shuffle-ms:1210ms;--exit-ms:500ms;--shuffle-start:880ms;--exit-start:2090ms;--total-ms:2590ms/);
     expect(css).toMatch(/\.exit-left\s*{[^}]*repeating-linear-gradient\(to bottom, var\(--ink\) 0 10px, transparent 10px 20px\)/);
     expect(css).toMatch(/\.exit-right\s*{[^}]*repeating-linear-gradient\(to bottom, transparent 0 10px, var\(--ink\) 10px 20px\)/);
   });

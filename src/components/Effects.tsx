@@ -27,20 +27,21 @@ export interface DeckSettings {
   cardFallMs: number; cardStaggerMs: number; cardFadeMs: number; spawnWaitMs: number;
   firstSplitMs: number; firstHoldMs: number; repeatSplitMs: number;
   cycleWaitMs: number; joinMs: number; exitMs: number; stackOffsetPct: number; fallStartPct: number;
-  cardFollowMs: number;
+  cardFollowMs: number; splitPct: number; tiltDeg: number; exitWaitMs: number;
 }
 export const DECK_DEFAULTS: DeckSettings = {
   cardFallMs: 300, cardStaggerMs: 70, cardFadeMs: 100, spawnWaitMs: 90,
   firstSplitMs: 50, firstHoldMs: 0, repeatSplitMs: 50,
-  cycleWaitMs: 0, joinMs: 300, exitMs: 500, stackOffsetPct: 2, fallStartPct: 160,
-  cardFollowMs: 10,
+  cycleWaitMs: 0, joinMs: 180, exitMs: 500, stackOffsetPct: 2, fallStartPct: 160,
+  cardFollowMs: 20, splitPct: 30, tiltDeg: 20, exitWaitMs: 100,
 };
 export const DECK_CONTROLS: readonly [keyof DeckSettings, string, number, number][] = [
   ['cardFallMs', '카드 낙하 ms', 50, 800], ['cardStaggerMs', '카드 간격 ms', 0, 250], ['cardFadeMs', '페이드인 ms', 0, 500],
   ['spawnWaitMs', '스폰 후 대기 ms', 0, 800], ['firstSplitMs', '첫 분리 ms', 50, 500],
   ['firstHoldMs', '첫 분리 대기 ms', 0, 500], ['repeatSplitMs', '반복 분리 ms', 50, 500], ['cycleWaitMs', '반복 대기 ms', 0, 500],
   ['joinMs', '합치기 ms', 50, 500], ['exitMs', '소멸 ms', 50, 900], ['stackOffsetPct', '카드 상단 오프셋 %', 0, 10], ['fallStartPct', '낙하 시작 높이 %', 20, 240],
-  ['cardFollowMs', '카드 추종 지연 ms', 0, 100],
+  ['cardFollowMs', '카드 추종 지연 ms', 0, 100], ['splitPct', '벌어짐 %', 0, 60], ['tiltDeg', '기울임 도', 0, 45],
+  ['exitWaitMs', '소멸 전 대기 ms', 0, 600],
 ];
 export const deriveDeckTimeline = (s: DeckSettings) => {
   const spawnEnd = s.cardStaggerMs * 7 + s.cardFallMs, shuffleStart = spawnEnd + s.spawnWaitMs;
@@ -48,12 +49,12 @@ export const deriveDeckTimeline = (s: DeckSettings) => {
   const split1 = shuffleStart, join1 = split1 + s.firstSplitMs + s.firstHoldMs;
   const split2 = join1 + effectiveJoinMs + s.cycleWaitMs, join2 = split2 + s.repeatSplitMs + s.cycleWaitMs;
   const split3 = join2 + effectiveJoinMs + s.cycleWaitMs, join3 = split3 + s.repeatSplitMs + s.cycleWaitMs;
-  const exitStart = join3 + effectiveJoinMs;
+  const exitStart = join3 + effectiveJoinMs + s.exitWaitMs;
   return {
     spawnEnd, shuffleStart, splitStarts: [split1, split2, split3] as const,
     splitEnds: [split1 + s.firstSplitMs, split2 + s.repeatSplitMs, split3 + s.repeatSplitMs] as const,
     joinStarts: [join1, join2, join3] as const, joinEnds: [join1 + effectiveJoinMs, join2 + effectiveJoinMs, join3 + effectiveJoinMs] as const,
-    directions: ['right', 'left', 'right'] as const, joinMs: s.joinMs, cardFollowMs: s.cardFollowMs, effectiveJoinMs,
+    directions: ['right', 'left', 'right'] as const, joinMs: s.joinMs, cardFollowMs: s.cardFollowMs, effectiveJoinMs, exitWaitMs: s.exitWaitMs, splitPct: s.splitPct, tiltDeg: s.tiltDeg,
     exitStart, shuffleMs: exitStart - shuffleStart, total: exitStart + s.exitMs,
   };
 };
@@ -70,7 +71,9 @@ const sideForCycle = (pile: CardPile, cycle: number): PileSide =>
   (pile === 'odd') === (cycle % 2 === 0) ? 'left' : 'right';
 export const buildCardTimeline = (name: string, pile: CardPile, cardOrder: number, timeline: ReturnType<typeof deriveDeckTimeline>) => {
   const at = (absoluteMs: number) => `${Number((((absoluteMs - timeline.shuffleStart) / timeline.shuffleMs) * 100).toFixed(4))}%`;
-  const split = (cycle: number) => sideForCycle(pile, cycle) === 'right' ? 'translateX(30%) rotate(20deg)' : 'translateX(-30%) rotate(-20deg)';
+  const split = (cycle: number) => sideForCycle(pile, cycle) === 'right'
+    ? `translateX(${timeline.splitPct}%) rotate(${timeline.tiltDeg}deg)`
+    : `translateX(-${timeline.splitPct}%) rotate(-${timeline.tiltDeg}deg)`;
   const joinWindows = deriveCardJoinWindows(timeline, cardOrder);
   const frames = ['0% { transform: none; animation-timing-function: cubic-bezier(.2, .75, .3, 1); }'];
   for (const cycle of [0, 1, 2] as const) {
