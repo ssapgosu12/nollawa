@@ -52,9 +52,7 @@ export const createFirstPlayerCoin = (random: () => number = Math.random, replay
 };
 export const createSharedGameSelection = (game: GameId, size: BoardSize = 13) => ({ type: 'snapshot' as const, game, state: initGame(game, size) });
 export const createSharedGameStart = (game: GameId, createOpening: () => FirstPlayerCoin = createFirstPlayerCoin, size: BoardSize = 13) => {
-  const opening = createOpening();
-  return { type: 'snapshot' as const, game, state: initialGameForOpening(game, opening.firstPlayer, size), opening };
-};
+  const opening = createOpening(); return { type: 'snapshot' as const, game, state: initialGameForOpening(game, opening.firstPlayer, size), opening }; };
 export function initialGameForOpening(game: GameId, firstPlayer: Seat, size: BoardSize = 13): GameState {
   const initial = initGame(game, size);
   if (firstPlayer === 1) return initial;
@@ -111,8 +109,7 @@ export function App() {
   const [peopleFilter, setPeopleFilter] = useState<PeopleFilter>('all');
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [mode, setMode] = useState<PlayMode>('local');
-  const [selectedGame, setSelectedGame] = useState<GameId>('samok');
-  const [boardSize, setBoardSize] = useState<BoardSize>(13);
+  const [selectedGame, setSelectedGame] = useState<GameId>('samok'), [boardSize, setBoardSize] = useState<BoardSize>(13);
   const [state, setState] = useState<GameState>(() => samok.init());
   const [connection, setConnection] = useState('준비');
   const [localSeat, setLocalSeat] = useState<Seat | null>(null);
