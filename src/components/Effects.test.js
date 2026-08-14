@@ -139,7 +139,8 @@ describe('E4: full deck-shuffle sequence', () => {
   it('E4-CORRECTION-CARD-WIDTH-CAPTION-GAP: puts the caption directly below the deck at exactly 20% of card width', () => {
     const { caption } = renderedDeck();
     expect(caption.props.children.join('')).toBe('테스트 카드 덱이 섞이고 있습니다');
-    expect(css).toMatch(/\.shuffle-scene\s*{[^}]*width:\s*min\(38vw, 150px\)[^}]*gap:\s*min\(7\.6vw, 30px\)/);
+    expect(css).toMatch(/\.shuffle-scene\s*{[^}]*gap:\s*min\(7\.6vw, 30px\)/);
+    expect(css).toMatch(/\.shuffle-deck\s*{[^}]*width:\s*min\(38vw, 150px\)/);
     expect(css.match(/\.shuffle-scene\s*{[^}]*}/)?.[0]).not.toMatch(/gap:\s*20%/);
     expect(css.match(/\.shuffle-caption\s*{[^}]*}/)?.[0]).not.toMatch(/position|bottom/);
   });
@@ -195,5 +196,16 @@ describe('D-015 후속: 값은 던질 때만 바뀐다', () => {
     expect(demo).toMatch(/useMemo\(\(\) => children\(replayKey\), \[replayKey, \.\.\.deps\]\)/);
     expect(source).toMatch(/deps=\{\[coinCount\]\}/);
     expect(source).toMatch(/deps=\{\[diceCount\]\}/);
+  });
+});
+
+describe('D-025 후속: 덱 크기는 자막 폭에 끌려가지 않는다', () => {
+  it('E4-DECK-WIDTH-INDEPENDENT: 덱은 자기 폭을 직접 갖고 자막이 트랙을 부풀리지 못한다', () => {
+    const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
+    const deck = css.match(/\.shuffle-deck \{[^}]*\}/)?.[0] ?? '';
+    const scene = css.match(/\.shuffle-scene \{[^}]*\}/)?.[0] ?? '';
+    expect(deck).toMatch(/width:\s*min\(38vw,\s*150px\)/);
+    expect(deck).not.toMatch(/width:\s*100%/);
+    expect(scene).not.toMatch(/display:\s*grid/);
   });
 });
