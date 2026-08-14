@@ -71,14 +71,32 @@ describe('A1: AI 대전은 사람 전원 한 팀', () => {
 });
 
 describe('D-014: 게임 이름 옆 AI 대전 꼬리표', () => {
-  const heading = (aiOpponent: boolean) => {
-    const nodes = tree(RoomLobby({ room: room(2, aiOpponent), selfId: 'p1', send() {}, openGames() {} }));
-    return nodes.filter((node) => node.type === 'h2').map(text).join('');
+  const games = [
+    ['samok', '사목', '2인 · 5분 · #봇 있음 #대전 #5분 이내'],
+    ['omok', '오목', '2인 · 10분 · #봇 있음 #대전'],
+    ['yukmok', '육목', '2인 · 15분 · #봇 있음 #대전'],
+    ['reversi', '리버시', '2인 · 15분 · #봇 있음 #대전'],
+  ] as const;
+
+  const gameCard = (id: string, aiOpponent: boolean) => {
+    const current = room(2, aiOpponent);
+    current.game = id;
+    const nodes = tree(RoomLobby({ room: current, selfId: 'p1', send() {}, openGames() {} }));
+    return nodes.find((node) => node.type === 'article' && node.props.class === 'lobby-game');
   };
 
-  it('AI 대전이 켜지면 이름 옆에 (AI 대전)이 붙고, 꺼지면 붙지 않는다', () => {
-    expect(heading(true)).toBe('사목 (AI 대전)');
-    expect(heading(false)).toBe('사목');
+  it.each(games)('%s 방은 카탈로그의 한국어 이름과 서로 다른 메타데이터를 표시한다', (id, name, subtitle) => {
+    const card = tree(gameCard(id, false));
+    expect(text(card.find((node) => node.type === 'h2'))).toBe(name);
+    expect(text(card.find((node) => node.type === 'p'))).toBe(subtitle);
+  });
+
+  it.each(games)('%s 방은 AI일 때만 한국어 이름 뒤 꼬리표를 정확히 한 번 붙인다', (id, name) => {
+    const heading = (aiOpponent: boolean) => text(tree(gameCard(id, aiOpponent)).find((node) => node.type === 'h2'));
+    expect(heading(true)).toBe(`${name} (AI 대전)`);
+    expect(heading(true).match(/\(AI 대전\)/g)).toHaveLength(1);
+    expect(heading(false)).toBe(name);
+    expect(heading(false)).not.toContain(id);
   });
 });
 
