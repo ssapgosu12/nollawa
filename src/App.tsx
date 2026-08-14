@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { requestGameMove } from './ai/game-client';
-import { BoardGame } from './components/BoardGame';
+import { BoardGame, nextLastTurnView, type LastTurnView } from './components/BoardGame';
 import { CoinResults, EffectsTestPage } from './components/Effects';
 import { Countdown, Vignette } from './components/TableEffects';
 import { reduceRematchConsent, reduceSharedRematch, rematchProgress, type RematchMember, type RematchState } from './game/rematch-consent';
-import { actionForMove, GAME_CATALOG, gameId, initGame, legalGameMoveKeys, reduceGame, reduceGameMove, restartAction, terminalGame, voteActionForMove, type GameAction, type GameId, type GameMove, type GameMoveKey, type GameState, type GameWireAction } from './game/catalog';
+import { actionForMove, GAME_CATALOG, gameId, initGame, legalGameMoveKeys, moveKey, reduceGame, reduceGameMove, restartAction, terminalGame, voteActionForMove, type GameAction, type GameId, type GameMove, type GameMoveKey, type GameState, type GameWireAction } from './game/catalog';
 import { samok, type SamokState, type Seat } from './game/samok';
 import { authorityResolvedVoteDeadline, authorityVoteDeadline, commitResolvedTeamVote, reduceAuthorityVote, roulettePlan, settleTeamVote, type TeamVoteRules, type VoteMember } from './game/team-vote';
 import { normalizeRoomCode, requestReservation, reserveRoomCode } from './lobby/room-code';
@@ -12,7 +12,7 @@ import { RoomLobby } from './lobby/RoomLobby';
 import { isRoomHost, MAIN_DESTINATIONS, reuseRemoteTransport, roomScreen, teamForSlot, type RoomCommand, type RoomSnapshot } from './lobby/room-state';
 import { deviceReconnectKey, LoopbackTransport, WebSocketTransport, type Transport } from './transport/transport';
 type Screen = 'name' | 'room' | 'lobby' | 'games' | 'effects' | 'opening' | 'play';
-type PlayMode = 'local' | 'ai' | 'remote';
+export type PlayMode = 'local' | 'ai' | 'remote';
 interface ActionActor { id: string; seat: Seat | null }
 interface AcceptedActionSource { actor: ActionActor; action: GameWireAction }
 export interface FirstPlayerCoin { outcomes: readonly ['H' | 'T']; replayKey: number; firstPlayer: Seat }
@@ -46,6 +46,11 @@ export const AI_MOVE_DELAY_MS = 1_000;
 export const COIN_TOSS_DURATION_MS = 700;
 export const aiBudgetMs = (room: RoomSnapshot | null) => room?.settings.aiStrength === 'high' ? 3_000 : AI_MOVE_DELAY_MS;
 export const gameListModeAfterPlay = (mode: PlayMode): PlayMode => mode === 'ai' ? 'local' : mode;
+export interface MovePreview { game: GameId; move: GameMove; moves: number; turn: Seat }
+export const createMovePreview = (game: GameId, state: GameState, move: GameMove): MovePreview => ({ game, move, moves: state.moves, turn: state.turn });
+export const canConfirmMovePreview = (game: GameId, state: GameState, preview: MovePreview | null, disabled: boolean): preview is MovePreview => Boolean(preview && !disabled && preview.game === game && preview.moves === state.moves && preview.turn === state.turn && legalGameMoveKeys(game, state).includes(moveKey(preview.move)));
+export const confirmedActionFor = (mode: PlayMode, game: GameId, move: GameMove): GameWireAction => mode === 'remote' ? voteActionForMove(move) : actionForMove(game, move);
+export const playStatusFor = (aiThinking: boolean, restartNotice: string, mode: PlayMode, seat: Seat | null): string => aiThinking ? 'AI 생각중...' : restartNotice || (mode === 'remote' ? remoteSeatLabel(seat) : '');
 export const createFirstPlayerCoin = (random: () => number = Math.random, replayKey = Date.now()): FirstPlayerCoin => {
   const firstPlayer: Seat = random() < .5 ? 1 : 2;
   return { outcomes: [firstPlayer === 1 ? 'H' : 'T'], replayKey, firstPlayer };
@@ -123,11 +128,13 @@ export function App() {
   const [restartNotice, setRestartNotice] = useState('');
   const [opening, setOpening] = useState<FirstPlayerCoin | null>(null);
   const [clock, setClock] = useState(() => Date.now());
+  const [preview, setPreview] = useState<MovePreview | null>(null);
+  const [lastTurn, setLastTurn] = useState<LastTurnView>({ game: 'samok', moves: 0, cells: [] });
   const transportRef = useRef<Transport<GameMessage> | null>(null);
   const clientId = useRef<string | null>(null);
   const localSeatRef = useRef<Seat | null>(null);
   const roomRef = useRef<RoomSnapshot | null>(null);
-  const selectedGameRef = useRef<GameId>('samok');
+  const selectedGameRef = useRef<GameId>('samok'), previousAccepted = useRef<{ game: GameId; state: GameState } | null>(null);
   const isAuthority = useRef(false);
   const aiThinking = useRef(false);
   const aiRequest = useRef(0);
@@ -256,6 +263,7 @@ export function App() {
   const selectSharedGame = (game: GameId) => sendSharedGameSnapshot(createSharedGameSelection(game));
   const initializeSharedGame = (game: GameId) => sendSharedGameSnapshot(createSharedGameStart(game));
   const sendRoom = (command: RoomCommand) => { send({ type: 'room-command', ...command }); if (command.command === 'start' && isAuthority.current) initializeSharedGame(gameId(roomRef.current?.game ?? selectedGameRef.current)); };
+  useEffect(() => { setLastTurn((current) => nextLastTurnView(selectedGame, previousAccepted.current, state, current)); previousAccepted.current = { game: selectedGame, state }; }, [selectedGame, state]);
   useEffect(() => {
     if (screen === 'games') setMode((current) => gameListModeAfterPlay(current));
   }, [screen]);
@@ -312,7 +320,7 @@ export function App() {
     return () => timers.forEach((timer) => window.clearTimeout(timer));
   }, [state.resolvedVote]);
   useEffect(() => () => { transportRef.current?.close(); if (openingTimer.current !== null) window.clearTimeout(openingTimer.current); }, []);
-  const outcome = state.winner ? `${state.winner}번 승리` : state.draw ? '무승부' : `${state.turn}번 차례`;
+  const outcome = state.winner ? `${state.winner}번 승리` : state.draw ? '무승부' : `${state.turn}번 차례`, boardDisabled = Boolean(state.resolvedVote) || (mode === 'remote' ? terminalGame(selectedGame, state).ended || localSeat !== state.turn : terminalGame(selectedGame, state).ended || (mode === 'ai' && state.turn === 2)), confirmedPreview = canConfirmMovePreview(selectedGame, state, preview, boardDisabled) ? preview : null, playStatus = aiThinkingVisible ? 'AI 생각중...' : playStatusFor(false, restartNotice, mode, localSeat), seatStatus = mode === 'remote' && !aiThinkingVisible && !restartNotice, lastTurnCells = lastTurn.game === selectedGame && lastTurn.moves === state.moves ? lastTurn.cells : [];
   const rematch = rematchProgress(state as GameState & RematchState, roomRematchMembers(room), selfId);
   const voteTimer = voteTimerPresentation(state, clock);
   return <main class="app-shell">
@@ -334,7 +342,7 @@ export function App() {
     </div></section>}
     {screen === 'effects' && <EffectsTestPage onBack={() => setScreen('games')} />}
     {screen === 'opening' && opening && <section class="panel narrow opening-coin" aria-labelledby="opening-title"><p class="eyebrow">{connection}</p><h1 id="opening-title">선공 결정</h1><CoinResults outcomes={opening.outcomes} replayKey={opening.replayKey} /><p>{opening.firstPlayer}번이 먼저 시작합니다</p></section>}
-    {screen === 'play' && <section class="play-layout" aria-labelledby="play-title"><div class="game-status"><div><p class="eyebrow">{connection}</p><h1 id="play-title">{outcome}</h1>{aiThinkingVisible && <p class="ai-thinking" role="status">AI 생각중...</p>}{mode === 'remote' && <p class={`seat-badge ${localSeat ? `player-${localSeat}` : ''}`}>{remoteSeatLabel(localSeat)}</p>}{restartNotice && <p class="restart-notice" role="status">{restartNotice}</p>}</div>{mode === 'remote' ? <div><button onClick={() => returnToLobby(sendRoom)}>로비로 돌아가기</button><button onClick={() => leaveForTitle(sendRoom, closeTransport, () => setScreen('name'))}>타이틀로 나가기</button></div> : <button onClick={() => setScreen('games')}>게임 목록</button>}</div><BoardGame game={selectedGame} state={state} selfId={mode === 'remote' ? selfId : null} seat={localSeat} rouletteMove={rouletteMove} disabled={(mode === 'remote' && (terminalGame(selectedGame, state).ended || localSeat !== state.turn)) || (mode !== 'remote' && (terminalGame(selectedGame, state).ended || (mode === 'ai' && state.turn === 2)))} onMove={(move) => send({ type: 'action', action: mode === 'remote' ? voteActionForMove(move) : actionForMove(selectedGame, move) })} /><p class="hint">판을 누르거나 키보드로 선택하세요. ● 1번 · ■ 2번</p>{terminalGame(selectedGame, state).ended && <div class="rematch"><div>{mode === 'remote' && room && <><p>{rematch.ready}/{rematch.total} 다음 판 준비</p><p>아직: {rematch.pendingNames.join(', ')}</p></>}</div><button class="primary restart" disabled={mode === 'remote' && (localSeat === null || rematch.selfReady)} onClick={() => send({ type: 'action', action: restartAction() })}>다음 판</button></div>}</section>}
+    {screen === 'play' && <section class="play-layout" aria-labelledby="play-title"><div class="game-status"><div><p class="eyebrow">{connection}</p><h1 id="play-title">{outcome}</h1><div class="play-status-slot" role="status" aria-live="polite"><p class={`${seatStatus ? `seat-badge ${localSeat ? `player-${localSeat}` : ''}` : restartNotice ? 'restart-notice' : ''}`} aria-hidden={!playStatus}>{playStatus || '\u00a0'}</p></div></div>{mode === 'remote' ? <div><button onClick={() => returnToLobby(sendRoom)}>로비로 돌아가기</button><button onClick={() => leaveForTitle(sendRoom, closeTransport, () => setScreen('name'))}>타이틀로 나가기</button></div> : <button onClick={() => setScreen('games')}>게임 목록</button>}</div><BoardGame game={selectedGame} state={state} selfId={mode === 'remote' ? selfId : null} seat={localSeat} rouletteMove={rouletteMove} preview={confirmedPreview?.move ?? null} lastTurn={lastTurnCells} disabled={boardDisabled} onSelect={(move) => setPreview(createMovePreview(selectedGame, state, move))} /><button class="primary confirm-move" disabled={!confirmedPreview} onClick={() => { if (!confirmedPreview) return; send({ type: 'action', action: confirmedActionFor(mode, selectedGame, confirmedPreview.move) }); setPreview(null); }}>확인</button><p class="hint">자리를 선택한 뒤 확인하세요. 키보드는 Enter 또는 Space를 씁니다. ● 1번 · ■ 2번</p>{terminalGame(selectedGame, state).ended && <div class="rematch"><div>{mode === 'remote' && room && <><p>{rematch.ready}/{rematch.total} 다음 판 준비</p><p>아직: {rematch.pendingNames.join(', ')}</p></>}</div><button class="primary restart" disabled={mode === 'remote' && (localSeat === null || rematch.selfReady)} onClick={() => send({ type: 'action', action: restartAction() })}>다음 판</button></div>}</section>}
     {screen === 'play' && voteTimer.visible && <Vignette intensity={voteTimer.intensity} periodMs={voteTimer.periodMs} />}
     {screen === 'play' && <Countdown remaining={voteTimer.remaining} visible={voteTimer.visible} />}
     <UpdateBanner />
