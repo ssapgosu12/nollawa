@@ -130,32 +130,49 @@ label { display: block; font-weight: 700; }
 .effect-die { display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); border: 3px solid var(--line); border-radius: 12px; padding: 7px; background: var(--paper); box-shadow: 0 3px 0 var(--line); animation-name: die-roll; animation-duration: 650ms; }
 .die-pip { position: relative; align-self: center; justify-self: center; width: min(9px, 60%); aspect-ratio: 1; border-radius: 50%; background: transparent; }
 .die-pip.is-on { animation: die-pip-reveal 650ms steps(1, end) both; animation-delay: calc(var(--effect-index) * 55ms); }
-.die-pip::before { position: absolute; inset: 0; border-radius: 50%; background: var(--ink); content: ""; animation: die-pip-scramble-a 650ms steps(1, end) both; animation-delay: calc(var(--effect-index) * 55ms); }
-.die-pip:nth-child(3n + 2)::before { animation-name: die-pip-scramble-b; }
-.die-pip:nth-child(3n)::before { animation-name: die-pip-scramble-c; }
+.die-pip::before { position: absolute; inset: 0; border-radius: 50%; background: var(--ink); opacity: 0; content: ""; animation-duration: 650ms; animation-timing-function: steps(1, end); animation-fill-mode: both; animation-delay: calc(var(--effect-index) * 55ms); }
+.die-pip.scramble-111::before { animation-name: die-pip-scramble-111; }
+.die-pip.scramble-011::before { animation-name: die-pip-scramble-011; }
+.die-pip.scramble-101::before { animation-name: die-pip-scramble-101; }
 .effect-controls { display: flex; align-items: center; gap: .8rem; margin-top: .75rem; }
 .effect-controls label { display: flex; align-items: center; gap: .35rem; }
 .effect-controls input { width: 24px; min-height: 24px; margin: 0; }
-.deck-shuffle-overlay { position: fixed; z-index: 20; inset: 0; display: grid; place-items: center; overflow: hidden; color: var(--paper); background: var(--effect-overlay); pointer-events: none; animation: deck-overlay 2.8s both; }
-.shuffle-deck { position: relative; width: min(38vw, 150px); aspect-ratio: 2 / 3; }
-.shuffle-piece { position: absolute; top: 50%; left: 50%; width: 100%; height: 100%; border: 3px solid var(--line); border-radius: 12px; background: var(--effect-card); box-shadow: inset 0 0 0 7px var(--paper), inset 0 0 0 9px var(--line), 0 2px 0 var(--line); transform: translate(-50%, -50%); }
-.shuffle-half { animation: shuffle-halves 2.8s both; }
-.shuffle-left { --shuffle-split: -.18rem; clip-path: polygon(0 0, 50% 0, 50% 100%, 0 100%); }
-.shuffle-right { --shuffle-split: .18rem; clip-path: polygon(50% 0, 100% 0, 100% 100%, 50% 100%); }
-.shuffle-stripe { opacity: 0; animation: shuffle-stripes 2.8s both; }
-.stripe-left { --stripe-exit: -60vw; mask-image: repeating-linear-gradient(to bottom, var(--ink) 0 10px, transparent 10px 20px); }
-.stripe-right { --stripe-exit: 60vw; mask-image: repeating-linear-gradient(to bottom, transparent 0 10px, var(--ink) 10px 20px); }
-.shuffle-caption { position: absolute; right: 1rem; bottom: max(1.25rem, env(safe-area-inset-bottom)); left: 1rem; margin: 0; text-align: center; font-size: clamp(1.1rem, 5vw, 2rem); font-weight: 900; animation: shuffle-caption 5s both; }
+.deck-timing-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .5rem; margin-bottom: .75rem; }
+.deck-timing-controls label { border: 1px solid var(--line); border-radius: 8px; padding: .45rem; font-size: .78rem; }
+.deck-timing-controls input { min-height: 24px; margin: .15rem 0; padding: 0; }
+.deck-timing-controls output { display: block; text-align: right; font: 700 .75rem/1 ui-monospace, monospace; }
+.deck-shuffle-overlay { position: fixed; z-index: 20; inset: 0; display: grid; place-items: center; overflow: hidden; color: var(--paper); background: var(--effect-overlay); pointer-events: none; animation: deck-overlay var(--total-ms) linear both; }
+.shuffle-scene { display: grid; width: min(38vw, 150px); justify-items: center; gap: 20%; }
+.shuffle-deck { position: relative; width: 100%; aspect-ratio: 2 / 3; }
+.shuffle-card { position: absolute; top: 50%; left: 50%; width: 100%; height: 100%; border: 3px solid var(--line); border-radius: 12px; background: var(--effect-card); box-shadow: inset 0 0 0 7px var(--paper), inset 0 0 0 9px var(--line), 0 2px 0 var(--line); opacity: 0; transform: translate(-50%, -50%); }
+.spawn-card { z-index: var(--card-order); animation: deck-card-spring-drop var(--fall-ms) cubic-bezier(.18, .72, .24, 1.18) var(--card-delay) forwards, deck-card-fade var(--fade-ms) linear var(--card-delay) forwards, deck-card-gather var(--gather-ms) cubic-bezier(.2, .9, .3, 1.12) var(--gather-start) forwards, deck-hide 1ms steps(1, end) var(--shuffle-start) forwards; }
+.shuffle-card-a { z-index: 3; animation: deck-show 1ms steps(1, end) var(--shuffle-start) forwards, deck-split-right var(--split-1-ms) cubic-bezier(.2, .9, .3, 1.12) var(--split-1-start) forwards, deck-join-right var(--join-ms) cubic-bezier(.2, .9, .3, 1.12) var(--join-1-start) forwards, deck-lower 1ms steps(1, end) var(--split-2-start) forwards, deck-split-right var(--split-ms) cubic-bezier(.2, .9, .3, 1.12) var(--split-2-start) forwards, deck-join-right var(--join-ms) cubic-bezier(.2, .9, .3, 1.12) var(--join-2-start) forwards, deck-raise 1ms steps(1, end) var(--split-3-start) forwards, deck-split-right var(--split-ms) cubic-bezier(.2, .9, .3, 1.12) var(--split-3-start) forwards, deck-join-right var(--join-ms) cubic-bezier(.2, .9, .3, 1.12) var(--join-3-start) forwards, deck-hide 1ms steps(1, end) var(--exit-start) forwards; }
+.shuffle-card-b { z-index: 2; animation: deck-show 1ms steps(1, end) var(--shuffle-start) forwards, deck-split-left var(--split-1-ms) cubic-bezier(.2, .9, .3, 1.12) var(--split-1-start) forwards, deck-join-left var(--join-ms) cubic-bezier(.2, .9, .3, 1.12) var(--join-1-start) forwards, deck-raise 1ms steps(1, end) var(--split-2-start) forwards, deck-split-left var(--split-ms) cubic-bezier(.2, .9, .3, 1.12) var(--split-2-start) forwards, deck-join-left var(--join-ms) cubic-bezier(.2, .9, .3, 1.12) var(--join-2-start) forwards, deck-lower 1ms steps(1, end) var(--split-3-start) forwards, deck-split-left var(--split-ms) cubic-bezier(.2, .9, .3, 1.12) var(--split-3-start) forwards, deck-join-left var(--join-ms) cubic-bezier(.2, .9, .3, 1.12) var(--join-3-start) forwards, deck-hide 1ms steps(1, end) var(--exit-start) forwards; }
+.exit-band { z-index: 4; border-radius: 12px; animation-duration: var(--exit-ms); animation-timing-function: linear; animation-delay: var(--exit-start); animation-fill-mode: forwards; }
+.exit-left { mask-image: repeating-linear-gradient(to bottom, var(--ink) 0 10px, transparent 10px 20px); animation-name: deck-exit-left; }
+.exit-right { mask-image: repeating-linear-gradient(to bottom, transparent 0 10px, var(--ink) 10px 20px); animation-name: deck-exit-right; }
+.shuffle-caption { width: min(90vw, 500px); margin: 0; text-align: center; font-size: clamp(1.1rem, 5vw, 2rem); font-weight: 900; animation: deck-caption var(--total-ms) linear both; }
 @keyframes coin-toss { from { opacity: 0; transform: translateY(-24vh) rotateY(540deg); } 72% { transform: translateY(7px) rotateY(0); } to { opacity: 1; transform: none; } }
 @keyframes die-roll { from { opacity: 0; transform: translateY(-20vh) rotate(300deg) scale(.7); } 50% { opacity: 1; transform: translateY(7px) rotate(20deg); } 62% { transform: translateY(-18px) rotate(-12deg); } 72% { transform: translateY(0) rotate(0); } to { opacity: 1; transform: none; } }
 @keyframes die-pip-reveal { 0%, 72% { background: transparent; } 73%, 100% { background: var(--ink); } }
-@keyframes die-pip-scramble-a { 0%, 23% { opacity: 1; } 24%, 47% { opacity: 0; } 48%, 72% { opacity: 1; } 73%, 100% { opacity: 0; } }
-@keyframes die-pip-scramble-b { 0%, 23% { opacity: 0; } 24%, 47% { opacity: 1; } 48%, 100% { opacity: 0; } }
-@keyframes die-pip-scramble-c { 0%, 47% { opacity: 1; } 48%, 100% { opacity: 0; } }
-@keyframes shuffle-halves { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.94); } 6%, 14% { opacity: 1; transform: translate(-50%, -50%); } 22% { transform: translate(calc(-50% + var(--shuffle-split)), -50%); } 30% { transform: translate(-50%, -50%); } 38% { transform: translate(calc(-50% + var(--shuffle-split)), -50%); } 46% { transform: translate(-50%, -50%); } 54% { transform: translate(calc(-50% + var(--shuffle-split)), -50%); } 62%, 66% { opacity: 1; transform: translate(-50%, -50%); } 67%, 100% { opacity: 0; transform: translate(-50%, -50%); } }
-@keyframes shuffle-stripes { 0%, 66% { opacity: 0; transform: translate(-50%, -50%); } 67% { opacity: 1; transform: translate(-50%, -50%); } 100% { opacity: 0; transform: translate(calc(-50% + var(--stripe-exit)), -50%); } }
-@keyframes shuffle-caption { 0%, 5%, 92%, 100% { opacity: 0; } 10%, 86% { opacity: 1; } }
-@keyframes deck-overlay { 0% { opacity: 0; visibility: visible; } 5%, 92% { opacity: 1; visibility: visible; } 99% { opacity: 0; visibility: visible; } 100% { opacity: 0; visibility: hidden; } }
+@keyframes die-pip-scramble-111 { 0%, 72% { opacity: 1; } 73%, 100% { opacity: 0; } }
+@keyframes die-pip-scramble-011 { 0%, 23% { opacity: 0; } 24%, 72% { opacity: 1; } 73%, 100% { opacity: 0; } }
+@keyframes die-pip-scramble-101 { 0%, 23% { opacity: 1; } 24%, 47% { opacity: 0; } 48%, 72% { opacity: 1; } 73%, 100% { opacity: 0; } }
+@keyframes deck-card-spring-drop { from { transform: translate(-50%, calc(-50% - var(--fall-start))); } 82% { transform: translate(-50%, calc(-48% - var(--stack-y))); } to { transform: translate(-50%, calc(-50% - var(--stack-y))); } }
+@keyframes deck-card-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes deck-card-gather { from { transform: translate(-50%, calc(-50% - var(--stack-y))); } to { transform: translate(-50%, calc(-50% - var(--gather-y))); } }
+@keyframes deck-show { to { opacity: 1; } }
+@keyframes deck-hide { to { opacity: 0; visibility: hidden; } }
+@keyframes deck-raise { to { z-index: 3; } }
+@keyframes deck-lower { to { z-index: 2; } }
+@keyframes deck-split-right { from { transform: translate(-50%, -50%) rotate(0); } to { transform: translate(calc(-50% + 30%), -50%) rotate(20deg); } }
+@keyframes deck-split-left { from { transform: translate(-50%, -50%) rotate(0); } to { transform: translate(calc(-50% - 30%), -50%) rotate(-20deg); } }
+@keyframes deck-join-right { from { transform: translate(calc(-50% + 30%), -50%) rotate(20deg); } to { transform: translate(-50%, -50%) rotate(0); } }
+@keyframes deck-join-left { from { transform: translate(calc(-50% - 30%), -50%) rotate(-20deg); } to { transform: translate(-50%, -50%) rotate(0); } }
+@keyframes deck-exit-left { from { opacity: 1; transform: translate(-50%, -50%); } to { opacity: 0; transform: translate(calc(-50% - 60vw), -50%); } }
+@keyframes deck-exit-right { from { opacity: 1; transform: translate(-50%, -50%); } to { opacity: 0; transform: translate(calc(-50% + 60vw), -50%); } }
+@keyframes deck-caption { 0%, 92% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes deck-overlay { 0%, 92% { opacity: 1; visibility: visible; } 100% { opacity: 0; visibility: hidden; } }
 @media (max-width: 600px) {
   .choice-grid { grid-template-columns: 1fr; }
   .join-box { grid-row: auto; }
@@ -174,8 +191,11 @@ label { display: block; font-weight: 700; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; }
   .viewport-vignette { animation: none; opacity: .3; }
-  .effect-coin, .effect-die, .die-pip, .die-pip::before, .shuffle-piece, .shuffle-caption { animation: none; }
+  .effect-coin, .effect-die, .die-pip, .die-pip::before, .shuffle-card, .shuffle-caption { animation: none; }
   .die-pip::before { display: none; }
   .die-pip.is-on { background: var(--ink); }
   .deck-shuffle-overlay { position: relative; inset: auto; min-height: 260px; margin-top: .75rem; visibility: visible; opacity: 1; }
+  .spawn-card { opacity: 0; }
+  .shuffle-card-a, .shuffle-card-b { opacity: 1; }
+  .exit-band { display: none; }
 }
