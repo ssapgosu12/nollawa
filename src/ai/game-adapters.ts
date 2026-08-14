@@ -21,7 +21,7 @@ function longest(board: readonly (readonly number[])[], seat: Seat): number {
 }
 const base = (id: GameId, evaluate: GameAdapter['evaluate']): GameAdapter => ({
   legalMoves: (state) => legalGameMoves(id, state), apply: (state, move) => reduceGame(id, state, actionForMove(id, move)), terminal: (state) => terminalGame(id, state), evaluate,
-  key: (state) => `${state.turn}|${'stonesLeft' in state ? state.stonesLeft : ''}|${'swapAvailable' in state ? state.swapAvailable : ''}|${state.board.flat().join('')}`, blockable: true,
+  key: (state) => `${state.turn}|${'stonesLeft' in state ? state.stonesLeft : ''}|${state.board.flat().join('')}`, blockable: true,
 });
 const lineAdapter = (id: GameId, target: number): GameAdapter => ({ ...base(id, (state, seat) => lineValue(state.board, seat, target)), forcing: (before, after) => longest(after.board, before.turn) >= target - 1 });
 export const GAME_ADAPTERS: Record<GameId, GameAdapter> = {
