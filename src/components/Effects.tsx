@@ -28,9 +28,9 @@ export interface DeckSettings {
   cycleWaitMs: number; joinMs: number; exitMs: number; stackOffsetPct: number; fallStartPct: number;
 }
 export const DECK_DEFAULTS: DeckSettings = {
-  cardFallMs: 300, cardStaggerMs: 70, cardFadeMs: 150, spawnWaitMs: 300,
-  firstSplitMs: 150, firstHoldMs: 100, repeatSplitMs: 100,
-  cycleWaitMs: 70, joinMs: 100, exitMs: 400, stackOffsetPct: 2, fallStartPct: 120,
+  cardFallMs: 300, cardStaggerMs: 70, cardFadeMs: 100, spawnWaitMs: 90,
+  firstSplitMs: 50, firstHoldMs: 0, repeatSplitMs: 50,
+  cycleWaitMs: 0, joinMs: 300, exitMs: 500, stackOffsetPct: 2, fallStartPct: 160,
 };
 export const DECK_CONTROLS: readonly [keyof DeckSettings, string, number, number][] = [
   ['cardFallMs', '카드 낙하 ms', 50, 800], ['cardStaggerMs', '카드 간격 ms', 0, 250], ['cardFadeMs', '페이드인 ms', 0, 500],

@@ -103,9 +103,9 @@ describe('E4: full deck-shuffle sequence', () => {
     expect(cards.every((card) => card.props.class === 'shuffle-card spawn-card pile-card')).toBe(true);
   });
 
-  it('E4-DEFAULTS-TIMELINE-ORDER: preserves exact remaining defaults and derives the 790ms spawn plus 1030ms shuffle', () => {
-    expect(DECK_DEFAULTS).toEqual({ cardFallMs: 300, cardStaggerMs: 70, cardFadeMs: 150, spawnWaitMs: 300, firstSplitMs: 150, firstHoldMs: 100, repeatSplitMs: 100, cycleWaitMs: 70, joinMs: 100, exitMs: 400, stackOffsetPct: 2, fallStartPct: 120 });
-    expect(deriveDeckTimeline(DECK_DEFAULTS)).toEqual({ spawnEnd: 790, shuffleStart: 1090, splitStarts: [1090, 1510, 1850], splitEnds: [1240, 1610, 1950], joinStarts: [1340, 1680, 2020], joinEnds: [1440, 1780, 2120], directions: ['right', 'left', 'right'], exitStart: 2120, shuffleMs: 1030, total: 2520 });
+  it('E4-DEFAULTS-TIMELINE-ORDER: preserves exact remaining defaults and derives the 790ms spawn plus 1050ms shuffle', () => {
+    expect(DECK_DEFAULTS).toEqual({ cardFallMs: 300, cardStaggerMs: 70, cardFadeMs: 100, spawnWaitMs: 90, firstSplitMs: 50, firstHoldMs: 0, repeatSplitMs: 50, cycleWaitMs: 0, joinMs: 300, exitMs: 500, stackOffsetPct: 2, fallStartPct: 160 });
+    expect(deriveDeckTimeline(DECK_DEFAULTS)).toEqual({ spawnEnd: 790, shuffleStart: 880, splitStarts: [880, 1230, 1580], splitEnds: [930, 1280, 1630], joinStarts: [930, 1280, 1630], joinEnds: [1230, 1580, 1930], shuffleMs: 1050, directions: ['right', 'left', 'right'], exitStart: 1930, total: 2430 });
   });
 
   it('E4-CORRECTION-SPAWN-DIRECTION: places each later spawn card above its predecessor at exactly 0 through 14 percent', () => {
@@ -126,8 +126,8 @@ describe('E4: full deck-shuffle sequence', () => {
     const { piles, timelineCss } = renderedDeck();
     expect(deriveDeckTimeline(DECK_DEFAULTS).directions).toEqual(['right', 'left', 'right']);
     expect(piles.map((pile) => pile.props['data-top-cycles'])).toEqual(['left', 'right,right']);
-    expect(timelineCss).toMatch(/deck-shuffle-even-3[\s\S]*0%[^}]*z-index: 3[\s\S]*40\.7767%[^}]*z-index: 2[\s\S]*73\.7864%[^}]*z-index: 3/);
-    expect(timelineCss).toMatch(/deck-shuffle-odd-3[\s\S]*0%[^}]*z-index: 2[\s\S]*40\.7767%[^}]*z-index: 3[\s\S]*73\.7864%[^}]*z-index: 2/);
+    expect(timelineCss).toMatch(/deck-shuffle-even-3[\s\S]*0%[^}]*z-index: 3[\s\S]*33\.3333%[^}]*z-index: 2[\s\S]*66\.6667%[^}]*z-index: 3/);
+    expect(timelineCss).toMatch(/deck-shuffle-odd-3[\s\S]*0%[^}]*z-index: 2[\s\S]*33\.3333%[^}]*z-index: 3[\s\S]*66\.6667%[^}]*z-index: 2/);
   });
 
   it('E4-SIMULTANEOUS-30PCT-20DEG: puts exact width-relative translation and rotation in each split endpoint', () => {
@@ -178,7 +178,7 @@ describe('E4: full deck-shuffle sequence', () => {
 
   it('E4-EXIT-10PX: exits only after the last join using complementary 10px bands and linear motion', () => {
     const { overlay } = renderedDeck();
-    expect(overlay.props.style).toMatch(/--shuffle-ms:1030ms;--exit-ms:400ms;--shuffle-start:1090ms;--exit-start:2120ms;--total-ms:2520ms/);
+    expect(overlay.props.style).toMatch(/--shuffle-ms:1050ms;--exit-ms:500ms;--shuffle-start:880ms;--exit-start:1930ms;--total-ms:2430ms/);
     expect(css).toMatch(/\.exit-left\s*{[^}]*repeating-linear-gradient\(to bottom, var\(--ink\) 0 10px, transparent 10px 20px\)/);
     expect(css).toMatch(/\.exit-right\s*{[^}]*repeating-linear-gradient\(to bottom, transparent 0 10px, var\(--ink\) 10px 20px\)/);
   });
