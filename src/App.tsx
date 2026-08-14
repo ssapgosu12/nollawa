@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { requestGameMove } from './ai/game-client';
 import { BoardGame } from './components/BoardGame';
-import { EffectsTestPage } from './components/Effects';
+import { CoinResults, EffectsTestPage } from './components/Effects';
 import { Countdown, Vignette } from './components/TableEffects';
 import { reduceRematchConsent, reduceSharedRematch, rematchProgress, type RematchMember, type RematchState } from './game/rematch-consent';
 import { actionForMove, GAME_CATALOG, gameId, initGame, legalGameMoveKeys, reduceGame, reduceGameMove, restartAction, terminalGame, voteActionForMove, type GameAction, type GameId, type GameMove, type GameMoveKey, type GameState, type GameWireAction } from './game/catalog';
@@ -11,13 +11,14 @@ import { normalizeRoomCode, requestReservation, reserveRoomCode } from './lobby/
 import { RoomLobby } from './lobby/RoomLobby';
 import { isRoomHost, MAIN_DESTINATIONS, reuseRemoteTransport, roomScreen, teamForSlot, type RoomCommand, type RoomSnapshot } from './lobby/room-state';
 import { deviceReconnectKey, LoopbackTransport, WebSocketTransport, type Transport } from './transport/transport';
-type Screen = 'name' | 'room' | 'lobby' | 'games' | 'effects' | 'play';
+type Screen = 'name' | 'room' | 'lobby' | 'games' | 'effects' | 'opening' | 'play';
 type PlayMode = 'local' | 'ai' | 'remote';
 interface ActionActor { id: string; seat: Seat | null }
 interface AcceptedActionSource { actor: ActionActor; action: GameWireAction }
+export interface FirstPlayerCoin { outcomes: readonly ['H' | 'T']; replayKey: number; firstPlayer: Seat }
 type GameMessage =
   | { type: 'action'; action: GameWireAction; actor?: ActionActor }
-  | { type: 'snapshot'; game?: GameId; state: GameState; source?: AcceptedActionSource }
+  | { type: 'snapshot'; game?: GameId; state: GameState; source?: AcceptedActionSource; opening?: FirstPlayerCoin }
   | { type: 'identity'; id: string; authority: string; seat: Seat | null }
   | { type: 'authority'; authority: string | null }
   | { type: 'room'; room: RoomSnapshot }
@@ -42,8 +43,33 @@ export const applyAuthorityGameAction = (game: GameId, state: GameState, action:
 export const applyAuthorityGameRematch = (game: GameId, state: GameState, actor: ActionActor | undefined, room: RoomSnapshot | null, authority: boolean): GameState => authority && actor ? reduceSharedRematch(state as GameState & RematchState, actor.id, roomRematchMembers(room), terminalGame(game, state).ended, (current) => reduceGame(game, current, restartAction()) as GameState & RematchState) : state;
 export const voteRulesForGame = (game: GameId): TeamVoteRules<GameState> => ({ legalMoves: (current) => legalGameMoveKeys(game, current), applyMove: (current, move) => reduceGameMove(game, current, move) });
 export const AI_MOVE_DELAY_MS = 1_000;
+export const COIN_TOSS_DURATION_MS = 700;
 export const aiBudgetMs = (room: RoomSnapshot | null) => room?.settings.aiStrength === 'high' ? 3_000 : AI_MOVE_DELAY_MS;
-export const requestGameMoveWithRoomBudget = (game: GameId, state: GameState, room: RoomSnapshot | null, requester: typeof requestGameMove = requestGameMove) => requester(game, state, aiBudgetMs(room));
+export const gameListModeAfterPlay = (mode: PlayMode): PlayMode => mode === 'ai' ? 'local' : mode;
+export const createFirstPlayerCoin = (random: () => number = Math.random, replayKey = Date.now()): FirstPlayerCoin => {
+  const firstPlayer: Seat = random() < .5 ? 1 : 2;
+  return { outcomes: [firstPlayer === 1 ? 'H' : 'T'], replayKey, firstPlayer };
+};
+export const createSharedGameSelection = (game: GameId) => ({ type: 'snapshot' as const, game, state: initGame(game) });
+export const createSharedGameStart = (game: GameId, createOpening: () => FirstPlayerCoin = createFirstPlayerCoin) => {
+  const opening = createOpening();
+  return { type: 'snapshot' as const, game, state: initialGameForOpening(game, opening.firstPlayer), opening };
+};
+export function initialGameForOpening(game: GameId, firstPlayer: Seat): GameState {
+  const initial = initGame(game);
+  if (firstPlayer === 1) return initial;
+  const board = initial.board.map((row) => row.map((cell) => cell === 1 ? 2 : cell === 2 ? 1 : cell));
+  return { ...initial, board, turn: 2, starter: 2 } as GameState;
+}
+export function forcedAiOpeningMove(game: GameId, state: GameState): GameMove | null {
+  if ((game !== 'omok' && game !== 'yukmok') || state.turn !== 2 || state.moves !== 0) return null;
+  const center = Math.floor(state.board.length / 2);
+  return { row: center, column: center };
+}
+export const requestGameMoveWithRoomBudget = (game: GameId, state: GameState, room: RoomSnapshot | null, requester: typeof requestGameMove = requestGameMove) => {
+  const forced = forcedAiOpeningMove(game, state);
+  return forced ? Promise.resolve(forced) : requester(game, state, aiBudgetMs(room));
+};
 export const roomMessageTransition = (currentGame: GameId, currentState: GameState, room: RoomSnapshot) => ({ game: gameId(room.game), state: currentState });
 export function voteTimerPresentation(state: GameState, now: number) {
   if (!state.vote || state.vote.effectsSuppressed) return { remaining: 0, visible: false, intensity: 0, periodMs: 1_000 };
@@ -95,6 +121,7 @@ export function App() {
   const [aiThinkingVisible, setAiThinkingVisible] = useState(false);
   const [rouletteMove, setRouletteMove] = useState<GameMoveKey | null>(null);
   const [restartNotice, setRestartNotice] = useState('');
+  const [opening, setOpening] = useState<FirstPlayerCoin | null>(null);
   const [clock, setClock] = useState(() => Date.now());
   const transportRef = useRef<Transport<GameMessage> | null>(null);
   const clientId = useRef<string | null>(null);
@@ -104,6 +131,7 @@ export function App() {
   const isAuthority = useRef(false);
   const aiThinking = useRef(false);
   const aiRequest = useRef(0);
+  const openingTimer = useRef<number | null>(null);
   const visibleGames = useMemo(() => filterGames(query, peopleFilter, tagFilters), [peopleFilter, query, tagFilters]);
   const isHost = room ? isRoomHost(room, selfId) : false;
   function bindTransport(transport: Transport<GameMessage>, nextMode: PlayMode) {
@@ -146,6 +174,7 @@ export function App() {
         selectedGameRef.current = snapshotGame; setSelectedGame(snapshotGame);
         setRestartNotice(restartNoticeFor(message.state, message.source, clientId.current, localSeatRef.current));
         setState(message.state);
+        if (message.opening) showOpening(message.opening);
       }
     });
     transport.onPeerChange((count) => setConnection(`${count}명 연결`));
@@ -205,19 +234,31 @@ export function App() {
     setMode(nextMode);
     selectedGameRef.current = game;
     setSelectedGame(game);
-    setState(initGame(game));
+    const nextOpening = createFirstPlayerCoin();
+    setState(initialGameForOpening(game, nextOpening.firstPlayer));
     setLocalSeat(null);
     setRestartNotice('');
-    setScreen('play');
     await transport.connect();
     setConnection('이 기기 연결');
+    showOpening(nextOpening);
+  }
+  function showOpening(nextOpening: FirstPlayerCoin) {
+    if (openingTimer.current !== null) window.clearTimeout(openingTimer.current);
+    setOpening(nextOpening);
+    setScreen('opening');
+    openingTimer.current = window.setTimeout(() => { setScreen('play'); openingTimer.current = null; }, COIN_TOSS_DURATION_MS);
   }
   function send(message: GameMessage) {
     try { transportRef.current?.send(message); }
     catch (error) { setConnection(error instanceof Error ? error.message : '전송 실패'); }
   }
-  const initializeSharedGame = (game: GameId) => { const initial = initGame(game); selectedGameRef.current = game; setSelectedGame(game); setState(initial); send({ type: 'snapshot', game, state: initial }); };
+  const sendSharedGameSnapshot = (snapshot: ReturnType<typeof createSharedGameSelection> | ReturnType<typeof createSharedGameStart>) => { selectedGameRef.current = snapshot.game; setSelectedGame(snapshot.game); setState(snapshot.state); send(snapshot); };
+  const selectSharedGame = (game: GameId) => sendSharedGameSnapshot(createSharedGameSelection(game));
+  const initializeSharedGame = (game: GameId) => sendSharedGameSnapshot(createSharedGameStart(game));
   const sendRoom = (command: RoomCommand) => { send({ type: 'room-command', ...command }); if (command.command === 'start' && isAuthority.current) initializeSharedGame(gameId(roomRef.current?.game ?? selectedGameRef.current)); };
+  useEffect(() => {
+    if (screen === 'games') setMode((current) => gameListModeAfterPlay(current));
+  }, [screen]);
   useEffect(() => {
     if (screen !== 'play' || !shouldRequestAiMove(mode, room, authority) || state.turn !== 2 || terminalGame(selectedGame, state).ended || aiThinking.current) return;
     const requestId = ++aiRequest.current;
@@ -270,7 +311,7 @@ export function App() {
     }
     return () => timers.forEach((timer) => window.clearTimeout(timer));
   }, [state.resolvedVote]);
-  useEffect(() => () => transportRef.current?.close(), []);
+  useEffect(() => () => { transportRef.current?.close(); if (openingTimer.current !== null) window.clearTimeout(openingTimer.current); }, []);
   const outcome = state.winner ? `${state.winner}번 승리` : state.draw ? '무승부' : `${state.turn}번 차례`;
   const rematch = rematchProgress(state as GameState & RematchState, roomRematchMembers(room), selfId);
   const voteTimer = voteTimerPresentation(state, clock);
@@ -286,12 +327,13 @@ export function App() {
     {screen === 'lobby' && !room && <section class="panel"><h1>{roomCode}</h1><p>{connection}</p></section>}
     {screen === 'games' && <section class="panel" aria-labelledby="games-title"><p class="eyebrow">{mode === 'remote' ? `방 ${roomCode}` : '이 기기'}</p><h1 id="games-title">게임을 골라 주세요</h1>{mode === 'remote' && <button onClick={() => { sendRoom({ command: 'set-activity', activity: 'lobby' }); setScreen('lobby'); }}>방 로비</button>}<label>게임 검색<input type="search" value={query} onInput={(event) => setQuery(event.currentTarget.value)} /></label><div class="filters" aria-label="게임 필터"><div>{(['all', '1', '2', '3-4'] as const).map((value) => <button key={value} class={peopleFilter === value ? 'selected' : ''} aria-pressed={peopleFilter === value} onClick={() => setPeopleFilter(value)}>{value === 'all' ? '전체' : `${value}인`}</button>)}</div><div>{['봇 있음', '대전', '5분 이내'].map((tag) => <button key={tag} class={tagFilters.includes(tag) ? 'selected' : ''} aria-pressed={tagFilters.includes(tag)} onClick={() => setTagFilters((current) => current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag])}>{tag}</button>)}</div></div><div class="game-list">
       {visibleGames.map((game) => <article class="game-card" key={game.name}><div><h2>{game.name}</h2><p class="people">{game.people} · {game.time}</p><div class="tags">{game.tags.map((tag) => <span key={tag}>{tag}</span>)}</div></div><div class="game-actions">
-        {mode === 'remote' ? <button class="primary" disabled={!isHost} onClick={() => { sendRoom({ command: 'select-game', game: game.id }); initializeSharedGame(game.id); setScreen('lobby'); }}>게임 선택</button> : <button class="primary" onClick={() => void startLocal(mode, game.id)}>두 사람이 시작</button>}
+        {mode === 'remote' ? <button class="primary" disabled={!isHost} onClick={() => { sendRoom({ command: 'select-game', game: game.id }); selectSharedGame(game.id); setScreen('lobby'); }}>게임 선택</button> : <button class="primary" onClick={() => void startLocal(mode, game.id)}>두 사람이 시작</button>}
         {mode === 'local' && <button onClick={() => void startLocal('ai', game.id)}>AI와 시작</button>}
       </div></article>)}
       <article class="game-card effects-entry"><div><h2>연출 테스트</h2><p class="people">동전 · 주사위 · 덱 섞기</p><div class="tags"><span>E1–E5</span></div></div><div class="game-actions"><button class="primary" onClick={() => setScreen('effects')}>테스트 열기</button></div></article>
     </div></section>}
     {screen === 'effects' && <EffectsTestPage onBack={() => setScreen('games')} />}
+    {screen === 'opening' && opening && <section class="panel narrow opening-coin" aria-labelledby="opening-title"><p class="eyebrow">{connection}</p><h1 id="opening-title">선공 결정</h1><CoinResults outcomes={opening.outcomes} replayKey={opening.replayKey} /><p>{opening.firstPlayer}번이 먼저 시작합니다</p></section>}
     {screen === 'play' && <section class="play-layout" aria-labelledby="play-title"><div class="game-status"><div><p class="eyebrow">{connection}</p><h1 id="play-title">{outcome}</h1>{aiThinkingVisible && <p class="ai-thinking" role="status">AI 생각중...</p>}{mode === 'remote' && <p class={`seat-badge ${localSeat ? `player-${localSeat}` : ''}`}>{remoteSeatLabel(localSeat)}</p>}{restartNotice && <p class="restart-notice" role="status">{restartNotice}</p>}</div>{mode === 'remote' ? <div><button onClick={() => returnToLobby(sendRoom)}>로비로 돌아가기</button><button onClick={() => leaveForTitle(sendRoom, closeTransport, () => setScreen('name'))}>타이틀로 나가기</button></div> : <button onClick={() => setScreen('games')}>게임 목록</button>}</div><BoardGame game={selectedGame} state={state} selfId={mode === 'remote' ? selfId : null} seat={localSeat} rouletteMove={rouletteMove} disabled={(mode === 'remote' && (terminalGame(selectedGame, state).ended || localSeat !== state.turn)) || (mode !== 'remote' && (terminalGame(selectedGame, state).ended || (mode === 'ai' && state.turn === 2)))} onMove={(move) => send({ type: 'action', action: mode === 'remote' ? voteActionForMove(move) : actionForMove(selectedGame, move) })} /><p class="hint">판을 누르거나 키보드로 선택하세요. ● 1번 · ■ 2번</p>{terminalGame(selectedGame, state).ended && <div class="rematch"><div>{mode === 'remote' && room && <><p>{rematch.ready}/{rematch.total} 다음 판 준비</p><p>아직: {rematch.pendingNames.join(', ')}</p></>}</div><button class="primary restart" disabled={mode === 'remote' && (localSeat === null || rematch.selfReady)} onClick={() => send({ type: 'action', action: restartAction() })}>다음 판</button></div>}</section>}
     {screen === 'play' && voteTimer.visible && <Vignette intensity={voteTimer.intensity} periodMs={voteTimer.periodMs} />}
     {screen === 'play' && <Countdown remaining={voteTimer.remaining} visible={voteTimer.visible} />}
