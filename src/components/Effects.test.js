@@ -55,37 +55,37 @@ describe('E3: caller-supplied six-sided dice results', () => {
   it('E3-FALL-FREEZE: keeps the first real-die pattern unchanged throughout the full fall', () => {
     const timeline = deriveDiceTimeline(DICE_DEFAULTS);
     const generated = buildDiceTimeline('dice-test', timeline);
-    expect(timeline).toMatchObject({ fallEnd: 300, firstChange: 350, total: 620 });
+    expect(timeline).toMatchObject({ fallEnd: 250, firstChange: 270, total: 520 });
     expect(timeline.firstChange).toBeGreaterThan(timeline.fallEnd);
-    expect(generated).toMatch(/@keyframes dice-test-pip-10 \{ 0% \{ opacity: 1; \} 56\.4516% \{ opacity: 0; \}/);
-    expect(generated).not.toMatch(/@keyframes dice-test-pip-[01]{2}[\s\S]*48\.3871% \{ opacity:/);
+    expect(generated).toMatch(/@keyframes dice-test-pip-10 \{ 0% \{ opacity: 1; \} 51\.9231% \{ opacity: 0; \}/);
+    expect(generated).not.toMatch(/@keyframes dice-test-pip-[01]{2}[\s\S]*48\.0769% \{ opacity:/);
   });
 
   it('E3-TWO-UNEQUAL-BOUNCES: lands, makes exactly two peaks, and keeps the first peak higher', () => {
     const timeline = deriveDiceTimeline(DICE_DEFAULTS);
     const generated = buildDiceTimeline('dice-test', timeline);
-    expect(timeline).toEqual({ fallEnd: 300, firstPeak: 400, firstBounceEnd: 500, secondPeak: 560, motionEnd: 620, firstChange: 350, finalChange: 550, total: 620 });
+    expect(timeline).toEqual({ fallEnd: 250, firstPeak: 335, firstBounceEnd: 420, secondPeak: 470, motionEnd: 520, firstChange: 270, finalChange: 440, total: 520 });
     expect(generated.match(/translateY\(-(?:18|8)px\)/g)).toEqual(['translateY(-18px)', 'translateY(-8px)']);
     expect(18).toBeGreaterThan(8);
-    expect(generated).toMatch(/48\.3871%[^}]*translateY\(0\)[\s\S]*80\.6452%[^}]*translateY\(0\)[\s\S]*100%[^}]*translateY\(0\)/);
+    expect(generated).toMatch(/48\.0769%[^}]*translateY\(0\)[\s\S]*80\.7692%[^}]*translateY\(0\)[\s\S]*100%[^}]*translateY\(0\)/);
   });
 
-  it('E3-TWO-DELAYED-CHANGES-FINAL-OWNERSHIP: changes 50ms after each impact and ends at the supplied d6 face', () => {
+  it('E3-TWO-DELAYED-CHANGES-FINAL-OWNERSHIP: changes the configured delay after each impact and ends at the supplied d6 face', () => {
     const timeline = deriveDiceTimeline(DICE_DEFAULTS);
-    expect(timeline.firstChange - timeline.fallEnd).toBe(50);
-    expect(timeline.finalChange - timeline.firstBounceEnd).toBe(50);
+    expect(timeline.firstChange - timeline.fallEnd).toBe(20);
+    expect(timeline.finalChange - timeline.firstBounceEnd).toBe(20);
     const patterns = [1, 2, 3, 4, 5, 6].map((face) => deriveDicePatterns(face));
     expect(patterns).toEqual([[2, 3, 1], [3, 4, 2], [4, 5, 3], [5, 6, 4], [6, 1, 5], [1, 2, 6]]);
     expect(patterns.every(([first, second, final]) => first !== final && second !== final && first !== second)).toBe(true);
     const rendered = children(DiceResults({ outcomes: [1, 2, 3, 4, 5, 6], replayKey: 9 })).flat(Infinity).filter((node) => node.props.class === 'effect-die');
     expect(rendered.map((die) => die.props['data-patterns'])).toEqual(['2,3,1', '3,4,2', '4,5,3', '5,6,4', '6,1,5', '1,2,6']);
     expect(rendered.map((die) => children(die).filter((pip) => pip.props.class.endsWith(' is-on')).length)).toEqual([1, 2, 3, 4, 5, 6]);
-    expect(buildDiceTimeline('dice-test', timeline)).toMatch(/56\.4516% \{ opacity:[^}]+\} 88\.7097%, 100% \{ opacity: 0; \}/);
-    expect(buildDiceTimeline('dice-test', timeline)).toMatch(/@keyframes dice-test-final \{ 0% \{ background: transparent; \} 88\.7097%, 100% \{ background: var\(--ink\); \} \}/);
+    expect(buildDiceTimeline('dice-test', timeline)).toMatch(/51\.9231% \{ opacity:[^}]+\} 84\.6154%, 100% \{ opacity: 0; \}/);
+    expect(buildDiceTimeline('dice-test', timeline)).toMatch(/@keyframes dice-test-final \{ 0% \{ background: transparent; \} 84\.6154%, 100% \{ background: var\(--ink\); \} \}/);
   });
 
   it('E3-FOUR-SLIDER-WIRING: exposes only the four required defaults and routes every value into generated timing', () => {
-    expect(DICE_DEFAULTS).toEqual({ fallMs: 300, firstBounceMs: 200, secondBounceMs: 120, pipChangeDelayMs: 50 });
+    expect(DICE_DEFAULTS).toEqual({ fallMs: 250, firstBounceMs: 170, secondBounceMs: 100, pipChangeDelayMs: 20 });
     expect(DICE_CONTROLS.map(([key]) => key)).toEqual(['fallMs', 'firstBounceMs', 'secondBounceMs', 'pipChangeDelayMs']);
     const baseline = buildDiceTimeline('dice-test', deriveDiceTimeline(DICE_DEFAULTS));
     for (const [key] of DICE_CONTROLS) {
@@ -146,15 +146,15 @@ describe('E4: full deck-shuffle sequence', () => {
     expect(css).not.toMatch(/\.shuffle-pile\s*{/);
   });
 
-  it('E4-DEFAULTS-TIMELINE-ORDER: preserves the 12 confirmed defaults, adds follow 20 with split/tilt/exit-wait, and derives a 1210ms shuffle', () => {
-    expect(DECK_DEFAULTS).toEqual({ cardFallMs: 300, cardStaggerMs: 70, cardFadeMs: 100, spawnWaitMs: 90, firstSplitMs: 50, firstHoldMs: 0, repeatSplitMs: 50, cycleWaitMs: 0, joinMs: 180, exitMs: 500, stackOffsetPct: 2, fallStartPct: 160, cardFollowMs: 20, splitPct: 30, tiltDeg: 20, exitWaitMs: 100 });
-    expect(deriveDeckTimeline(DECK_DEFAULTS)).toEqual({ spawnEnd: 790, shuffleStart: 880, splitStarts: [880, 1250, 1620], splitEnds: [930, 1300, 1670], joinStarts: [930, 1300, 1670], joinEnds: [1250, 1620, 1990], directions: ['right', 'left', 'right'], joinMs: 180, cardFollowMs: 20, effectiveJoinMs: 320, exitWaitMs: 100, splitPct: 30, tiltDeg: 20, exitStart: 2090, shuffleMs: 1210, total: 2590 });
+  it('E4-DEFAULTS-TIMELINE-ORDER: preserves the 12 confirmed defaults, adds follow 20 with split/tilt/exit-wait, and derives a 1330ms shuffle', () => {
+    expect(DECK_DEFAULTS).toEqual({ cardFallMs: 230, cardStaggerMs: 70, cardFadeMs: 100, spawnWaitMs: 90, firstSplitMs: 50, firstHoldMs: 0, repeatSplitMs: 50, cycleWaitMs: 0, joinMs: 150, exitMs: 500, stackOffsetPct: 3, fallStartPct: 160, cardFollowMs: 30, splitPct: 45, tiltDeg: 15, exitWaitMs: 100 });
+    expect(deriveDeckTimeline(DECK_DEFAULTS)).toEqual({ spawnEnd: 720, shuffleStart: 810, splitStarts: [810, 1220, 1630], splitEnds: [860, 1270, 1680], joinStarts: [860, 1270, 1680], joinEnds: [1220, 1630, 2040], directions: ['right', 'left', 'right'], joinMs: 150, cardFollowMs: 30, effectiveJoinMs: 360, exitWaitMs: 100, splitPct: 45, tiltDeg: 15, exitStart: 2140, shuffleMs: 1330, total: 2640 });
   });
 
-  it('E4-CORRECTION-SPAWN-DIRECTION: places each later spawn card above its predecessor at exactly 0 through 14 percent', () => {
+  it('E4-CORRECTION-SPAWN-DIRECTION: places each later spawn card above its predecessor at exactly 0 through 21 percent', () => {
     const { tracks } = renderedDeck();
     const spawnStyles = tracks.map((track) => children(track).props.style);
-    expect(spawnStyles.map((style) => Number(style.match(/--stack-y:(\d+)%/)?.[1]))).toEqual([0, 2, 4, 6, 8, 10, 12, 14]);
+    expect(spawnStyles.map((style) => Number(style.match(/--stack-y:(\d+)%/)?.[1]))).toEqual([0, 3, 6, 9, 12, 15, 18, 21]);
   });
 
   it('E4-GATHER-REMOVED: has no gather phase, timing value, slider, keyframe, or replacement cards', () => {
@@ -172,18 +172,18 @@ describe('E4: full deck-shuffle sequence', () => {
     expect(tracks.filter((track) => track.props['data-pile'] === 'even').every((track) => track.props['data-directions'] === 'right,left,right')).toBe(true);
     const odd = buildCardTimeline('odd-test', 'odd', 1, deriveDeckTimeline(DECK_DEFAULTS));
     const even = buildCardTimeline('even-test', 'even', 2, deriveDeckTimeline(DECK_DEFAULTS));
-    expect(odd.match(/translateX\(-30%\) rotate\(-20deg\)/g)).toHaveLength(4);
-    expect(odd.match(/translateX\(30%\) rotate\(20deg\)/g)).toHaveLength(2);
-    expect(even.match(/translateX\(30%\) rotate\(20deg\)/g)).toHaveLength(4);
-    expect(even.match(/translateX\(-30%\) rotate\(-20deg\)/g)).toHaveLength(2);
+    expect(odd.match(/translateX\(-45%\) rotate\(-15deg\)/g)).toHaveLength(4);
+    expect(odd.match(/translateX\(45%\) rotate\(15deg\)/g)).toHaveLength(2);
+    expect(even.match(/translateX\(45%\) rotate\(15deg\)/g)).toHaveLength(4);
+    expect(even.match(/translateX\(-45%\) rotate\(-15deg\)/g)).toHaveLength(2);
     expect(`${odd} ${even}`).not.toMatch(/translateX\(-30%\) rotate\(20deg\)|translateX\(30%\) rotate\(-20deg\)/);
   });
 
-  it('E4-SIMULTANEOUS-30PCT-20DEG: puts exact width-relative translation and rotation in each split endpoint', () => {
+  it('E4-SIMULTANEOUS-SPLIT-AND-TILT: puts exact width-relative translation and rotation in each split endpoint', () => {
     const { timelineCss } = renderedDeck();
-    expect(timelineCss).toMatch(/translateX\(30%\) rotate\(20deg\)/);
-    expect(timelineCss).toMatch(/translateX\(-30%\) rotate\(-20deg\)/);
-    expect(timelineCss).not.toMatch(/translateX\(-30%\) rotate\(20deg\)|translateX\(30%\) rotate\(-20deg\)/);
+    expect(timelineCss).toMatch(/translateX\(45%\) rotate\(15deg\)/);
+    expect(timelineCss).toMatch(/translateX\(-45%\) rotate\(-15deg\)/);
+    expect(timelineCss).not.toMatch(/translateX\(-45%\) rotate\(15deg\)|translateX\(45%\) rotate\(-15deg\)/);
   });
 
   it('E4-SINGLE-TIMELINE-NO-OVERLAP: gives each card one computed timeline and keeps all split/join intervals disjoint', () => {
@@ -199,10 +199,10 @@ describe('E4: full deck-shuffle sequence', () => {
 
   it('E4-JOIN-FOLLOW-BOTTOM-UP: delays joins only bottom-to-top while retaining the configured movement and simultaneous splits', () => {
     const timeline = deriveDeckTimeline(DECK_DEFAULTS);
-    expect(deriveCardJoinWindows(timeline, 1)).toEqual([{ start: 930, end: 1110 }, { start: 1300, end: 1480 }, { start: 1670, end: 1850 }]);
-    expect(deriveCardJoinWindows(timeline, 8)).toEqual([{ start: 1070, end: 1250 }, { start: 1440, end: 1620 }, { start: 1810, end: 1990 }]);
-    expect(timeline.joinEnds.map((end, index) => end - timeline.joinStarts[index])).toEqual([320, 320, 320]);
-    expect(timeline.splitStarts).toEqual([880, 1250, 1620]);
+    expect(deriveCardJoinWindows(timeline, 1)).toEqual([{ start: 860, end: 1010 }, { start: 1270, end: 1420 }, { start: 1680, end: 1830 }]);
+    expect(deriveCardJoinWindows(timeline, 8)).toEqual([{ start: 1070, end: 1220 }, { start: 1480, end: 1630 }, { start: 1890, end: 2040 }]);
+    expect(timeline.joinEnds.map((end, index) => end - timeline.joinStarts[index])).toEqual([360, 360, 360]);
+    expect(timeline.splitStarts).toEqual([810, 1220, 1630]);
     expect(DECK_CONTROLS).toContainEqual(['cardFollowMs', '카드 추종 지연 ms', 0, 100]);
     expect(DECK_CONTROLS).toContainEqual(['splitPct', '벌어짐 %', 0, 60]);
     expect(DECK_CONTROLS).toContainEqual(['tiltDeg', '기울임 도', 0, 45]);
@@ -238,7 +238,7 @@ describe('E4: full deck-shuffle sequence', () => {
 
   it('E4-EXIT-10PX: exits only after the last join using complementary 10px bands and linear motion', () => {
     const { overlay } = renderedDeck();
-    expect(overlay.props.style).toMatch(/--shuffle-ms:1210ms;--exit-ms:500ms;--shuffle-start:880ms;--exit-start:2090ms;--total-ms:2590ms/);
+    expect(overlay.props.style).toMatch(/--shuffle-ms:1330ms;--exit-ms:500ms;--shuffle-start:810ms;--exit-start:2140ms;--total-ms:2640ms/);
     expect(css).toMatch(/\.exit-left\s*{[^}]*repeating-linear-gradient\(to bottom, var\(--ink\) 0 10px, transparent 10px 20px\)/);
     expect(css).toMatch(/\.exit-right\s*{[^}]*repeating-linear-gradient\(to bottom, transparent 0 10px, var\(--ink\) 10px 20px\)/);
   });

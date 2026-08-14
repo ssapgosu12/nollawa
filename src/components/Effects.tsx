@@ -23,7 +23,7 @@ export interface DiceSettings {
   fallMs: number; firstBounceMs: number; secondBounceMs: number; pipChangeDelayMs: number;
 }
 export const DICE_DEFAULTS: DiceSettings = {
-  fallMs: 300, firstBounceMs: 200, secondBounceMs: 120, pipChangeDelayMs: 50,
+  fallMs: 250, firstBounceMs: 170, secondBounceMs: 100, pipChangeDelayMs: 20,
 };
 export const DICE_CONTROLS: readonly [keyof DiceSettings, string, number, number][] = [
   ['fallMs', '주사위 낙하 ms', 50, 800],
@@ -58,10 +58,10 @@ export interface DeckSettings {
   cardFollowMs: number; splitPct: number; tiltDeg: number; exitWaitMs: number;
 }
 export const DECK_DEFAULTS: DeckSettings = {
-  cardFallMs: 300, cardStaggerMs: 70, cardFadeMs: 100, spawnWaitMs: 90,
+  cardFallMs: 230, cardStaggerMs: 70, cardFadeMs: 100, spawnWaitMs: 90,
   firstSplitMs: 50, firstHoldMs: 0, repeatSplitMs: 50,
-  cycleWaitMs: 0, joinMs: 180, exitMs: 500, stackOffsetPct: 2, fallStartPct: 160,
-  cardFollowMs: 20, splitPct: 30, tiltDeg: 20, exitWaitMs: 100,
+  cycleWaitMs: 0, joinMs: 150, exitMs: 500, stackOffsetPct: 3, fallStartPct: 160,
+  cardFollowMs: 30, splitPct: 45, tiltDeg: 15, exitWaitMs: 100,
 };
 export const DECK_CONTROLS: readonly [keyof DeckSettings, string, number, number][] = [
   ['cardFallMs', '카드 낙하 ms', 50, 800], ['cardStaggerMs', '카드 간격 ms', 0, 250], ['cardFadeMs', '페이드인 ms', 0, 500],
