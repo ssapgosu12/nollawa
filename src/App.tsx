@@ -16,9 +16,10 @@ export type PlayMode = 'local' | 'ai' | 'remote';
 interface ActionActor { id: string; seat: Seat | null }
 interface AcceptedActionSource { actor: ActionActor; action: GameWireAction }
 export interface FirstPlayerCoin { outcomes: readonly ['H' | 'T']; replayKey: number; firstPlayer: Seat }
+interface FirstPlayerChoice { game: GameId; size: BoardSize; shared: boolean }
 type GameMessage =
   | { type: 'action'; action: GameWireAction; actor?: ActionActor }
-  | { type: 'snapshot'; game?: GameId; state: GameState; source?: AcceptedActionSource; opening?: FirstPlayerCoin }
+  | { type: 'snapshot'; game?: GameId; state: GameState; source?: AcceptedActionSource; opening?: FirstPlayerCoin; openingChoice?: { game: GameId; size: BoardSize }; startsGame?: boolean }
   | { type: 'identity'; id: string; authority: string; seat: Seat | null }
   | { type: 'authority'; authority: string | null }
   | { type: 'room'; room: RoomSnapshot }
@@ -46,6 +47,9 @@ export const AI_MOVE_DELAY_MS = 1_000;
 export const COIN_TOSS_DURATION_MS = 700;
 export const aiBudgetMs = (room: RoomSnapshot | null) => room?.settings.aiStrength === 'high' ? 3_000 : AI_MOVE_DELAY_MS;
 export const gameListModeAfterPlay = (mode: PlayMode): PlayMode => mode === 'ai' ? 'local' : mode;
+export const firstPlayerMethodFor = (mode: PlayMode, room: RoomSnapshot | null): 'coin' | 'choice' => mode === 'ai' || (mode === 'remote' && room?.settings.aiOpponent === true) ? 'choice' : 'coin';
+export const firstPlayerChoiceLabels = (game: GameId): readonly [string, string] => game === 'omok' || game === 'yukmok' ? ['흑돌 (선수)', '백돌 (후수)'] : ['1번 (선수)', '2번 (후수)'];
+export const completedGameRestart = (game: GameId, before: GameState, after: GameState): boolean => terminalGame(game, before).ended && !terminalGame(game, after).ended;
 export interface MovePreview { game: GameId; move: GameMove; moves: number; turn: Seat }
 export const createMovePreview = (game: GameId, state: GameState, move: GameMove): MovePreview => ({ game, move, moves: state.moves, turn: state.turn });
 export const canConfirmMovePreview = (game: GameId, state: GameState, preview: MovePreview | null, disabled: boolean): preview is MovePreview => Boolean(preview && !disabled && preview.game === game && preview.moves === state.moves && preview.turn === state.turn && legalGameMoveKeys(game, state).includes(moveKey(preview.move)));
@@ -125,6 +129,7 @@ export function App() {
   const [rouletteMove, setRouletteMove] = useState<GameMoveKey | null>(null);
   const [restartNotice, setRestartNotice] = useState('');
   const [opening, setOpening] = useState<FirstPlayerCoin | null>(null);
+  const [openingChoice, setOpeningChoice] = useState<FirstPlayerChoice | null>(null);
   const [clock, setClock] = useState(() => Date.now());
   const [preview, setPreview] = useState<MovePreview | null>(null);
   const [lastTurn, setLastTurn] = useState<LastTurnView>({ game: 'samok', moves: 0, cells: [] });
@@ -166,9 +171,27 @@ export function App() {
       if (message.type === 'action') setState((current) => {
         let next = current;
         const game = selectedGameRef.current;
-        if (nextMode !== 'remote' && message.action.type !== 'vote') next = reduceGame(game, current, message.action);
+        if (nextMode !== 'remote' && message.action.type !== 'vote') {
+          next = reduceGame(game, current, message.action);
+          if (message.action.type === 'restart' && completedGameRestart(game, current, next)) {
+            queueMicrotask(() => beginOpening(game, current.board.length as BoardSize, nextMode));
+            return current;
+          }
+        }
         else if (isAuthority.current && message.action.type === 'vote' && message.actor) next = reduceAuthorityVote(current, message.action.move, message.actor, roomVoteMembers(roomRef.current, current.turn), true, Date.now(), Math.random, voteRulesForGame(game));
-        else if (isAuthority.current && message.action.type === 'restart') next = applyAuthorityGameRematch(game, current, message.actor, roomRef.current, true);
+        else if (isAuthority.current && message.action.type === 'restart') {
+          next = applyAuthorityGameRematch(game, current, message.actor, roomRef.current, true);
+          if (completedGameRestart(game, current, next)) {
+            if (firstPlayerMethodFor(nextMode, roomRef.current) === 'choice') {
+              queueMicrotask(() => beginOpening(game, roomRef.current?.settings.boardSize ?? 13, nextMode, current));
+              return current;
+            }
+            const nextOpening = createFirstPlayerCoin();
+            next = initialGameForOpening(game, nextOpening.firstPlayer, roomRef.current?.settings.boardSize ?? 13);
+            queueMicrotask(() => transport.send({ type: 'snapshot', game, state: next, opening: nextOpening }));
+            return next;
+          }
+        }
         if (nextMode === 'remote' && isAuthority.current && next !== current) {
           const source = message.actor ? { actor: message.actor, action: message.action } : undefined;
           queueMicrotask(() => transport.send({ type: 'snapshot', game, state: next, source }));
@@ -181,6 +204,8 @@ export function App() {
         setRestartNotice(restartNoticeFor(message.state, message.source, clientId.current, localSeatRef.current));
         setState(message.state);
         if (message.opening) showOpening(message.opening);
+        else if (message.openingChoice) showOpeningChoice(message.openingChoice.game, message.openingChoice.size, nextMode === 'remote');
+        else if (message.startsGame) { setOpeningChoice(null); setScreen('play'); }
       }
     });
     transport.onPeerChange((count) => setConnection(`${count}명 연결`));
@@ -240,16 +265,41 @@ export function App() {
     setMode(nextMode);
     selectedGameRef.current = game;
     setSelectedGame(game);
-    const nextOpening = createFirstPlayerCoin();
-    setState(initialGameForOpening(game, nextOpening.firstPlayer, size));
     setLocalSeat(null);
     setRestartNotice('');
     await transport.connect();
     setConnection('이 기기 연결');
-    showOpening(nextOpening);
+    beginOpening(game, size, nextMode);
+  }
+  function beginOpening(game: GameId, size: BoardSize, nextMode: PlayMode, current: GameState = initGame(game, size)) {
+    if (firstPlayerMethodFor(nextMode, roomRef.current) === 'choice') {
+      if (nextMode === 'remote') send({ type: 'snapshot', game, state: current, openingChoice: { game, size } });
+      else showOpeningChoice(game, size, false);
+      return;
+    }
+    const nextOpening = createFirstPlayerCoin();
+    const nextState = initialGameForOpening(game, nextOpening.firstPlayer, size);
+    setState(nextState);
+    if (nextMode === 'remote') send({ type: 'snapshot', game, state: nextState, opening: nextOpening });
+    else showOpening(nextOpening);
+  }
+  function showOpeningChoice(game: GameId, size: BoardSize, shared: boolean) {
+    if (openingTimer.current !== null) window.clearTimeout(openingTimer.current);
+    setOpening(null);
+    setOpeningChoice({ game, size, shared });
+    setScreen('opening');
+  }
+  function chooseFirstPlayer(firstPlayer: Seat) {
+    if (!openingChoice) return;
+    const next = initialGameForOpening(openingChoice.game, firstPlayer, openingChoice.size);
+    setState(next);
+    setOpeningChoice(null);
+    setScreen('play');
+    if (openingChoice.shared) send({ type: 'snapshot', game: openingChoice.game, state: next, startsGame: true });
   }
   function showOpening(nextOpening: FirstPlayerCoin) {
     if (openingTimer.current !== null) window.clearTimeout(openingTimer.current);
+    setOpeningChoice(null);
     setOpening(nextOpening);
     setScreen('opening');
     openingTimer.current = window.setTimeout(() => { setScreen('play'); openingTimer.current = null; }, COIN_TOSS_DURATION_MS);
@@ -260,7 +310,7 @@ export function App() {
   }
   const sendSharedGameSnapshot = (snapshot: ReturnType<typeof createSharedGameSelection> | ReturnType<typeof createSharedGameStart>) => { selectedGameRef.current = snapshot.game; setSelectedGame(snapshot.game); setState(snapshot.state); send(snapshot); };
   const selectSharedGame = (game: GameId, size: BoardSize) => sendSharedGameSnapshot(createSharedGameSelection(game, size));
-  const initializeSharedGame = (game: GameId, size: BoardSize) => sendSharedGameSnapshot(createSharedGameStart(game, createFirstPlayerCoin, size));
+  const initializeSharedGame = (game: GameId, size: BoardSize) => firstPlayerMethodFor('remote', roomRef.current) === 'choice' ? beginOpening(game, size, 'remote') : sendSharedGameSnapshot(createSharedGameStart(game, createFirstPlayerCoin, size));
   const sendRoom = (command: RoomCommand) => { send({ type: 'room-command', ...command }); if (command.command === 'start' && isAuthority.current) initializeSharedGame(gameId(roomRef.current?.game ?? selectedGameRef.current), roomRef.current?.settings.boardSize ?? 13); };
   useEffect(() => { setLastTurn((current) => nextLastTurnView(selectedGame, previousAccepted.current, state, current)); previousAccepted.current = { game: selectedGame, state }; }, [selectedGame, state]);
   useEffect(() => {
@@ -340,6 +390,7 @@ export function App() {
       <article class="game-card effects-entry"><div><h2>연출 테스트</h2><p class="people">동전 · 주사위 · 덱 섞기</p><div class="tags"><span>E1–E5</span></div></div><div class="game-actions"><button class="primary" onClick={() => setScreen('effects')}>테스트 열기</button></div></article>
     </div></section>}
     {screen === 'effects' && <EffectsTestPage onBack={() => setScreen('games')} />}
+    {screen === 'opening' && openingChoice && <section class="first-player-choice" aria-labelledby="opening-choice-title"><div class="first-player-choice-card"><h1 id="opening-choice-title">선공을 골라 주세요</h1><div>{firstPlayerChoiceLabels(openingChoice.game).map((label, index) => <button class="primary" key={label} disabled={openingChoice.shared && !authority} onClick={() => chooseFirstPlayer((index + 1) as Seat)}>{label}</button>)}</div>{openingChoice.shared && !authority && <p>방장이 선공을 고르는 중입니다.</p>}</div></section>}
     {screen === 'opening' && opening && <section class="panel narrow opening-coin" aria-labelledby="opening-title"><p class="eyebrow">{connection}</p><h1 id="opening-title">선공 결정</h1><CoinResults outcomes={opening.outcomes} replayKey={opening.replayKey} /><p>{opening.firstPlayer}번이 먼저 시작합니다</p></section>}
     {screen === 'play' && <section class="play-layout" aria-labelledby="play-title"><div class="game-status"><div><p class="eyebrow">{connection}</p><h1 id="play-title">{outcome}</h1><div class="play-status-slot" role="status" aria-live="polite"><p class={`${seatStatus ? `seat-badge ${localSeat ? `player-${localSeat}` : ''}` : restartNotice ? 'restart-notice' : ''}`} aria-hidden={!playStatus}>{playStatus || '\u00a0'}</p></div></div>{mode === 'remote' ? <div><button onClick={() => returnToLobby(sendRoom)}>로비로 돌아가기</button><button onClick={() => leaveForTitle(sendRoom, closeTransport, () => setScreen('name'))}>타이틀로 나가기</button></div> : <button onClick={() => setScreen('games')}>게임 목록</button>}</div><BoardGame game={selectedGame} state={state} selfId={mode === 'remote' ? selfId : null} seat={localSeat} rouletteMove={rouletteMove} preview={confirmedPreview?.move ?? null} lastTurn={lastTurnCells} disabled={boardDisabled} onSelect={(move) => setPreview(createMovePreview(selectedGame, state, move))} /><button class="primary confirm-move" disabled={!confirmedPreview} onClick={() => { if (!confirmedPreview) return; send({ type: 'action', action: confirmedActionFor(mode, selectedGame, confirmedPreview.move) }); setPreview(null); }}>확인</button><p class="hint">자리를 선택한 뒤 확인하세요. 키보드는 Enter 또는 Space를 씁니다. ● 1번 · ■ 2번</p>{terminalGame(selectedGame, state).ended && <div class="rematch"><div>{mode === 'remote' && room && <><p>{rematch.ready}/{rematch.total} 다음 판 준비</p><p>아직: {rematch.pendingNames.join(', ')}</p></>}</div><button class="primary restart" disabled={mode === 'remote' && (localSeat === null || rematch.selfReady)} onClick={() => send({ type: 'action', action: restartAction() })}>다음 판</button></div>}</section>}
     {screen === 'play' && voteTimer.visible && <Vignette intensity={voteTimer.intensity} periodMs={voteTimer.periodMs} />}

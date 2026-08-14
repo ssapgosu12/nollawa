@@ -1,11 +1,40 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AI_MOVE_DELAY_MS, aiBudgetMs, applyAuthorityAiMove, applyAuthorityRematch, identitySeat, leaveForTitle, remoteBoardDisabled, remoteRematchPresentation, remoteSeatLabel, restartNoticeFor, returnToLobby, roomRematchMembers, roomVoteMembers, shouldRequestAiMove, waitForAiMoveGate, withAiMoveGate } from './App';
+import { AI_MOVE_DELAY_MS, aiBudgetMs, applyAuthorityAiMove, applyAuthorityRematch, completedGameRestart, firstPlayerChoiceLabels, firstPlayerMethodFor, identitySeat, initialGameForOpening, leaveForTitle, remoteBoardDisabled, remoteRematchPresentation, remoteSeatLabel, restartNoticeFor, returnToLobby, roomRematchMembers, roomVoteMembers, shouldRequestAiMove, waitForAiMoveGate, withAiMoveGate } from './App';
+import { initGame, reduceGame, restartAction, type GameId } from './game/catalog';
 import { samok, type SamokState } from './game/samok';
 
 function terminalState(): SamokState {
   return [0, 0, 1, 1, 2, 2, 3]
     .reduce((state, column) => samok.reduce(state, { type: 'drop', column }), samok.init());
 }
+
+describe('S12 선공 결정을 매 판: 완료된 다음 판 reset도 opening 경계로 식별한다', () => {
+  it('local·AI·remote가 공유하는 restart 전환 판정은 terminal에서 fresh board로 갈 때만 열린다', () => {
+    const terminal = terminalState();
+    const reset = reduceGame('samok', terminal, restartAction());
+    expect(completedGameRestart('samok', terminal, reset)).toBe(true);
+    expect(completedGameRestart('samok', initGame('samok'), reset)).toBe(false);
+  });
+});
+
+describe('S13 AI 대전 선공 선택: 동전 대신 정확히 두 선택으로 starter와 turn을 정한다', () => {
+  it('AI 모드는 choice이고 사람끼리는 coin이며 게임별 두 라벨과 선택 결과가 일치한다', () => {
+    const aiRoom = { settings: { aiOpponent: true } } as Parameters<typeof firstPlayerMethodFor>[1];
+    expect(firstPlayerMethodFor('ai', null)).toBe('choice');
+    expect(firstPlayerMethodFor('remote', aiRoom)).toBe('choice');
+    expect(firstPlayerMethodFor('local', null)).toBe('coin');
+    expect(firstPlayerMethodFor('remote', null)).toBe('coin');
+    const expected = new Map<GameId, readonly [string, string]>([
+      ['omok', ['흑돌 (선수)', '백돌 (후수)']], ['yukmok', ['흑돌 (선수)', '백돌 (후수)']],
+      ['samok', ['1번 (선수)', '2번 (후수)']], ['reversi', ['1번 (선수)', '2번 (후수)']],
+    ]);
+    for (const [game, labels] of expected) {
+      expect(firstPlayerChoiceLabels(game)).toEqual(labels);
+      expect(firstPlayerChoiceLabels(game)).toHaveLength(2);
+      expect(initialGameForOpening(game, 2)).toMatchObject({ starter: 2, turn: 2 });
+    }
+  });
+});
 
 describe('N1 REMATCH CONSENT: App authority routing and presentation', () => {
   const room = (participants = [
