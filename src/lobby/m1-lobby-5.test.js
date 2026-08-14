@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import { createFirstPlayerCoin, gameListModeAfterPlay, initialGameForOpening, requestGameMoveWithRoomBudget } from '../App';
+import { createFirstPlayerCoin, createSharedGameSelection, createSharedGameStart, gameListModeAfterPlay, initialGameForOpening, requestGameMoveWithRoomBudget } from '../App';
 import { Room } from '../../relay/worker.js';
 
 describe('M1-LOBBY-5 acceptance', () => {
@@ -43,6 +43,21 @@ describe('M1-LOBBY-5 acceptance', () => {
     expect(sent[0][0].opening).toEqual(tails);
     expect(sent[1][0].opening).toEqual(tails);
     expect(sent[0][0].opening).toEqual(sent[1][0].opening);
+  });
+
+  it('S5-SELECT-NO-OPENING: 원격 게임 선택 snapshot은 opening을 만들거나 싣지 않는다', () => {
+    const snapshot = createSharedGameSelection('omok');
+    expect(snapshot).toMatchObject({ type: 'snapshot', game: 'omok' });
+    expect(snapshot).not.toHaveProperty('opening');
+  });
+
+  it('S5-START-ONE-OPENING: 방장 start는 authority opening을 정확히 한 번 만들고 동일 결과를 싣는다', () => {
+    const authorityOpening = { outcomes: ['T'], replayKey: 73, firstPlayer: 2 };
+    const createOpening = vi.fn(() => authorityOpening);
+    const snapshot = createSharedGameStart('omok', createOpening);
+    expect(createOpening).toHaveBeenCalledTimes(1);
+    expect(snapshot.opening).toBe(authorityOpening);
+    expect(snapshot.state.turn).toBe(authorityOpening.firstPlayer);
   });
 
   it('S6-CENTER: AI 선수인 빈 오목과 육목은 탐색을 호출하지 않고 중앙에 둔다', async () => {

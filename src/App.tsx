@@ -50,6 +50,11 @@ export const createFirstPlayerCoin = (random: () => number = Math.random, replay
   const firstPlayer: Seat = random() < .5 ? 1 : 2;
   return { outcomes: [firstPlayer === 1 ? 'H' : 'T'], replayKey, firstPlayer };
 };
+export const createSharedGameSelection = (game: GameId) => ({ type: 'snapshot' as const, game, state: initGame(game) });
+export const createSharedGameStart = (game: GameId, createOpening: () => FirstPlayerCoin = createFirstPlayerCoin) => {
+  const opening = createOpening();
+  return { type: 'snapshot' as const, game, state: initialGameForOpening(game, opening.firstPlayer), opening };
+};
 export function initialGameForOpening(game: GameId, firstPlayer: Seat): GameState {
   const initial = initGame(game);
   if (firstPlayer === 1) return initial;
@@ -247,7 +252,9 @@ export function App() {
     try { transportRef.current?.send(message); }
     catch (error) { setConnection(error instanceof Error ? error.message : '전송 실패'); }
   }
-  const initializeSharedGame = (game: GameId) => { const nextOpening = createFirstPlayerCoin(); const initial = initialGameForOpening(game, nextOpening.firstPlayer); selectedGameRef.current = game; setSelectedGame(game); setState(initial); send({ type: 'snapshot', game, state: initial, opening: nextOpening }); };
+  const sendSharedGameSnapshot = (snapshot: ReturnType<typeof createSharedGameSelection> | ReturnType<typeof createSharedGameStart>) => { selectedGameRef.current = snapshot.game; setSelectedGame(snapshot.game); setState(snapshot.state); send(snapshot); };
+  const selectSharedGame = (game: GameId) => sendSharedGameSnapshot(createSharedGameSelection(game));
+  const initializeSharedGame = (game: GameId) => sendSharedGameSnapshot(createSharedGameStart(game));
   const sendRoom = (command: RoomCommand) => { send({ type: 'room-command', ...command }); if (command.command === 'start' && isAuthority.current) initializeSharedGame(gameId(roomRef.current?.game ?? selectedGameRef.current)); };
   useEffect(() => {
     if (screen !== 'play' || !shouldRequestAiMove(mode, room, authority) || state.turn !== 2 || terminalGame(selectedGame, state).ended || aiThinking.current) return;
@@ -317,7 +324,7 @@ export function App() {
     {screen === 'lobby' && !room && <section class="panel"><h1>{roomCode}</h1><p>{connection}</p></section>}
     {screen === 'games' && <section class="panel" aria-labelledby="games-title"><p class="eyebrow">{mode === 'remote' ? `방 ${roomCode}` : '이 기기'}</p><h1 id="games-title">게임을 골라 주세요</h1>{mode === 'remote' && <button onClick={() => { sendRoom({ command: 'set-activity', activity: 'lobby' }); setScreen('lobby'); }}>방 로비</button>}<label>게임 검색<input type="search" value={query} onInput={(event) => setQuery(event.currentTarget.value)} /></label><div class="filters" aria-label="게임 필터"><div>{(['all', '1', '2', '3-4'] as const).map((value) => <button key={value} class={peopleFilter === value ? 'selected' : ''} aria-pressed={peopleFilter === value} onClick={() => setPeopleFilter(value)}>{value === 'all' ? '전체' : `${value}인`}</button>)}</div><div>{['봇 있음', '대전', '5분 이내'].map((tag) => <button key={tag} class={tagFilters.includes(tag) ? 'selected' : ''} aria-pressed={tagFilters.includes(tag)} onClick={() => setTagFilters((current) => current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag])}>{tag}</button>)}</div></div><div class="game-list">
       {visibleGames.map((game) => <article class="game-card" key={game.name}><div><h2>{game.name}</h2><p class="people">{game.people} · {game.time}</p><div class="tags">{game.tags.map((tag) => <span key={tag}>{tag}</span>)}</div></div><div class="game-actions">
-        {mode === 'remote' ? <button class="primary" disabled={!isHost} onClick={() => { sendRoom({ command: 'select-game', game: game.id }); initializeSharedGame(game.id); setScreen('lobby'); }}>게임 선택</button> : <button class="primary" onClick={() => void startLocal(mode, game.id)}>두 사람이 시작</button>}
+        {mode === 'remote' ? <button class="primary" disabled={!isHost} onClick={() => { sendRoom({ command: 'select-game', game: game.id }); selectSharedGame(game.id); setScreen('lobby'); }}>게임 선택</button> : <button class="primary" onClick={() => void startLocal(mode, game.id)}>두 사람이 시작</button>}
         {mode === 'local' && <button onClick={() => void startLocal('ai', game.id)}>AI와 시작</button>}
       </div></article>)}
       <article class="game-card effects-entry"><div><h2>연출 테스트</h2><p class="people">동전 · 주사위 · 덱 섞기</p><div class="tags"><span>E1–E5</span></div></div><div class="game-actions"><button class="primary" onClick={() => setScreen('effects')}>테스트 열기</button></div></article>
