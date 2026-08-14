@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AI_MOVE_DELAY_MS, aiBudgetMs, applyAuthorityAiMove, applyAuthorityRematch, completedGameRestart, firstPlayerChoiceLabels, firstPlayerMethodFor, identitySeat, initialGameForOpening, leaveForTitle, remoteBoardDisabled, remoteRematchPresentation, remoteSeatLabel, restartNoticeFor, returnToLobby, roomRematchMembers, roomVoteMembers, shouldRequestAiMove, waitForAiMoveGate, withAiMoveGate } from './App';
+import { BoardGame } from './components/BoardGame';
+import type { BoardGridProps } from './components/BoardGrid';
 import { initGame, reduceGame, restartAction, type GameId } from './game/catalog';
 import { samok, type SamokState } from './game/samok';
 
@@ -33,6 +35,18 @@ describe('S13 AI 대전 선공 선택: 동전 대신 정확히 두 선택으로 
       expect(firstPlayerChoiceLabels(game)).toHaveLength(2);
       expect(initialGameForOpening(game, 2)).toMatchObject({ starter: 2, turn: 2 });
     }
+  });
+
+  it.each([['omok', 1], ['omok', 2], ['yukmok', 1], ['yukmok', 2]] as const)('%s firstPlayer=%i renders the starter black and the other seat white without changing seat ids', (game, firstPlayer) => {
+    const state = initialGameForOpening(game, firstPlayer), other = firstPlayer === 1 ? 2 : 1;
+    state.board[0]![0] = firstPlayer;
+    state.board[0]![1] = other;
+    const props = BoardGame({ game, state }).props as BoardGridProps;
+    const stoneAt = (column: number) => (props.renderCell(state.board[0]![column]!, 0, column, column * 100 + 50, 50) as { props: { children: { props: { seat: number } } } }).props.children.props.seat;
+    expect(state).toMatchObject({ starter: firstPlayer, turn: firstPlayer });
+    expect(state.board[0]!.slice(0, 2)).toEqual([firstPlayer, other]);
+    expect(stoneAt(0)).toBe(1);
+    expect(stoneAt(1)).toBe(2);
   });
 });
 
