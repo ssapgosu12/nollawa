@@ -7,7 +7,7 @@ export interface GameContract<State, Action, Seat, View> {
 }
 
 export type GridMove = { row: number; column: number };
-export type GameMove = number | GridMove | { kind: 'swap' };
+export type GameMove = number | GridMove;
 export type GameMoveKey = string;
 export interface TeamVoteState {
   turn: 1 | 2;
