@@ -1,21 +1,28 @@
 # Nollawa — 다음 작업
 
-STREAM: nollawa-build · v5 · 2026-08-14 (v4 = 다음 티켓 선택 요청, 세 트랙 동시 진행으로 소진돼 교체)
+STREAM: nollawa-build · v6 · 2026-08-14 (v5 = 배포·V4~V10 검수 요청, 2라운드 병합으로 갱신)
 
-▶ **RESUME HERE → 라이브에 올린 뒤 `docs/PLAN.md` §14 「검수 대기 목록」의 V4~V10 일곱 항을 실기기에서 눈으로 확인하고, 결과를 그 절 아래 새 표로 적는다.** [사용자만 할 수 있는 부분이 있다 — 배포와 폰·태블릿 확인]
-**DONE-WHEN**: ①사용자가 `! git -C /c/Localai/boardgames push`로 master를 올려 Cloudflare Pages가 재빌드하고 ②V4~V10을 하나씩 보고 ③통과·실패를 `docs/PLAN.md` §14에 새 표로 기록한다. 실패가 나오면 그 행이 다음 티켓의 모집단이 된다.
-**HOW→** V8(오목·육목·리버시가 팀 투표를 거치는가)은 한 팀에 3명 이상이어야 열린다. 한 대에서 여러 신원을 만드는 법 = 탭 A를 접속시켜 두고 다른 탭에서 `indexedDB.deleteDatabase('nollawa-device')` 실행 후 새로고침. **브라우저 창이 최소화돼 있으면 타이머가 조여져 검수가 성립하지 않는다** — 방장 탭이 화면에 보여야 한다.
-**ANCHOR**: `b1dd022` (2026-08-14; tests 173 passed, build 성공) — 재개 전 `git log b1dd022..HEAD --oneline`과 `git status --porcelain`으로 대조.
+▶ **RESUME HERE → 사용자가 master를 푸시하고 릴레이를 배포한 뒤, `docs/PLAN.md` §14의 검수 대기 항목을 실기기에서 보고 결과를 그 절에 새 표로 적는다.** [푸시·릴레이 배포·폰 확인은 사용자만 할 수 있다]
+**DONE-WHEN**: ①`! git -C /c/Localai/boardgames push` ②`! cd /c/Localai/boardgames && npx wrangler deploy --config relay/wrangler.toml`(**이번에도 `relay/worker.js`가 바뀌었다 — 푸시만으로는 릴레이가 갱신되지 않는다**) ③아래 목록을 눈으로 확인하고 `docs/PLAN.md` §14에 새 표로 기록한다.
+**볼 것** — 지난 라운드에서 밀린 넷: V4 참가자 상태 5종 · V5 AI 강도(높음이 실제로 더 오래 생각하는지) · V8 오목·육목·리버시가 팀 투표를 거치는지 · V9 재접속에서 판이 유지되는지. 이번 라운드에서 더해진 것: 주사위가 튕긴 뒤 눈이 보이는 느낌 · 덱 섞기 템포 · 선공 결정 동전 연출 · 오목 금수 표시 · 게임 목록 카드 간격.
+**HOW→** 여러 명이 필요한 항목(V4·V5·V8)은 한 대에서 신원을 여러 개 만들어 본다 — 탭 A를 접속시켜 두고 다른 탭에서 `indexedDB.deleteDatabase('nollawa-device')` 실행 후 새로고침. **브라우저 창이 최소화돼 있으면 타이머가 조여져 검수가 성립하지 않는다**(방장 탭이 화면에 보여야 한다).
+**ANCHOR**: `3350b0e` (2026-08-14; tests 193 passed, build 성공) — 재개 전 `git log 3350b0e..HEAD --oneline`과 `git status --porcelain`으로 대조.
 
 ## STATE
 
-2026-08-14에 티켓 넷을 **세 트랙 동시**로 돌려 전부 master에 병합했다. 테스트가 111 → **173개**로 늘었고 빌드가 통과한다. **아직 푸시하지 않았다** — 라이브는 이 변경 전 상태다.
+하루에 두 라운드를 돌렸다. 1라운드(로비 표시·연출 도구·게임 3종)를 배포한 뒤 사용자가 실물을 보고 준
+피드백을 2라운드(연출 재작업·로비와 판 시작·오목 규칙)로 처리해 병합했다. 테스트 111 → **193개**.
+**master는 푸시됐지만 2라운드분은 아직 미푸시다** — 라이브는 1라운드 상태다.
 
-- 병합된 것: `M1-LOBBY-4`(참가자 상태 5종·「AI 생각중...」) · `M1-EFFECTS-1`(동전·주사위·덱 섞기·연출 테스트 페이지) · `M1-GAMES-1`+`M1-GAMES-2`(오목·육목·리버시 + 공용 격자 렌더러·탐색 코어, 네 게임 모두 같은 팀 투표 경로, 재접속 회귀 수리, AI 강도 예산 전달).
-- **로드맵 좌표**: `docs/PLAN.md` §8 — M0·M1 로비 계열·**M1 본편 구현 완료**. 다음 칸은 M2(주사위·점수표 축 = 요트 다이스 + 범용 점수판).
-- **IN-FLIGHT**: 없음. 협업 세션 0, 대기 결정 0. worktree와 감시자는 모두 정리했다.
-- **구조 예산**: `src` 비테스트 1,263/1,600 · CSS 161/500 · `relay/worker.js` 268/285 · 직접 의존성 4개 · 공통층 820줄 예산 안.
-- **이번 판의 증거**: 트랙별 세션 raw와 카드를 `collab13/tracks-20260814/{games,lobby,effects}/`에 보존했다(git 미추적).
+- 2라운드에 들어간 것: 동전·주사위 **값 무작위**와 **던질 때만 다시 뽑기** · 주사위 **튕김 뒤 공개** ·
+  덱 섞기 **2.8초 한 사이클**(도입 제거·10px 인터레이스·자동 재생 금지) · 게임 목록 **카드 간격** ·
+  AI 대전 뒤 **「AI와 시작」 유지** · **선공 결정 동전 연출** · **AI 선수면 첫 수 한가운데** ·
+  오목 **스왑 폐기 + 렌주 금수**(삼삼·사사·장목 금지·표시, AI도 회피).
+- **로드맵 좌표**: `docs/PLAN.md` §8 — M0·M1 로비 계열·M1 본편 완료. 다음 칸은 M2(요트 다이스·범용 점수판).
+- **IN-FLIGHT**: 없음. 협업 세션 0, worktree·감시자 정리 완료. 증거는 `collab13/tracks-20260814{,b}/`에 보존.
+- **구조 예산**: `src` 비테스트 1,314/1,600 · CSS 176/500 · `relay/worker.js` 268/285 · 직접 의존성 4개.
+- **사양만 쌓여 대기 중인 것**(티켓 미발행): **S8** 판 크기(기본 13×13, 오목·육목은 13/15/19 선택 · D-018·D-019) ·
+  **S9** 두 단계 착수(미리보기 + 「확인」, 팀 투표에서는 확인이 표 제출 · D-018).
 
 ## DECIDED (재논의 금지)
 
@@ -49,6 +56,6 @@ STREAM: nollawa-build · v5 · 2026-08-14 (v4 = 다음 티켓 선택 요청, 세
 
 ---
 
-**REALITY CHECK** (시작 직전 1회): `git log b1dd022..HEAD --oneline` · `git status --porcelain` · `./node_modules/.bin/vitest run` · `python C:/Users/apple/.collab3/control.py ls --root C:/Localai/boardgames`
+**REALITY CHECK** (시작 직전 1회): `git log 3350b0e..HEAD --oneline` · `git status --porcelain` · `./node_modules/.bin/vitest run` · `python C:/Users/apple/.collab3/control.py ls --root C:/Localai/boardgames`
 
-**디스커버리**: 이 파일은 `docs/INDEX.md`의 「인수인계」 표와 `docs/PLAN.md` §8 말미에서 가리켜진다. 스트림이 끝나면 같은 파일을 v6으로 교체하고 다른 스트림 파일은 덮어쓰지 않는다.
+**디스커버리**: 이 파일은 `docs/INDEX.md`의 「인수인계」 표와 `docs/PLAN.md` §8 말미에서 가리켜진다. 스트림이 끝나면 같은 파일을 v7로 교체하고 다른 스트림 파일은 덮어쓰지 않는다.
