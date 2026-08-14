@@ -1,4 +1,5 @@
 import type { Transport } from '../transport/transport';
+import type { BoardSize } from '../game/catalog';
 export interface RoomParticipant { id: string; slot: number; name: string; ready: boolean; present: boolean; activity?: 'lobby' | 'games' | 'play' }
 export interface RoomSnapshot {
   code: string;
@@ -6,13 +7,14 @@ export interface RoomSnapshot {
   hostId: string | null;
   game: string;
   teamNames: [string, string];
-  settings: { aiOpponent: boolean; aiStrength?: 'normal' | 'high' };
+  settings: { aiOpponent: boolean; aiStrength?: 'normal' | 'high'; boardSize?: BoardSize };
   phase: 'lobby' | 'play';
 }
 export type RoomCommand =
   | { command: 'ready' | 'start' | 'return-lobby' | 'leave-room' }
   | { command: 'set-ai-opponent'; enabled: boolean }
   | { command: 'set-ai-strength'; strength: 'normal' | 'high' }
+  | { command: 'set-board-size'; size: BoardSize }
   | { command: 'set-activity'; activity: 'lobby' | 'games' }
   | { command: 'select-game'; game: string }
   | { command: 'kick' | 'promote'; target: string }

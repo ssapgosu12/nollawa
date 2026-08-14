@@ -14,7 +14,7 @@ describe('M1-LOBBY-5 acceptance', () => {
     expect(gameListModeAfterPlay('ai')).toBe('local');
     expect(gameListModeAfterPlay('local')).toBe('local');
     expect(app).toContain("if (screen === 'games') setMode((current) => gameListModeAfterPlay(current));");
-    expect(app).toContain("{mode === 'local' && <button onClick={() => void startLocal('ai', game.id)}>AI와 시작</button>}");
+    expect(app).toContain("{mode === 'local' && <button onClick={() => void startLocal('ai', game.id, boardSize)}>AI와 시작</button>}");
   });
 
   it('S5-COIN: 로컬 시작은 동전으로 선공을 정하고 원격 참가자는 authority의 같은 결과를 받는다', async () => {
@@ -49,24 +49,29 @@ describe('M1-LOBBY-5 acceptance', () => {
   });
 
   it('S5-SELECT-NO-OPENING: 원격 게임 선택 snapshot은 opening을 만들거나 싣지 않는다', () => {
-    const snapshot = createSharedGameSelection('omok');
+    const snapshot = createSharedGameSelection('omok', 19);
     expect(snapshot).toMatchObject({ type: 'snapshot', game: 'omok' });
+    expect(snapshot.state.board).toHaveLength(19);
     expect(snapshot).not.toHaveProperty('opening');
   });
 
   it('S5-START-ONE-OPENING: 방장 start는 authority opening을 정확히 한 번 만들고 동일 결과를 싣는다', () => {
     const authorityOpening = { outcomes: ['T'], replayKey: 73, firstPlayer: 2 };
     const createOpening = vi.fn(() => authorityOpening);
-    const snapshot = createSharedGameStart('omok', createOpening);
+    const snapshot = createSharedGameStart('omok', createOpening, 15);
     expect(createOpening).toHaveBeenCalledTimes(1);
     expect(snapshot.opening).toBe(authorityOpening);
     expect(snapshot.state.turn).toBe(authorityOpening.firstPlayer);
+    expect(snapshot.state.board).toHaveLength(15);
   });
 
   it('S6-CENTER: AI 선수인 빈 오목과 육목은 탐색을 호출하지 않고 중앙에 둔다', async () => {
     const requester = vi.fn(async () => ({ row: 0, column: 0 }));
-    await expect(requestGameMoveWithRoomBudget('omok', initialGameForOpening('omok', 2), null, requester)).resolves.toEqual({ row: 7, column: 7 });
-    await expect(requestGameMoveWithRoomBudget('yukmok', initialGameForOpening('yukmok', 2), null, requester)).resolves.toEqual({ row: 9, column: 9 });
+    for (const size of [13, 15, 19]) {
+      const center = (size - 1) / 2;
+      await expect(requestGameMoveWithRoomBudget('omok', initialGameForOpening('omok', 2, size), null, requester)).resolves.toEqual({ row: center, column: center });
+      await expect(requestGameMoveWithRoomBudget('yukmok', initialGameForOpening('yukmok', 2, size), null, requester)).resolves.toEqual({ row: center, column: center });
+    }
     expect(requester).not.toHaveBeenCalled();
   });
 });

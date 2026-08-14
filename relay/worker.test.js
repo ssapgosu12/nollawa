@@ -293,11 +293,39 @@ describe('N6: authoritative 게임 설정 command', () => {
     await room.attach(host, 'device-key-host', '방장');
     await room.attach(guest, 'device-key-guest', '손님');
     await room.webSocketMessage(host, JSON.stringify({ type: 'room-command', command: 'set-ai-opponent', enabled: true }));
-    expect(values.room.settings).toEqual({ aiOpponent: true, aiStrength: 'normal' });
-    expect(guest.messages.filter((message) => message.type === 'room').at(-1).room.settings).toEqual({ aiOpponent: true, aiStrength: 'normal' });
+    expect(values.room.settings).toEqual({ aiOpponent: true, aiStrength: 'normal', boardSize: 13 });
+    expect(guest.messages.filter((message) => message.type === 'room').at(-1).room.settings).toEqual({ aiOpponent: true, aiStrength: 'normal', boardSize: 13 });
     await room.webSocketMessage(guest, JSON.stringify({ type: 'room-command', command: 'set-ai-opponent', enabled: false }));
-    expect(values.room.settings).toEqual({ aiOpponent: true, aiStrength: 'normal' });
+    expect(values.room.settings).toEqual({ aiOpponent: true, aiStrength: 'normal', boardSize: 13 });
     expect(guest.messages.at(-1)).toEqual({ type: 'room-error', message: '허용되지 않은 방 명령' });
+  });
+});
+
+describe('M1-SIZE-1: authority-owned board size', () => {
+  it.each([13, 15, 19])('host pre-game omok accepts and shares %ix%i', async (size) => {
+    const { room, values } = roomHarness();
+    const host = relaySocket('host');
+    const guest = relaySocket('guest');
+    await room.attach(host, 'device-key-size-host', '방장');
+    await room.attach(guest, 'device-key-size-guest', '손님');
+    await room.webSocketMessage(host, JSON.stringify({ type: 'room-command', command: 'select-game', game: 'omok' }));
+    await room.webSocketMessage(host, JSON.stringify({ type: 'room-command', command: 'set-board-size', size }));
+    expect(values.room.settings.boardSize).toBe(size);
+    expect(host.messages.filter((message) => message.type === 'room').at(-1).room.settings.boardSize).toBe(size);
+    expect(guest.messages.filter((message) => message.type === 'room').at(-1).room.settings.boardSize).toBe(size);
+  });
+
+  it('rejects guest, in-game, invalid, and non-board-game changes', () => {
+    const base = () => ({ hostId: 'host', game: 'omok', phase: 'lobby', settings: { boardSize: 13 }, participants: [{ id: 'host' }, { id: 'guest' }] });
+    const guest = base();
+    expect(applyRoomCommand(guest, 'guest', { command: 'set-board-size', size: 15 })).toBe(false);
+    const playing = base(); playing.phase = 'play';
+    expect(applyRoomCommand(playing, 'host', { command: 'set-board-size', size: 15 })).toBe(false);
+    const invalid = base();
+    expect(applyRoomCommand(invalid, 'host', { command: 'set-board-size', size: 17 })).toBe(false);
+    const fixed = base(); fixed.game = 'samok';
+    expect(applyRoomCommand(fixed, 'host', { command: 'set-board-size', size: 19 })).toBe(false);
+    expect([guest, playing, invalid, fixed].map((room) => room.settings.boardSize)).toEqual([13, 13, 13, 13]);
   });
 });
 
@@ -337,7 +365,7 @@ describe('S2: authoritative AI 강도 default/migration/host gate', () => {
     expect(values.room.settings.aiStrength).toBe('normal');
     values.room.settings = { aiOpponent: true };
     await room.attach(guest, 'device-key-guest', '손님');
-    expect(values.room.settings).toEqual({ aiOpponent: true, aiStrength: 'normal' });
+    expect(values.room.settings).toEqual({ aiOpponent: true, aiStrength: 'normal', boardSize: 13 });
     await room.webSocketMessage(host, JSON.stringify({ type: 'room-command', command: 'set-ai-strength', strength: 'high' }));
     expect(guest.messages.filter((message) => message.type === 'room').at(-1).room.settings.aiStrength).toBe('high');
     await room.webSocketMessage(guest, JSON.stringify({ type: 'room-command', command: 'set-ai-strength', strength: 'normal' }));
