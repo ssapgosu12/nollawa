@@ -120,6 +120,10 @@ label { display: block; font-weight: 700; }
 .effects-page > h1 { margin-top: 1rem; }
 .effect-selectors { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
 .effect-selectors select { display: block; width: 100%; min-height: 44px; margin-top: .35rem; border: 2px solid var(--line); border-radius: 8px; padding: .45rem; color: var(--ink); background: var(--paper); }
+.dice-timing-controls { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .5rem; }
+.dice-timing-controls label { border: 1px solid var(--line); border-radius: 8px; padding: .45rem; font-size: .78rem; }
+.dice-timing-controls input { min-height: 24px; margin: .15rem 0; padding: 0; }
+.dice-timing-controls output { display: block; text-align: right; font: 700 .75rem/1 ui-monospace, monospace; }
 .effect-demo { position: relative; overflow: hidden; margin-top: 1rem; border: 2px solid var(--line); border-radius: 14px; padding: 1rem; background: var(--paper); }
 .effect-demo h2 { margin-bottom: .65rem; }
 .effect-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)); align-items: center; gap: clamp(.35rem, 2vw, .75rem); width: 100%; min-height: 80px; }
@@ -127,13 +131,10 @@ label { display: block; font-weight: 700; }
 .effect-coin { display: grid; place-items: center; border: 3px solid var(--line); border-radius: 50%; font-size: clamp(1.25rem, 5vw, 2rem); font-weight: 900; animation-name: coin-toss; animation-duration: 650ms; }
 .effect-coin.face-H { color: var(--ink); background: var(--paper); }
 .effect-coin.face-T { color: var(--paper); background: var(--ink); }
-.effect-die { display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); border: 3px solid var(--line); border-radius: 12px; padding: 7px; background: var(--paper); box-shadow: 0 3px 0 var(--line); animation-name: die-roll; animation-duration: 650ms; }
+.effect-die { display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); border: 3px solid var(--line); border-radius: 12px; padding: 7px; background: var(--paper); box-shadow: 0 3px 0 var(--line); animation-duration: var(--dice-total-ms); }
 .die-pip { position: relative; align-self: center; justify-self: center; width: min(9px, 60%); aspect-ratio: 1; border-radius: 50%; background: transparent; }
-.die-pip.is-on { animation: die-pip-reveal calc(var(--dice-dwell-ms, 220ms) * 3) steps(1, end) both; animation-delay: calc(var(--effect-index) * 55ms); }
-.die-pip::before { position: absolute; inset: 0; border-radius: 50%; background: var(--ink); opacity: 0; content: ""; animation-duration: calc(var(--dice-dwell-ms, 220ms) * 3); animation-timing-function: steps(1, end); animation-fill-mode: both; animation-delay: calc(var(--effect-index) * 55ms); }
-.die-pip.scramble-111::before { animation-name: die-pip-scramble-111; }
-.die-pip.scramble-011::before { animation-name: die-pip-scramble-011; }
-.die-pip.scramble-101::before { animation-name: die-pip-scramble-101; }
+.die-pip.is-on { animation-name: var(--final-animation); animation-duration: var(--dice-total-ms); animation-timing-function: steps(1, end); animation-fill-mode: both; animation-delay: calc(var(--effect-index) * 55ms); }
+.die-pip::before { position: absolute; inset: 0; border-radius: 50%; background: var(--ink); opacity: 0; content: ""; animation-name: var(--pip-animation); animation-duration: var(--dice-total-ms); animation-timing-function: steps(1, end); animation-fill-mode: both; animation-delay: calc(var(--effect-index) * 55ms); }
 .effect-controls { display: flex; align-items: center; gap: .8rem; margin-top: .75rem; }
 .effect-controls label { display: flex; align-items: center; gap: .35rem; }
 .effect-controls input { width: 24px; min-height: 24px; margin: 0; }
@@ -154,11 +155,6 @@ label { display: block; font-weight: 700; }
 .exit-right { mask-image: repeating-linear-gradient(to bottom, transparent 0 10px, var(--ink) 10px 20px); animation-name: deck-exit-right; }
 .shuffle-caption { width: min(90vw, 500px); margin: 0; text-align: center; font-size: clamp(1.1rem, 5vw, 2rem); font-weight: 900; animation: deck-caption var(--total-ms) linear both; }
 @keyframes coin-toss { from { opacity: 0; transform: translateY(-24vh) rotateY(540deg); } 72% { transform: translateY(7px) rotateY(0); } to { opacity: 1; transform: none; } }
-@keyframes die-roll { from { opacity: 0; transform: translateY(-20vh) rotate(300deg) scale(.7); } 50% { opacity: 1; transform: translateY(7px) rotate(20deg); } 62% { transform: translateY(-18px) rotate(-12deg); } 72% { transform: translateY(0) rotate(0); } to { opacity: 1; transform: none; } }
-@keyframes die-pip-reveal { 0%, 99.999% { background: transparent; } 100% { background: var(--ink); } }
-@keyframes die-pip-scramble-111 { 0%, 99.999% { opacity: 1; } 100% { opacity: 0; } }
-@keyframes die-pip-scramble-011 { 0%, 33.333% { opacity: 0; } 33.334%, 99.999% { opacity: 1; } 100% { opacity: 0; } }
-@keyframes die-pip-scramble-101 { 0%, 33.333% { opacity: 1; } 33.334%, 66.666% { opacity: 0; } 66.667%, 99.999% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes deck-card-spring-drop { from { transform: translate(-50%, calc(-50% - var(--fall-start))); } 82% { transform: translate(-50%, calc(-48% - var(--stack-y))); } to { transform: translate(-50%, calc(-50% - var(--stack-y))); } }
 @keyframes deck-card-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes deck-exit-left { from { opacity: 1; transform: translate(-50%, -50%); } to { opacity: 0; transform: translate(calc(-50% - 60vw), -50%); } }

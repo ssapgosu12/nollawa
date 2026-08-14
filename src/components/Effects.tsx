@@ -12,16 +12,44 @@ export const demoDiceOutcomes = (count: number, random: () => number = Math.rand
 
 interface ReplayProps { replayKey?: number }
 interface CoinResultsProps extends ReplayProps { outcomes: readonly CoinFace[] }
-interface DiceResultsProps extends ReplayProps { outcomes: readonly DieFace[] }
+interface DiceResultsProps extends ReplayProps { outcomes: readonly DieFace[]; settings?: Partial<DiceSettings> }
 interface DeckShuffleProps extends ReplayProps { deckName: string; settings?: Partial<DeckSettings> }
 
 const PIPS: Record<DieFace, readonly number[]> = {
   1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8],
 };
 
-export const DICE_SCRAMBLE_PHASES = [[0, 4, 8], [0, 2, 6, 8], [0, 2, 4, 6, 8]] as const;
-export const DICE_DWELL_DEFAULT_MS = 220;
-const PIP_SCRAMBLE_CLASS = Array.from({ length: 9 }, (_, pip) => `scramble-${DICE_SCRAMBLE_PHASES.map((phase) => phase.includes(pip as never) ? 1 : 0).join('')}`);
+export interface DiceSettings {
+  fallMs: number; firstBounceMs: number; secondBounceMs: number; pipChangeDelayMs: number;
+}
+export const DICE_DEFAULTS: DiceSettings = {
+  fallMs: 300, firstBounceMs: 200, secondBounceMs: 120, pipChangeDelayMs: 50,
+};
+export const DICE_CONTROLS: readonly [keyof DiceSettings, string, number, number][] = [
+  ['fallMs', '주사위 낙하 ms', 50, 800],
+  ['firstBounceMs', '첫 번째 튀기기 ms', 100, 500],
+  ['secondBounceMs', '두 번째 튀기기 ms', 100, 500],
+  ['pipChangeDelayMs', '튀긴 뒤 핍 변경 ms', 0, 100],
+];
+export const deriveDicePatterns = (face: DieFace): readonly [DieFace, DieFace, DieFace] =>
+  [face % 6 + 1 as DieFace, (face + 1) % 6 + 1 as DieFace, face];
+export const deriveDiceTimeline = (s: DiceSettings) => {
+  const fallEnd = s.fallMs;
+  const firstPeak = fallEnd + s.firstBounceMs / 2;
+  const firstBounceEnd = fallEnd + s.firstBounceMs;
+  const secondPeak = firstBounceEnd + s.secondBounceMs / 2;
+  const motionEnd = firstBounceEnd + s.secondBounceMs;
+  const firstChange = fallEnd + s.pipChangeDelayMs;
+  const finalChange = firstBounceEnd + s.pipChangeDelayMs;
+  return { fallEnd, firstPeak, firstBounceEnd, secondPeak, motionEnd, firstChange, finalChange, total: Math.max(1, motionEnd, finalChange) };
+};
+export const buildDiceTimeline = (name: string, timeline: ReturnType<typeof deriveDiceTimeline>) => {
+  const at = (ms: number) => `${Number((ms / timeline.total * 100).toFixed(4))}%`;
+  const phase = (first: 0 | 1, second: 0 | 1) => `@keyframes ${name}-pip-${first}${second} { 0% { opacity: ${first}; } ${at(timeline.firstChange)} { opacity: ${second}; } ${at(timeline.finalChange)}, 100% { opacity: 0; } }`;
+  const body = `@keyframes ${name}-body { 0% { opacity: 0; transform: translateY(-20vh) rotate(300deg) scale(.7); } ${at(timeline.fallEnd)} { opacity: 1; transform: translateY(0) rotate(0) scale(1); } ${at(timeline.firstPeak)} { opacity: 1; transform: translateY(-18px) rotate(-12deg) scale(1); } ${at(timeline.firstBounceEnd)} { opacity: 1; transform: translateY(0) rotate(0) scale(1); } ${at(timeline.secondPeak)} { opacity: 1; transform: translateY(-8px) rotate(6deg) scale(1); } ${at(timeline.motionEnd)} { opacity: 1; transform: translateY(0) rotate(0) scale(1); } }`;
+  const final = `@keyframes ${name}-final { 0% { background: transparent; } ${at(timeline.finalChange)}, 100% { background: var(--ink); } }`;
+  return [body, phase(0, 0), phase(0, 1), phase(1, 0), phase(1, 1), final].join(' ');
+};
 
 export interface DeckSettings {
   cardFallMs: number; cardStaggerMs: number; cardFadeMs: number; spawnWaitMs: number;
@@ -96,11 +124,21 @@ export function CoinResults({ outcomes, replayKey = 0 }: CoinResultsProps) {
   </output>;
 }
 
-export function DiceResults({ outcomes, replayKey = 0 }: DiceResultsProps) {
-  return <output class="effect-grid dice-results" aria-label="주사위 결과" data-replay={replayKey}>
-    {outcomes.slice(0, 6).map((face, index) => <span class="effect-die" data-value={face} style={`--effect-index:${index}`} aria-label={`주사위 ${face}`} key={`${replayKey}-${index}`}>
-      {Array.from({ length: 9 }, (_, pip) => <i class={`die-pip ${PIP_SCRAMBLE_CLASS[pip]}${PIPS[face].includes(pip) ? ' is-on' : ''}`} aria-hidden="true" />)}
-    </span>)}
+export function DiceResults({ outcomes, replayKey = 0, settings }: DiceResultsProps) {
+  const resolved = { ...DICE_DEFAULTS, ...settings };
+  const timeline = deriveDiceTimeline(resolved);
+  const name = `dice-${Math.abs(Math.trunc(replayKey))}`;
+  return <output class="effect-grid dice-results" aria-label="주사위 결과" data-replay={replayKey} style={`--dice-total-ms:${timeline.total}ms`}>
+    <style>{buildDiceTimeline(name, timeline)}</style>
+    {outcomes.slice(0, 6).map((face, index) => {
+      const patterns = deriveDicePatterns(face);
+      return <span class="effect-die" data-value={face} data-patterns={patterns.join(',')} style={`--effect-index:${index};animation-name:${name}-body`} aria-label={`주사위 ${face}`} key={`${replayKey}-${index}`}>
+        {Array.from({ length: 9 }, (_, pip) => {
+          const signature = `${PIPS[patterns[0]].includes(pip) ? 1 : 0}${PIPS[patterns[1]].includes(pip) ? 1 : 0}`;
+          return <i class={`die-pip phase-${signature}${PIPS[face].includes(pip) ? ' is-on' : ''}`} style={`--pip-animation:${name}-pip-${signature};--final-animation:${name}-final`} aria-hidden="true" key={pip} />;
+        })}
+      </span>;
+    })}
   </output>;
 }
 
@@ -144,7 +182,7 @@ function EffectDemo({ title, deps, style, children }: DemoProps) {
 export function EffectsTestPage({ onBack }: { onBack: () => void }) {
   const [coinCount, setCoinCount] = useState(4);
   const [diceCount, setDiceCount] = useState(2);
-  const [diceDwellMs, setDiceDwellMs] = useState(DICE_DWELL_DEFAULT_MS);
+  const [diceSettings, setDiceSettings] = useState(DICE_DEFAULTS);
   const [shuffleKey, setShuffleKey] = useState(0);
   const [deckSettings, setDeckSettings] = useState(DECK_DEFAULTS);
   return <section class="panel effects-page" aria-labelledby="effects-title">
@@ -152,10 +190,10 @@ export function EffectsTestPage({ onBack }: { onBack: () => void }) {
     <div class="effect-selectors">
       <label>동전 개수<select value={coinCount} onChange={(event) => setCoinCount(Number(event.currentTarget.value))}>{Array.from({ length: 12 }, (_, index) => <option value={index + 1}>{index + 1}</option>)}</select></label>
       <label>주사위 개수<select value={diceCount} onChange={(event) => setDiceCount(Number(event.currentTarget.value))}>{Array.from({ length: 6 }, (_, index) => <option value={index + 1}>{index + 1}</option>)}</select></label>
-      <label>주사위 눈 체류 ms<input type="range" min="160" max="500" step="10" value={diceDwellMs} onInput={(event) => setDiceDwellMs(Number(event.currentTarget.value))} /><output>{diceDwellMs}</output></label>
+      <div class="dice-timing-controls">{DICE_CONTROLS.map(([key, label, min, max]) => <label>{label}<input type="range" min={min} max={max} value={diceSettings[key]} onInput={(event) => setDiceSettings({ ...diceSettings, [key]: Number(event.currentTarget.value) })} /><output>{diceSettings[key]}</output></label>)}</div>
     </div>
     <EffectDemo title="동전 던지기" deps={[coinCount]}>{(replayKey) => <CoinResults outcomes={demoCoinOutcomes(coinCount)} replayKey={replayKey} />}</EffectDemo>
-    <EffectDemo title="주사위 굴리기" deps={[diceCount]} style={`--dice-dwell-ms:${diceDwellMs}ms`}>{(replayKey) => <DiceResults outcomes={demoDiceOutcomes(diceCount)} replayKey={replayKey} />}</EffectDemo>
+    <EffectDemo title="주사위 굴리기" deps={[diceCount, ...DICE_CONTROLS.map(([key]) => diceSettings[key])]}>{(replayKey) => <DiceResults outcomes={demoDiceOutcomes(diceCount)} replayKey={replayKey} settings={diceSettings} />}</EffectDemo>
     <article class="effect-demo"><h2>덱 섞기</h2><div class="deck-timing-controls">{DECK_CONTROLS.map(([key, label, min, max]) => <label>{label}<input type="range" min={min} max={max} value={deckSettings[key]} onInput={(event) => setDeckSettings({ ...deckSettings, [key]: Number(event.currentTarget.value) })} /><output>{deckSettings[key]}</output></label>)}</div><button onClick={() => setShuffleKey((value) => value + 1)}>덱 섞기</button>{shuffleKey > 0 && <DeckShuffle deckName="Nollawa 카드" replayKey={shuffleKey} settings={deckSettings} />}</article>
   </section>;
 }

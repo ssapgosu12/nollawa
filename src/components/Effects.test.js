@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { CARD_Z_ORDER, CoinResults, DECK_CONTROLS, DECK_DEFAULTS, DICE_DWELL_DEFAULT_MS, DICE_SCRAMBLE_PHASES, DeckShuffle, DiceResults, buildCardTimeline, demoCoinOutcomes, demoDiceOutcomes, deriveCardJoinWindows, deriveDeckTimeline } from './Effects';
+import { CARD_Z_ORDER, CoinResults, DECK_CONTROLS, DECK_DEFAULTS, DICE_CONTROLS, DICE_DEFAULTS, DeckShuffle, DiceResults, buildCardTimeline, buildDiceTimeline, demoCoinOutcomes, demoDiceOutcomes, deriveCardJoinWindows, deriveDeckTimeline, deriveDicePatterns, deriveDiceTimeline } from './Effects';
 
 const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8');
 const source = readFileSync(new URL('./Effects.tsx', import.meta.url), 'utf8');
@@ -37,11 +37,11 @@ describe('E2: caller-supplied H/T coin results', () => {
 describe('E3: caller-supplied six-sided dice results', () => {
   it('renders at most 6 supplied d6 values on white dice with the matching black pip counts', () => {
     const supplied = [1, 2, 3, 4, 5, 6];
-    const rendered = children(DiceResults({ outcomes: supplied, replayKey: 2 }));
+    const rendered = children(DiceResults({ outcomes: supplied, replayKey: 2 })).flat(Infinity).filter((node) => node.props.class === 'effect-die');
     expect(rendered).toHaveLength(6);
     expect(rendered.map((die) => children(die).filter((pip) => pip.props.class.endsWith(' is-on')).length)).toEqual(supplied);
     expect(css).toMatch(/\.effect-die\s*{[^}]*background:\s*var\(--paper\)/);
-    expect(css).toMatch(/\.die-pip\.is-on\s*{[^}]*animation:\s*die-pip-reveal/);
+    expect(css).toMatch(/\.die-pip\.is-on\s*{[^}]*animation-name:\s*var\(--final-animation\)/);
   });
 
   it('uses caller-side injected entropy instead of a 1-6 modulo cycle', () => {
@@ -52,43 +52,49 @@ describe('E3: caller-supplied six-sided dice results', () => {
     expect(source.match(/export function DiceResults[\s\S]*?\n}/)?.[0]).not.toMatch(/Math\.random|demoDiceOutcomes/);
   });
 
-  it('E3-BOUNCE-DELAY: synchronizes all 6 dice bodies, final pip reveals, and scrambles to the inherited per-die delay', () => {
-    const rendered = children(DiceResults({ outcomes: [1, 2, 3, 4, 5, 6], replayKey: 4 }));
-    expect(rendered.map((die) => die.props.style)).toEqual(Array.from({ length: 6 }, (_, index) => `--effect-index:${index}`));
-    expect(css).toMatch(/\.effect-coin, \.effect-die\s*{[^}]*animation-delay:\s*calc\(var\(--effect-index\) \* 55ms\)/);
-    expect(css).toMatch(/\.die-pip\.is-on\s*{[^}]*animation-delay:\s*calc\(var\(--effect-index\) \* 55ms\)/);
-    expect(css).toMatch(/\.die-pip::before\s*{[^}]*animation-duration:\s*calc\(var\(--dice-dwell-ms, 220ms\) \* 3\)[^}]*animation-delay:\s*calc\(var\(--effect-index\) \* 55ms\)/);
-    expect(css).toMatch(/@keyframes die-roll[\s\S]*50%[^{]*{[^}]*translateY\(7px\)[\s\S]*62%[^{]*{[^}]*translateY\(-18px\)[\s\S]*72%[^{]*{[^}]*translateY\(0\)/);
-    expect(css).toMatch(/\.die-pip\.is-on\s*{[^}]*animation:\s*die-pip-reveal/);
-    expect(css).toMatch(/@keyframes die-pip-reveal\s*{[\s\S]*?0%, 99\.999%[^}]*transparent[\s\S]*?100%[^}]*var\(--ink\)/);
-    expect(css.match(/@keyframes die-pip-scramble-(?:111|011|101)/g)).toHaveLength(3);
+  it('E3-FALL-FREEZE: keeps the first real-die pattern unchanged throughout the full fall', () => {
+    const timeline = deriveDiceTimeline(DICE_DEFAULTS);
+    const generated = buildDiceTimeline('dice-test', timeline);
+    expect(timeline).toMatchObject({ fallEnd: 300, firstChange: 350, total: 620 });
+    expect(timeline.firstChange).toBeGreaterThan(timeline.fallEnd);
+    expect(generated).toMatch(/@keyframes dice-test-pip-10 \{ 0% \{ opacity: 1; \} 56\.4516% \{ opacity: 0; \}/);
+    expect(generated).not.toMatch(/@keyframes dice-test-pip-[01]{2}[\s\S]*48\.3871% \{ opacity:/);
   });
 
-  it('E3-REGRESSION-D024-DISTRIBUTED-PHASE-SETS: inspects actual selectors and rejects every complete 3x3 column', () => {
-    const columns = [[0, 3, 6], [1, 4, 7], [2, 5, 8]];
-    expect(DICE_SCRAMBLE_PHASES).toEqual([[0, 4, 8], [0, 2, 6, 8], [0, 2, 4, 6, 8]]);
-    expect(DICE_SCRAMBLE_PHASES.every((phase) => columns.every((column) => !column.every((pip) => phase.includes(pip))))).toBe(true);
-    const die = children(DiceResults({ outcomes: [6], replayKey: 9 }))[0];
-    expect(children(die).map((pip) => pip.props.class)).toEqual([
-      'die-pip scramble-111 is-on', 'die-pip scramble-000', 'die-pip scramble-011 is-on',
-      'die-pip scramble-000 is-on', 'die-pip scramble-101', 'die-pip scramble-000 is-on',
-      'die-pip scramble-011 is-on', 'die-pip scramble-000', 'die-pip scramble-111 is-on',
-    ]);
-    expect(css).not.toMatch(/nth-child\(3n/);
-    expect(source).toMatch(/PIP_SCRAMBLE_CLASS\[pip\]/);
-    expect(css.match(/\.die-pip\.scramble-(?:111|011|101)::before/g)).toHaveLength(3);
-    expect(css).toMatch(/@keyframes die-pip-scramble-101[\s\S]*0%, 33\.333%[^{]*{[^}]*opacity:\s*1[\s\S]*33\.334%, 66\.666%[^{]*{[^}]*opacity:\s*0[\s\S]*66\.667%, 99\.999%[^{]*{[^}]*opacity:\s*1/);
-    expect(css).toMatch(/@keyframes die-pip-reveal\s*{[\s\S]*100%[^}]*var\(--ink\)/);
+  it('E3-TWO-UNEQUAL-BOUNCES: lands, makes exactly two peaks, and keeps the first peak higher', () => {
+    const timeline = deriveDiceTimeline(DICE_DEFAULTS);
+    const generated = buildDiceTimeline('dice-test', timeline);
+    expect(timeline).toEqual({ fallEnd: 300, firstPeak: 400, firstBounceEnd: 500, secondPeak: 560, motionEnd: 620, firstChange: 350, finalChange: 550, total: 620 });
+    expect(generated.match(/translateY\(-(?:18|8)px\)/g)).toEqual(['translateY(-18px)', 'translateY(-8px)']);
+    expect(18).toBeGreaterThan(8);
+    expect(generated).toMatch(/48\.3871%[^}]*translateY\(0\)[\s\S]*80\.6452%[^}]*translateY\(0\)[\s\S]*100%[^}]*translateY\(0\)/);
   });
 
-  it('E3-DWELL-SLIDER: preserves all three scramble phase sets while lengthening each labeled adjustable dwell', () => {
-    expect(DICE_SCRAMBLE_PHASES).toEqual([[0, 4, 8], [0, 2, 6, 8], [0, 2, 4, 6, 8]]);
-    expect(DICE_DWELL_DEFAULT_MS).toBe(220);
-    expect(DICE_DWELL_DEFAULT_MS).toBeGreaterThan(650 * .24);
-    expect(source).toMatch(/주사위 눈 체류 ms[\s\S]*type="range"[\s\S]*setDiceDwellMs/);
-    expect(source).toMatch(/style=\{`--dice-dwell-ms:\$\{diceDwellMs\}ms`\}/);
-    expect(source).toMatch(/title="주사위 굴리기" deps=\{\[diceCount\]\}/);
-    expect(css).toMatch(/animation-duration:\s*calc\(var\(--dice-dwell-ms, 220ms\) \* 3\)/);
+  it('E3-TWO-DELAYED-CHANGES-FINAL-OWNERSHIP: changes 50ms after each impact and ends at the supplied d6 face', () => {
+    const timeline = deriveDiceTimeline(DICE_DEFAULTS);
+    expect(timeline.firstChange - timeline.fallEnd).toBe(50);
+    expect(timeline.finalChange - timeline.firstBounceEnd).toBe(50);
+    const patterns = [1, 2, 3, 4, 5, 6].map((face) => deriveDicePatterns(face));
+    expect(patterns).toEqual([[2, 3, 1], [3, 4, 2], [4, 5, 3], [5, 6, 4], [6, 1, 5], [1, 2, 6]]);
+    expect(patterns.every(([first, second, final]) => first !== final && second !== final && first !== second)).toBe(true);
+    const rendered = children(DiceResults({ outcomes: [1, 2, 3, 4, 5, 6], replayKey: 9 })).flat(Infinity).filter((node) => node.props.class === 'effect-die');
+    expect(rendered.map((die) => die.props['data-patterns'])).toEqual(['2,3,1', '3,4,2', '4,5,3', '5,6,4', '6,1,5', '1,2,6']);
+    expect(rendered.map((die) => children(die).filter((pip) => pip.props.class.endsWith(' is-on')).length)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(buildDiceTimeline('dice-test', timeline)).toMatch(/56\.4516% \{ opacity:[^}]+\} 88\.7097%, 100% \{ opacity: 0; \}/);
+    expect(buildDiceTimeline('dice-test', timeline)).toMatch(/@keyframes dice-test-final \{ 0% \{ background: transparent; \} 88\.7097%, 100% \{ background: var\(--ink\); \} \}/);
+  });
+
+  it('E3-FOUR-SLIDER-WIRING: exposes only the four required defaults and routes every value into generated timing', () => {
+    expect(DICE_DEFAULTS).toEqual({ fallMs: 300, firstBounceMs: 200, secondBounceMs: 120, pipChangeDelayMs: 50 });
+    expect(DICE_CONTROLS.map(([key]) => key)).toEqual(['fallMs', 'firstBounceMs', 'secondBounceMs', 'pipChangeDelayMs']);
+    const baseline = buildDiceTimeline('dice-test', deriveDiceTimeline(DICE_DEFAULTS));
+    for (const [key] of DICE_CONTROLS) {
+      const changed = { ...DICE_DEFAULTS, [key]: DICE_DEFAULTS[key] + 10 };
+      expect(buildDiceTimeline('dice-test', deriveDiceTimeline(changed))).not.toBe(baseline);
+    }
+    expect(source).toMatch(/DICE_CONTROLS\.map[\s\S]*type="range"[\s\S]*settings=\{diceSettings\}/);
+    expect(source).not.toMatch(/diceDwellMs|DICE_DWELL_DEFAULT_MS|주사위 눈 체류/);
+    expect(css).not.toMatch(/dice-dwell-ms|@keyframes die-roll|fixed-percentage/);
   });
 });
 
@@ -274,7 +280,7 @@ describe('D-015 후속: 값은 던질 때만 바뀐다', () => {
     const demo = source.match(/function EffectDemo[\s\S]*?\n}/)?.[0] ?? '';
     expect(demo).toMatch(/useMemo\(\(\) => children\(replayKey\), \[replayKey, \.\.\.deps\]\)/);
     expect(source).toMatch(/deps=\{\[coinCount\]\}/);
-    expect(source).toMatch(/deps=\{\[diceCount\]\}/);
+    expect(source).toMatch(/deps=\{\[diceCount, \.\.\.DICE_CONTROLS\.map/);
   });
 });
 
