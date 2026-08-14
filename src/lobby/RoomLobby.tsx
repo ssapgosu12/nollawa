@@ -1,6 +1,6 @@
 import type { RoomCommand, RoomSnapshot } from './room-state';
 import { isRoomHost, lobbyAction, participantStatusLabel, readyLabel, roomSlots, teamForSlot } from './room-state';
-import { BOARD_SIZES, GAME_CATALOG, gameId, hasBoardSize, type BoardSize } from '../game/catalog';
+import { BOARD_SIZES, GAME_CATALOG, catalogGameId, hasBoardSize, type BoardSize } from '../game/catalog';
 interface Props {
   room: RoomSnapshot;
   selfId: string | null;
@@ -10,11 +10,11 @@ interface Props {
 export function RoomLobby({ room, selfId, send, openGames }: Props) {
   const host = isRoomHost(room, selfId);
   const action = lobbyAction(room, selfId);
-  const game = GAME_CATALOG.find(({ id }) => id === gameId(room.game)) ?? GAME_CATALOG[0];
+  const game = GAME_CATALOG.find(({ id }) => id === catalogGameId(room.game)) ?? GAME_CATALOG[0];
   return <section class="room-lobby" aria-labelledby="room-code">
     <h1 id="room-code">{room.code}</h1>
-    <article class="lobby-game"><div><h2>{game.name}{room.settings.aiOpponent ? ' (AI 대전)' : ''}</h2><p>{game.people} · {game.time} · {game.tags.map((tag) => `#${tag}`).join(' ')}</p></div><details class="game-settings"><summary aria-label="게임 설정">…</summary><div class="game-settings-popup"><label>AI 대전<input type="checkbox" checked={room.settings.aiOpponent} disabled={!host} onChange={(event) => { if (host) send({ command: 'set-ai-opponent', enabled: event.currentTarget.checked }); }} /></label><label>AI 강도<select value={room.settings.aiStrength ?? 'normal'} disabled={!host} onChange={(event) => { if (host) send({ command: 'set-ai-strength', strength: event.currentTarget.value as 'normal' | 'high' }); }}><option value="normal">보통</option><option value="high">높음</option></select></label>{hasBoardSize(room.game) && <label>판 크기<select value={room.settings.boardSize ?? 13} disabled={!host || room.phase !== 'lobby'} onChange={(event) => { if (host) send({ command: 'set-board-size', size: Number(event.currentTarget.value) as BoardSize }); }}>{BOARD_SIZES.map((size) => <option value={size} key={size}>{size}×{size}</option>)}</select></label>}</div></details></article>
-    {room.settings.aiOpponent ? <p class="ai-opponent-banner">모두 함께 AI와 대전 중</p> : <div class="team-headings">
+    <article class="lobby-game"><div><h2>{game.name}{room.settings.aiOpponent && game.id !== 'yacht' ? ' (AI 대전)' : ''}</h2><p>{game.people} · {game.time} · {game.tags.map((tag) => `#${tag}`).join(' ')}</p></div>{game.id !== 'yacht' && <details class="game-settings"><summary aria-label="게임 설정">…</summary><div class="game-settings-popup"><label>AI 대전<input type="checkbox" checked={room.settings.aiOpponent} disabled={!host} onChange={(event) => { if (host) send({ command: 'set-ai-opponent', enabled: event.currentTarget.checked }); }} /></label><label>AI 강도<select value={room.settings.aiStrength ?? 'normal'} disabled={!host} onChange={(event) => { if (host) send({ command: 'set-ai-strength', strength: event.currentTarget.value as 'normal' | 'high' }); }}><option value="normal">보통</option><option value="high">높음</option></select></label>{hasBoardSize(room.game) && <label>판 크기<select value={room.settings.boardSize ?? 13} disabled={!host || room.phase !== 'lobby'} onChange={(event) => { if (host) send({ command: 'set-board-size', size: Number(event.currentTarget.value) as BoardSize }); }}>{BOARD_SIZES.map((size) => <option value={size} key={size}>{size}×{size}</option>)}</select></label>}</div></details>}</article>
+    {room.settings.aiOpponent && game.id !== 'yacht' ? <p class="ai-opponent-banner">모두 함께 AI와 대전 중</p> : game.id === 'yacht' ? <p class="ai-opponent-banner">개인전 · 참가 순서는 시작 연출로 결정</p> : <div class="team-headings">
       {room.teamNames.map((team, index) => host
         ? <label key={index}>팀 {index + 1}<input value={team} maxLength={24} onChange={(event) => send({ command: 'team-name', team: index + 1 as 1 | 2, name: event.currentTarget.value })} /></label>
         : <strong key={team}>팀 {index + 1} · {team}</strong>)}
