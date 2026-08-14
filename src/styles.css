@@ -129,8 +129,8 @@ label { display: block; font-weight: 700; }
 .effect-coin.face-T { color: var(--paper); background: var(--ink); }
 .effect-die { display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); border: 3px solid var(--line); border-radius: 12px; padding: 7px; background: var(--paper); box-shadow: 0 3px 0 var(--line); animation-name: die-roll; animation-duration: 650ms; }
 .die-pip { position: relative; align-self: center; justify-self: center; width: min(9px, 60%); aspect-ratio: 1; border-radius: 50%; background: transparent; }
-.die-pip.is-on { animation: die-pip-reveal 650ms steps(1, end) both; animation-delay: calc(var(--effect-index) * 55ms); }
-.die-pip::before { position: absolute; inset: 0; border-radius: 50%; background: var(--ink); opacity: 0; content: ""; animation-duration: 650ms; animation-timing-function: steps(1, end); animation-fill-mode: both; animation-delay: calc(var(--effect-index) * 55ms); }
+.die-pip.is-on { animation: die-pip-reveal calc(var(--dice-dwell-ms, 220ms) * 3) steps(1, end) both; animation-delay: calc(var(--effect-index) * 55ms); }
+.die-pip::before { position: absolute; inset: 0; border-radius: 50%; background: var(--ink); opacity: 0; content: ""; animation-duration: calc(var(--dice-dwell-ms, 220ms) * 3); animation-timing-function: steps(1, end); animation-fill-mode: both; animation-delay: calc(var(--effect-index) * 55ms); }
 .die-pip.scramble-111::before { animation-name: die-pip-scramble-111; }
 .die-pip.scramble-011::before { animation-name: die-pip-scramble-011; }
 .die-pip.scramble-101::before { animation-name: die-pip-scramble-101; }
@@ -144,19 +144,19 @@ label { display: block; font-weight: 700; }
 .deck-shuffle-overlay { position: fixed; z-index: 20; inset: 0; display: grid; place-items: center; overflow: hidden; color: var(--paper); background: var(--effect-overlay); pointer-events: none; animation: deck-overlay var(--total-ms) linear both; }
 .shuffle-scene { display: flex; flex-direction: column; align-items: center; gap: min(7.6vw, 30px); }
 .shuffle-deck { position: relative; width: min(38vw, 150px); aspect-ratio: 2 / 3; }
-.shuffle-pile { position: absolute; inset: 0; animation-duration: var(--shuffle-ms); animation-delay: var(--shuffle-start); animation-fill-mode: forwards; }
+.shuffle-card-track { position: absolute; z-index: var(--card-z); inset: 0; animation-duration: var(--shuffle-ms); animation-delay: var(--shuffle-start); animation-fill-mode: forwards; }
 .shuffle-card { position: absolute; top: 50%; left: 50%; width: 100%; height: 100%; border: 3px solid var(--line); border-radius: 12px; background: var(--effect-card); box-shadow: inset 0 0 0 7px var(--paper), inset 0 0 0 9px var(--line), 0 2px 0 var(--line); opacity: 0; transform: translate(-50%, -50%); }
-.spawn-card { z-index: var(--card-order); animation: deck-card-spring-drop var(--fall-ms) cubic-bezier(.18, .72, .24, 1.18) var(--card-delay) forwards, deck-card-fade var(--fade-ms) linear var(--card-delay) forwards; }
-.exit-band { z-index: 4; border-radius: 12px; animation-duration: var(--exit-ms); animation-timing-function: linear; animation-delay: var(--exit-start); animation-fill-mode: forwards; }
+.spawn-card { animation: deck-card-spring-drop var(--fall-ms) cubic-bezier(.18, .72, .24, 1.18) var(--card-delay) forwards, deck-card-fade var(--fade-ms) linear var(--card-delay) forwards; }
+.exit-band { z-index: 9; border-radius: 12px; animation-duration: var(--exit-ms); animation-timing-function: linear; animation-delay: var(--exit-start); animation-fill-mode: forwards; }
 .exit-left { mask-image: repeating-linear-gradient(to bottom, var(--ink) 0 10px, transparent 10px 20px); animation-name: deck-exit-left; }
 .exit-right { mask-image: repeating-linear-gradient(to bottom, transparent 0 10px, var(--ink) 10px 20px); animation-name: deck-exit-right; }
 .shuffle-caption { width: min(90vw, 500px); margin: 0; text-align: center; font-size: clamp(1.1rem, 5vw, 2rem); font-weight: 900; animation: deck-caption var(--total-ms) linear both; }
 @keyframes coin-toss { from { opacity: 0; transform: translateY(-24vh) rotateY(540deg); } 72% { transform: translateY(7px) rotateY(0); } to { opacity: 1; transform: none; } }
 @keyframes die-roll { from { opacity: 0; transform: translateY(-20vh) rotate(300deg) scale(.7); } 50% { opacity: 1; transform: translateY(7px) rotate(20deg); } 62% { transform: translateY(-18px) rotate(-12deg); } 72% { transform: translateY(0) rotate(0); } to { opacity: 1; transform: none; } }
-@keyframes die-pip-reveal { 0%, 72% { background: transparent; } 73%, 100% { background: var(--ink); } }
-@keyframes die-pip-scramble-111 { 0%, 72% { opacity: 1; } 73%, 100% { opacity: 0; } }
-@keyframes die-pip-scramble-011 { 0%, 23% { opacity: 0; } 24%, 72% { opacity: 1; } 73%, 100% { opacity: 0; } }
-@keyframes die-pip-scramble-101 { 0%, 23% { opacity: 1; } 24%, 47% { opacity: 0; } 48%, 72% { opacity: 1; } 73%, 100% { opacity: 0; } }
+@keyframes die-pip-reveal { 0%, 99.999% { background: transparent; } 100% { background: var(--ink); } }
+@keyframes die-pip-scramble-111 { 0%, 99.999% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes die-pip-scramble-011 { 0%, 33.333% { opacity: 0; } 33.334%, 99.999% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes die-pip-scramble-101 { 0%, 33.333% { opacity: 1; } 33.334%, 66.666% { opacity: 0; } 66.667%, 99.999% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes deck-card-spring-drop { from { transform: translate(-50%, calc(-50% - var(--fall-start))); } 82% { transform: translate(-50%, calc(-48% - var(--stack-y))); } to { transform: translate(-50%, calc(-50% - var(--stack-y))); } }
 @keyframes deck-card-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes deck-exit-left { from { opacity: 1; transform: translate(-50%, -50%); } to { opacity: 0; transform: translate(calc(-50% - 60vw), -50%); } }
@@ -181,7 +181,7 @@ label { display: block; font-weight: 700; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; }
   .viewport-vignette { animation: none; opacity: .3; }
-  .effect-coin, .effect-die, .die-pip, .die-pip::before, .shuffle-pile, .shuffle-card, .shuffle-caption { animation: none; }
+  .effect-coin, .effect-die, .die-pip, .die-pip::before, .shuffle-card-track, .shuffle-card, .shuffle-caption { animation: none; }
   .die-pip::before { display: none; }
   .die-pip.is-on { background: var(--ink); }
   .deck-shuffle-overlay { position: relative; inset: auto; min-height: 260px; margin-top: .75rem; visibility: visible; opacity: 1; }
