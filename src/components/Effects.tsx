@@ -27,9 +27,9 @@ export const DICE_DEFAULTS: DiceSettings = {
 };
 export const DICE_CONTROLS: readonly [keyof DiceSettings, string, number, number][] = [
   ['fallMs', '주사위 낙하 ms', 50, 800],
-  ['firstBounceMs', '첫 번째 튀기기 ms', 100, 500],
-  ['secondBounceMs', '두 번째 튀기기 ms', 100, 500],
-  ['pipChangeDelayMs', '튀긴 뒤 핍 변경 ms', 0, 100],
+  ['firstBounceMs', '첫 튕김 ms', 100, 500],
+  ['secondBounceMs', '둘째 튕김 ms', 100, 500],
+  ['pipChangeDelayMs', '튕김 후 눈 변경 ms', 0, 100],
 ];
 export const deriveDicePatterns = (face: DieFace): readonly [DieFace, DieFace, DieFace] =>
   [face % 6 + 1 as DieFace, (face + 1) % 6 + 1 as DieFace, face];

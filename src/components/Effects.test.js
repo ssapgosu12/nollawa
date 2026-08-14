@@ -294,3 +294,11 @@ describe('D-025 후속: 덱 크기는 자막 폭에 끌려가지 않는다', () 
     expect(scene).not.toMatch(/display:\s*grid/);
   });
 });
+
+describe('D-033 후속: 주사위 슬라이더 라벨은 한국어 표기를 따른다', () => {
+  it('E3-LABELS: 튕김·눈으로 적고 튀기기·핍을 쓰지 않는다', () => {
+    const labels = DICE_CONTROLS.map(([, label]) => label);
+    expect(labels).toEqual(['주사위 낙하 ms', '첫 튕김 ms', '둘째 튕김 ms', '튕김 후 눈 변경 ms']);
+    expect(labels.join(' ')).not.toMatch(/튀기기|핍/);
+  });
+});
