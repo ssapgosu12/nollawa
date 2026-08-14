@@ -54,7 +54,10 @@ describe('V1: 마지막 표 기준 절대 마감과 권위 확정', () => {
     const two = cast(one, 'p2', 2, members, 20);
     const three = cast(two, 'p3', 2, members, 30);
     expect(three.moves).toBe(1);
-    expect(three.resolvedVote?.selected).toBe('2');
+    expect(three.resolvedVote).toBeUndefined();
+    const next = castTeamVote(three, 4, actor('opponent', 2), [{ id: 'opponent', team: 2 }], 40, () => 0);
+    expect(next).toMatchObject({ moves: 2, turn: 1 });
+    expect(next.board[0]?.[4]).toBe(2);
   });
 
   it('accepted 새 표와 변경 표마다 미투표자×4+7 마감을 재시작하고 전원 투표는 1초와 effects 숨김을 저장한다', () => {
@@ -74,13 +77,18 @@ describe('V1: 마지막 표 기준 절대 마감과 권위 확정', () => {
     expect(settleTeamVote(all, members, 8_000, () => 0).resolvedVote).toBeDefined();
   });
 
-  it('마지막 표 마감에서 유일 최다를 확정하고 unique maximum은 난수를 호출하지 않는다', () => {
+  it('W5: 마지막 표 마감에서 유일 최다를 한 번만 적용하고 다음 차례 투표를 연다', () => {
     const random = vi.fn(() => 0.9);
     const open = cast(samok.init(), 'p1', 5, team('p1', 'p2'), 1_000, random);
     expect(nextVoteDeadline(open)).toBe(12_000);
     expect(settleTeamVote(open, team('p1', 'p2'), 11_999, random)).toBe(open);
     const resolved = settleTeamVote(open, team('p1', 'p2'), 12_000, random);
-    expect(resolved.resolvedVote?.selected).toBe('5');
+    expect(resolved).toMatchObject({ moves: 1, turn: 2 });
+    expect(resolved.board[0]?.[5]).toBe(1);
+    expect(resolved.resolvedVote).toBeUndefined();
+    const next = castTeamVote(resolved, 4, actor('opponent', 2), [{ id: 'opponent', team: 2 }], 12_001, random);
+    expect(next).toMatchObject({ moves: 2, turn: 1 });
+    expect(next.board[0]?.[4]).toBe(2);
     expect(random).not.toHaveBeenCalled();
   });
 

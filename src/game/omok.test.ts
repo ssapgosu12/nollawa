@@ -12,10 +12,10 @@ const patterns = {
   '사사': [[7, 5], [7, 6], [7, 8], [5, 7], [6, 7], [8, 7]],
   '장목': [[7, 3], [7, 4], [7, 5], [7, 6], [7, 7]],
 } as const;
-const position = (seat: 1 | 2, stones: readonly (readonly [number, number])[], size: BoardSize = 13): OmokState => {
+const position = (seat: 1 | 2, stones: readonly (readonly [number, number])[], size: BoardSize = 13, starter: 1 | 2 = 1): OmokState => {
   const state = omok.init(size);
   for (const [row, column] of stones) state.board[row]![column] = seat;
-  return { ...state, turn: seat, moves: stones.length };
+  return { ...state, turn: seat, starter, moves: stones.length };
 };
 
 describe('오목 렌주 리듀서', () => {
@@ -95,6 +95,20 @@ describe('오목 금수 표시·합법 수·AI 공유', () => {
     expect(marker.props.kind).toBe('삼삼');
     expect(legalGameMoves('omok', state).map(moveKey)).not.toContain('7:7');
     expect(adapterMoveKeys('omok', state)).not.toContain('7:7');
+  });
+
+  it.each([1, 2] as const)('starter=%i receives every renju restriction while the follower receives none', (starter) => {
+    const follower = starter === 1 ? 2 : 1;
+    for (const [kind, row, column] of [['삼삼', 7, 7], ['사사', 7, 7], ['장목', 7, 8]] as const) {
+      const state = position(starter, patterns[kind], 13, starter);
+      const props = BoardGame({ game: 'omok', state, onMove: () => undefined }).props as BoardGridProps;
+      expect(omokForbiddenKind(state, row, column)).toBe(kind);
+      expect(props.isLegal(row, column)).toBe(false);
+      expect((props.overlay?.(row, column, 750, 750) as { type: unknown }).type).toBe(ForbiddenPoint);
+      expect(legalGameMoves('omok', state).map(moveKey)).not.toContain(`${row}:${column}`);
+      expect(adapterMoveKeys('omok', state)).not.toContain(`${row}:${column}`);
+      expect(omokForbiddenKind(position(follower, patterns[kind], 13, starter), row, column)).toBeNull();
+    }
   });
 
   it('백 차례와 육목에는 금수 표시나 필터를 적용하지 않는다', () => {

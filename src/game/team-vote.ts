@@ -41,7 +41,7 @@ function finalize<State extends VotableState>(state: State, vote: TeamVoteState,
   const resolvedVote = { turn: state.turn, selected, presentation, settledAt: now };
   if (tied.length > 1) return { ...state, vote: undefined, resolvedVote };
   const applied = rules.applyMove(state, selected);
-  return applied === state ? { ...state, vote: undefined } : { ...applied, vote: undefined, resolvedVote };
+  return applied === state ? { ...state, vote: undefined } : { ...applied, vote: undefined, resolvedVote: undefined };
 }
 
 export function nextVoteDeadline(state: VotableState): number | null { return state.vote?.turn === state.turn ? state.vote.deadline : null; }
