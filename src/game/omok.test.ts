@@ -3,7 +3,7 @@ import { adapterMoveKeys } from '../ai/game-adapters';
 import { BoardGame } from '../components/BoardGame';
 import { ForbiddenPoint, GridBoard, type BoardGridProps } from '../components/BoardGrid';
 import { initGame, legalGameMoves, moveKey } from './catalog';
-import { omok, omokForbiddenKind, type OmokState } from './omok';
+import { BOARD_SIZES, omok, omokForbiddenKind, type BoardSize, type OmokState } from './omok';
 import type { YukmokState } from './yukmok';
 
 const place = (state: OmokState, row: number, column: number) => omok.reduce(state, { type: 'place', row, column });
@@ -12,21 +12,23 @@ const patterns = {
   '사사': [[7, 5], [7, 6], [7, 8], [5, 7], [6, 7], [8, 7]],
   '장목': [[7, 3], [7, 4], [7, 5], [7, 6], [7, 7]],
 } as const;
-const position = (seat: 1 | 2, stones: readonly (readonly [number, number])[]): OmokState => {
-  const state = omok.init();
+const position = (seat: 1 | 2, stones: readonly (readonly [number, number])[], size: BoardSize = 13): OmokState => {
+  const state = omok.init(size);
   for (const [row, column] of stones) state.board[row]![column] = seat;
   return { ...state, turn: seat, moves: stones.length };
 };
 
 describe('오목 렌주 리듀서', () => {
-  it('15x15에서 가로 다섯 줄을 승리로 판정한다', () => {
-    let state = omok.init();
-    for (let column = 0; column < 4; column += 1) { state = place(state, 7, column); state = place(state, 14, column); }
+  it.each(BOARD_SIZES)('%ix%i에서 가로 다섯 줄을 승리로 판정한다', (size) => {
+    let state = omok.init(size);
+    for (let column = 0; column < 4; column += 1) { state = place(state, 7, column); state = place(state, size - 1, column); }
     state = place(state, 7, 4);
     expect(state.winner).toBe(1);
     expect(omok.terminal(state)).toEqual({ ended: true, winner: 1, draw: false });
-    expect(state.board).toHaveLength(15);
+    expect(state.board).toHaveLength(size);
   });
+
+  it('기본 판은 13x13이다', () => expect(omok.init().board).toHaveLength(13));
 
   it('흑의 삼삼 금수를 거부한다', () => {
     const state = position(1, patterns['삼삼']);
@@ -106,5 +108,14 @@ describe('오목 금수 표시·합법 수·AI 공유', () => {
     expect(yukmokProps.isLegal(7, 7)).toBe(true);
     expect(yukmokProps.overlay?.(7, 7, 750, 750)).toBeNull();
     expect(legalGameMoves('yukmok', yukmok).map(moveKey)).toContain('7:7');
+  });
+
+  it.each(BOARD_SIZES)('%ix%i에서 삼삼·사사·장목과 AI 회피가 동일하다', (size) => {
+    for (const [kind, row, column] of [['삼삼', 7, 7], ['사사', 7, 7], ['장목', 7, 8]] as const) {
+      const state = position(1, patterns[kind], size);
+      expect(omokForbiddenKind(state, row, column)).toBe(kind);
+      expect(legalGameMoves('omok', state).map(moveKey)).not.toContain(`${row}:${column}`);
+      expect(adapterMoveKeys('omok', state)).not.toContain(`${row}:${column}`);
+    }
   });
 });

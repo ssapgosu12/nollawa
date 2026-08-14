@@ -4,7 +4,7 @@ import { BoardGame } from './components/BoardGame';
 import { CoinResults, EffectsTestPage } from './components/Effects';
 import { Countdown, Vignette } from './components/TableEffects';
 import { reduceRematchConsent, reduceSharedRematch, rematchProgress, type RematchMember, type RematchState } from './game/rematch-consent';
-import { actionForMove, GAME_CATALOG, gameId, initGame, legalGameMoveKeys, reduceGame, reduceGameMove, restartAction, terminalGame, voteActionForMove, type GameAction, type GameId, type GameMove, type GameMoveKey, type GameState, type GameWireAction } from './game/catalog';
+import { actionForMove, BOARD_SIZES, GAME_CATALOG, gameId, hasBoardSize, initGame, legalGameMoveKeys, reduceGame, reduceGameMove, restartAction, terminalGame, voteActionForMove, type BoardSize, type GameAction, type GameId, type GameMove, type GameMoveKey, type GameState, type GameWireAction } from './game/catalog';
 import { samok, type SamokState, type Seat } from './game/samok';
 import { authorityResolvedVoteDeadline, authorityVoteDeadline, commitResolvedTeamVote, reduceAuthorityVote, roulettePlan, settleTeamVote, type TeamVoteRules, type VoteMember } from './game/team-vote';
 import { normalizeRoomCode, requestReservation, reserveRoomCode } from './lobby/room-code';
@@ -50,13 +50,11 @@ export const createFirstPlayerCoin = (random: () => number = Math.random, replay
   const firstPlayer: Seat = random() < .5 ? 1 : 2;
   return { outcomes: [firstPlayer === 1 ? 'H' : 'T'], replayKey, firstPlayer };
 };
-export const createSharedGameSelection = (game: GameId) => ({ type: 'snapshot' as const, game, state: initGame(game) });
-export const createSharedGameStart = (game: GameId, createOpening: () => FirstPlayerCoin = createFirstPlayerCoin) => {
-  const opening = createOpening();
-  return { type: 'snapshot' as const, game, state: initialGameForOpening(game, opening.firstPlayer), opening };
-};
-export function initialGameForOpening(game: GameId, firstPlayer: Seat): GameState {
-  const initial = initGame(game);
+export const createSharedGameSelection = (game: GameId, size: BoardSize = 13) => ({ type: 'snapshot' as const, game, state: initGame(game, size) });
+export const createSharedGameStart = (game: GameId, createOpening: () => FirstPlayerCoin = createFirstPlayerCoin, size: BoardSize = 13) => {
+  const opening = createOpening(); return { type: 'snapshot' as const, game, state: initialGameForOpening(game, opening.firstPlayer, size), opening }; };
+export function initialGameForOpening(game: GameId, firstPlayer: Seat, size: BoardSize = 13): GameState {
+  const initial = initGame(game, size);
   if (firstPlayer === 1) return initial;
   const board = initial.board.map((row) => row.map((cell) => cell === 1 ? 2 : cell === 2 ? 1 : cell));
   return { ...initial, board, turn: 2, starter: 2 } as GameState;
@@ -111,7 +109,7 @@ export function App() {
   const [peopleFilter, setPeopleFilter] = useState<PeopleFilter>('all');
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [mode, setMode] = useState<PlayMode>('local');
-  const [selectedGame, setSelectedGame] = useState<GameId>('samok');
+  const [selectedGame, setSelectedGame] = useState<GameId>('samok'), [boardSize, setBoardSize] = useState<BoardSize>(13);
   const [state, setState] = useState<GameState>(() => samok.init());
   const [connection, setConnection] = useState('준비');
   const [localSeat, setLocalSeat] = useState<Seat | null>(null);
@@ -152,6 +150,7 @@ export function App() {
       if (message.type === 'room') {
         roomRef.current = message.room;
         setRoom(message.room);
+        setBoardSize(message.room.settings.boardSize ?? 13);
         const transition = roomMessageTransition(selectedGameRef.current, state, message.room);
         selectedGameRef.current = transition.game; setSelectedGame(transition.game);
         setScreen(roomScreen(message.room, clientId.current));
@@ -226,7 +225,7 @@ export function App() {
     } catch (error) { setRoomError(error instanceof Error ? error.message : '방을 만들지 못했습니다.'); }
     finally { setCreatingRoom(false); }
   }
-  async function startLocal(nextMode: PlayMode, game: GameId) {
+  async function startLocal(nextMode: PlayMode, game: GameId, size: BoardSize = boardSize) {
     closeTransport();
     const transport: Transport<GameMessage> = new LoopbackTransport();
     bindTransport(transport, nextMode);
@@ -235,7 +234,7 @@ export function App() {
     selectedGameRef.current = game;
     setSelectedGame(game);
     const nextOpening = createFirstPlayerCoin();
-    setState(initialGameForOpening(game, nextOpening.firstPlayer));
+    setState(initialGameForOpening(game, nextOpening.firstPlayer, size));
     setLocalSeat(null);
     setRestartNotice('');
     await transport.connect();
@@ -253,9 +252,9 @@ export function App() {
     catch (error) { setConnection(error instanceof Error ? error.message : '전송 실패'); }
   }
   const sendSharedGameSnapshot = (snapshot: ReturnType<typeof createSharedGameSelection> | ReturnType<typeof createSharedGameStart>) => { selectedGameRef.current = snapshot.game; setSelectedGame(snapshot.game); setState(snapshot.state); send(snapshot); };
-  const selectSharedGame = (game: GameId) => sendSharedGameSnapshot(createSharedGameSelection(game));
-  const initializeSharedGame = (game: GameId) => sendSharedGameSnapshot(createSharedGameStart(game));
-  const sendRoom = (command: RoomCommand) => { send({ type: 'room-command', ...command }); if (command.command === 'start' && isAuthority.current) initializeSharedGame(gameId(roomRef.current?.game ?? selectedGameRef.current)); };
+  const selectSharedGame = (game: GameId, size: BoardSize) => sendSharedGameSnapshot(createSharedGameSelection(game, size));
+  const initializeSharedGame = (game: GameId, size: BoardSize) => sendSharedGameSnapshot(createSharedGameStart(game, createFirstPlayerCoin, size));
+  const sendRoom = (command: RoomCommand) => { send({ type: 'room-command', ...command }); if (command.command === 'start' && isAuthority.current) initializeSharedGame(gameId(roomRef.current?.game ?? selectedGameRef.current), roomRef.current?.settings.boardSize ?? 13); };
   useEffect(() => {
     if (screen === 'games') setMode((current) => gameListModeAfterPlay(current));
   }, [screen]);
@@ -326,9 +325,9 @@ export function App() {
     {screen === 'lobby' && room && <RoomLobby room={room} selfId={selfId} send={sendRoom} openGames={() => setScreen('games')} />}
     {screen === 'lobby' && !room && <section class="panel"><h1>{roomCode}</h1><p>{connection}</p></section>}
     {screen === 'games' && <section class="panel" aria-labelledby="games-title"><p class="eyebrow">{mode === 'remote' ? `방 ${roomCode}` : '이 기기'}</p><h1 id="games-title">게임을 골라 주세요</h1>{mode === 'remote' && <button onClick={() => { sendRoom({ command: 'set-activity', activity: 'lobby' }); setScreen('lobby'); }}>방 로비</button>}<label>게임 검색<input type="search" value={query} onInput={(event) => setQuery(event.currentTarget.value)} /></label><div class="filters" aria-label="게임 필터"><div>{(['all', '1', '2', '3-4'] as const).map((value) => <button key={value} class={peopleFilter === value ? 'selected' : ''} aria-pressed={peopleFilter === value} onClick={() => setPeopleFilter(value)}>{value === 'all' ? '전체' : `${value}인`}</button>)}</div><div>{['봇 있음', '대전', '5분 이내'].map((tag) => <button key={tag} class={tagFilters.includes(tag) ? 'selected' : ''} aria-pressed={tagFilters.includes(tag)} onClick={() => setTagFilters((current) => current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag])}>{tag}</button>)}</div></div><div class="game-list">
-      {visibleGames.map((game) => <article class="game-card" key={game.name}><div><h2>{game.name}</h2><p class="people">{game.people} · {game.time}</p><div class="tags">{game.tags.map((tag) => <span key={tag}>{tag}</span>)}</div></div><div class="game-actions">
-        {mode === 'remote' ? <button class="primary" disabled={!isHost} onClick={() => { sendRoom({ command: 'select-game', game: game.id }); selectSharedGame(game.id); setScreen('lobby'); }}>게임 선택</button> : <button class="primary" onClick={() => void startLocal(mode, game.id)}>두 사람이 시작</button>}
-        {mode === 'local' && <button onClick={() => void startLocal('ai', game.id)}>AI와 시작</button>}
+      {visibleGames.map((game) => <article class="game-card" key={game.name}><div><h2>{game.name}</h2><p class="people">{game.people} · {game.time}</p><div class="tags">{game.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>{mode !== 'remote' && hasBoardSize(game.id) && <label>판 크기<select value={boardSize} onChange={(event) => setBoardSize(Number(event.currentTarget.value) as BoardSize)}>{BOARD_SIZES.map((size) => <option value={size} key={size}>{size}×{size}</option>)}</select></label>}</div><div class="game-actions">
+        {mode === 'remote' ? <button class="primary" disabled={!isHost} onClick={() => { sendRoom({ command: 'select-game', game: game.id }); selectSharedGame(game.id, room?.settings.boardSize ?? 13); setScreen('lobby'); }}>게임 선택</button> : <button class="primary" onClick={() => void startLocal(mode, game.id, boardSize)}>두 사람이 시작</button>}
+        {mode === 'local' && <button onClick={() => void startLocal('ai', game.id, boardSize)}>AI와 시작</button>}
       </div></article>)}
       <article class="game-card effects-entry"><div><h2>연출 테스트</h2><p class="people">동전 · 주사위 · 덱 섞기</p><div class="tags"><span>E1–E5</span></div></div><div class="game-actions"><button class="primary" onClick={() => setScreen('effects')}>테스트 열기</button></div></article>
     </div></section>}

@@ -3,6 +3,7 @@ const RECONNECT_KEY = /^[A-Za-z0-9_-]{16,128}$/;
 const HEARTBEAT_MS = 20_000;
 const STALE_MS = 60_000;
 const RESERVATION_MS = 30_000;
+const BOARD_SIZES = [13, 15, 19];
 export const TEAM_PAIRS = [['콜라', '사이다'], ['짜장', '짬뽕'], ['부먹', '찍먹'], ['인도어', '아웃도어']];
 
 export const activeWebSockets = (sockets) => sockets.filter((socket) => socket.readyState === 1);
@@ -28,7 +29,7 @@ function leaveRoom(room, sender) {
 
 function newRoom(code) {
   const pair = TEAM_PAIRS[Math.floor(Math.random() * TEAM_PAIRS.length)];
-  return { code, participants: [], hostId: null, game: 'samok', teamNames: [...pair], settings: { aiOpponent: false, aiStrength: 'normal' }, phase: 'lobby' };
+  return { code, participants: [], hostId: null, game: 'samok', teamNames: [...pair], settings: { aiOpponent: false, aiStrength: 'normal', boardSize: 13 }, phase: 'lobby' };
 }
 
 function participant(room, id) {
@@ -62,6 +63,10 @@ export function applyRoomCommand(room, sender, message) {
   }
   if (message.command === 'set-ai-strength' && ['normal', 'high'].includes(message.strength)) {
     room.settings = { ...(room.settings ?? {}), aiStrength: message.strength };
+    return true;
+  }
+  if (message.command === 'set-board-size' && room.phase === 'lobby' && ['omok', 'yukmok'].includes(room.game) && BOARD_SIZES.includes(message.size)) {
+    room.settings = { ...(room.settings ?? {}), boardSize: message.size };
     return true;
   }
   if (message.command === 'select-game' && typeof message.game === 'string' && message.game.length <= 32) {
@@ -133,7 +138,7 @@ export class Room {
       const replaced = existing.filter((socket) => socket.deserializeAttachment()?.reconnectKey === reconnectKey);
       const stored = await this.state.storage.get(['room', 'snapshot', 'snapshotGame', 'seq', 'authority']);
       const room = stored.get('room') ?? newRoom(code);
-      room.settings = { aiOpponent: room.settings?.aiOpponent === true, aiStrength: room.settings?.aiStrength === 'high' ? 'high' : 'normal' };
+      room.settings = { aiOpponent: room.settings?.aiOpponent === true, aiStrength: room.settings?.aiStrength === 'high' ? 'high' : 'normal', boardSize: BOARD_SIZES.includes(room.settings?.boardSize) ? room.settings.boardSize : 13 };
       for (const member of room.participants) member.activity ??= room.phase === 'play' ? 'play' : 'lobby';
       let person = room.participants.find((item) => item.reconnectKey === reconnectKey);
       if (!person && room.participants.length < 6) {

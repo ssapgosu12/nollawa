@@ -1,12 +1,7 @@
 import type { ComponentChildren } from 'preact';
 export type GridLayout = 'slots' | 'cells' | 'intersections';
 export interface GridGeometry { rows: number; columns: number; layout: GridLayout; footer?: number }
-export const BOARD_GEOMETRIES = {
-  samok: { rows: 6, columns: 7, layout: 'slots', footer: 50 },
-  omok: { rows: 15, columns: 15, layout: 'intersections' },
-  yukmok: { rows: 19, columns: 19, layout: 'intersections' },
-  reversi: { rows: 8, columns: 8, layout: 'cells' },
-} as const satisfies Record<string, GridGeometry>;
+export const BOARD_GEOMETRIES = { samok: { rows: 6, columns: 7, layout: 'slots', footer: 50 }, omok: { rows: 13, columns: 13, layout: 'intersections' }, yukmok: { rows: 13, columns: 13, layout: 'intersections' }, reversi: { rows: 8, columns: 8, layout: 'cells' } } as const satisfies Record<string, GridGeometry>;
 export const snapCellPixels = (available: number, cells: number): number => Math.max(1, Math.floor(available / cells));
 export const stoneDitherEnabled = (diameterPixels: number): boolean => diameterPixels >= 26;
 export interface BoardGridProps {
@@ -19,7 +14,8 @@ export interface BoardGridProps {
 export function gridMetrics(geometry: GridGeometry) {
   return { width: geometry.columns * 100, boardHeight: geometry.rows * 100, height: geometry.rows * 100 + (geometry.footer ?? 0) };
 }
-export function GridBoard({ geometry, board, label, disabled = false, flipRows = false, columnInput = false, rouletteColumn = null, rouletteCell = null, patternId = 'board-dither', viewBox, cellPixels = 100, isLegal, onSelect, renderCell, selectionLabel, overlay, footer }: BoardGridProps) {
+export function GridBoard({ geometry: configuredGeometry, board, label, disabled = false, flipRows = false, columnInput = false, rouletteColumn = null, rouletteCell = null, patternId = 'board-dither', viewBox, cellPixels = 100, isLegal, onSelect, renderCell, selectionLabel, overlay, footer }: BoardGridProps) {
+  const geometry = configuredGeometry.layout === 'intersections' ? { ...configuredGeometry, rows: board.length, columns: board.length } : configuredGeometry;
   const { width, boardHeight, height } = gridMetrics(geometry);
   const pixel = 100 / Math.max(1, Math.floor(cellPixels));
   const cells = Array.from({ length: geometry.rows * geometry.columns }, (_, index) => ({ visualRow: Math.floor(index / geometry.columns), column: index % geometry.columns }));

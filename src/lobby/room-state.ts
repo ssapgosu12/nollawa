@@ -1,23 +1,10 @@
 import type { Transport } from '../transport/transport';
+import type { BoardSize } from '../game/catalog';
 export interface RoomParticipant { id: string; slot: number; name: string; ready: boolean; present: boolean; activity?: 'lobby' | 'games' | 'play' }
-export interface RoomSnapshot {
-  code: string;
-  participants: RoomParticipant[];
-  hostId: string | null;
-  game: string;
-  teamNames: [string, string];
-  settings: { aiOpponent: boolean; aiStrength?: 'normal' | 'high' };
-  phase: 'lobby' | 'play';
-}
+export interface RoomSnapshot { code: string; participants: RoomParticipant[]; hostId: string | null; game: string; teamNames: [string, string]; settings: { aiOpponent: boolean; aiStrength?: 'normal' | 'high'; boardSize?: BoardSize }; phase: 'lobby' | 'play' }
 export type RoomCommand =
-  | { command: 'ready' | 'start' | 'return-lobby' | 'leave-room' }
-  | { command: 'set-ai-opponent'; enabled: boolean }
-  | { command: 'set-ai-strength'; strength: 'normal' | 'high' }
-  | { command: 'set-activity'; activity: 'lobby' | 'games' }
-  | { command: 'select-game'; game: string }
-  | { command: 'kick' | 'promote'; target: string }
-  | { command: 'move'; target: string; slot: number }
-  | { command: 'team-name'; team: 1 | 2; name: string };
+  | { command: 'ready' | 'start' | 'return-lobby' | 'leave-room' } | { command: 'set-ai-opponent'; enabled: boolean } | { command: 'set-ai-strength'; strength: 'normal' | 'high' } | { command: 'set-board-size'; size: BoardSize } | { command: 'set-activity'; activity: 'lobby' | 'games' }
+  | { command: 'select-game'; game: string } | { command: 'kick' | 'promote'; target: string } | { command: 'move'; target: string; slot: number } | { command: 'team-name'; team: 1 | 2; name: string };
 export const MAIN_DESTINATIONS = [
   ['이 기기에서 플레이', 'games'],
   ['방 참여', 'lobby'],

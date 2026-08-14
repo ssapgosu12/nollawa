@@ -111,3 +111,21 @@ describe('S2: AI 강도 snapshot과 방장 control', () => {
     expect(sent).toHaveLength(1);
   });
 });
+
+describe('M1-SIZE-1: 방 로비 판 크기 설정', () => {
+  it('오목은 13/15/19를 보이고 방장만 로비에서 변경한다', () => {
+    const current = room(2);
+    current.game = 'omok';
+    current.settings.boardSize = 13;
+    const sent: unknown[] = [];
+    const sizeSelect = (id: string) => tree(RoomLobby({ room: current, selfId: id, send: (command) => sent.push(command), openGames() {} })).find((node) => node.type === 'select' && node.props.value === 13);
+    const host = sizeSelect('p1');
+    expect(tree(host).filter((node) => node.type === 'option').map((node) => node.props.value)).toEqual([13, 15, 19]);
+    expect(host.props.disabled).toBe(false);
+    host.props.onChange({ currentTarget: { value: '19' } });
+    expect(sent).toEqual([{ command: 'set-board-size', size: 19 }]);
+    expect(sizeSelect('p2').props.disabled).toBe(true);
+    current.phase = 'play';
+    expect(sizeSelect('p1').props.disabled).toBe(true);
+  });
+});
