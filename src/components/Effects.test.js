@@ -64,6 +64,16 @@ describe('E3: caller-supplied six-sided dice results', () => {
     expect(css).toMatch(/\.die-pip::before\s*{[^}]*animation:\s*die-pip-scramble-a/);
     expect(css.match(/@keyframes die-pip-scramble-[abc]/g)).toHaveLength(3);
   });
+
+  it('limits scrambled pips to three face phases before the final reveal', () => {
+    const scrambles = [...css.matchAll(/@keyframes die-pip-scramble-[abc]\s*{[^\n]+}/g)].map((match) => match[0]);
+    expect(scrambles).toHaveLength(3);
+    expect(scrambles[0]).toMatch(/0%, 23%[\s\S]*24%, 47%[\s\S]*48%, 72%[\s\S]*73%, 100%/);
+    expect(scrambles[1]).toMatch(/0%, 23%[\s\S]*24%, 47%[\s\S]*48%, 100%/);
+    expect(scrambles[2]).toMatch(/0%, 47%[\s\S]*48%, 100%/);
+    expect(scrambles.every((keyframes) => !/\b(?:9|18|27|36|45|54|63)%/.test(keyframes))).toBe(true);
+    expect(css).toMatch(/@keyframes die-pip-reveal\s*{[\s\S]*73%, 100%[^}]*var\(--ink\)/);
+  });
 });
 
 describe('E4: full deck-shuffle sequence', () => {
@@ -79,6 +89,21 @@ describe('E4: full deck-shuffle sequence', () => {
     expect(css).toMatch(/@keyframes shuffle-halves[\s\S]*14%[^{]*{[^}]*translate\(-50%, -50%\)[\s\S]*22%[^{]*{[^}]*var\(--shuffle-split\)[\s\S]*30%[^{]*{[^}]*translate\(-50%, -50%\)[\s\S]*38%[^{]*{[^}]*var\(--shuffle-split\)[\s\S]*46%[^{]*{[^}]*translate\(-50%, -50%\)[\s\S]*54%[^{]*{[^}]*var\(--shuffle-split\)[\s\S]*62%[^{]*{[^}]*translate\(-50%, -50%\)/);
     expect(css).not.toMatch(/shuffle-(?:piece|half)[^}]*animation-delay|translate\([^)]*-75vh/);
     expect(css).toMatch(/@keyframes deck-overlay[\s\S]*100%\s*{[^}]*visibility:\s*hidden/);
+  });
+
+  it('keeps both deck halves aligned as one until each split rejoins', () => {
+    expect(css).toMatch(/\.shuffle-left\s*{\s*--shuffle-split:\s*-.18rem/);
+    expect(css).toMatch(/\.shuffle-right\s*{\s*--shuffle-split:\s*\.18rem/);
+    const sequence = css.match(/@keyframes shuffle-halves\s*{[\s\S]*?\n}/)?.[0] ?? '';
+    expect(sequence).not.toMatch(/rotate\(/);
+    expect(sequence.match(/var\(--shuffle-split\)/g)).toHaveLength(3);
+  });
+
+  it('uses a restrained single-card back without a permanent diagonal repeat', () => {
+    const cardBack = css.match(/\.shuffle-piece\s*{[^}]*}/)?.[0] ?? '';
+    expect(cardBack).toMatch(/background:\s*var\(--effect-card\)/);
+    expect(cardBack).toMatch(/box-shadow:\s*inset/);
+    expect(cardBack).not.toMatch(/repeating-linear-gradient|45deg/);
   });
 
   it('exits as complementary interlaced bands grouped in exact 10px units', () => {
