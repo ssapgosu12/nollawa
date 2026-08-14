@@ -2,11 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { App, filterGames, requestGameMoveWithRoomBudget, roomMessageTransition, voteRulesForGame } from './App';
 import { BoardGame } from './components/BoardGame';
 import { EffectsTestPage } from './components/Effects';
-import { GAME_CATALOG, initGame, legalGameMoves, moveKey, voteActionForMove, type GameId, type GameState } from './game/catalog';
+import { BOARD_GAME_CATALOG, initGame, legalGameMoves, moveKey, voteActionForMove, type GameId, type GameState } from './game/catalog';
 import { commitResolvedTeamVote, reduceAuthorityVote, resolvedVoteDeadline, roulettePlan, settleTeamVote } from './game/team-vote';
 import { participantStatusLabel, type RoomSnapshot } from './lobby/room-state';
 
-const ids = GAME_CATALOG.map(({ id }) => id);
+const ids = BOARD_GAME_CATALOG.map(({ id }) => id);
 const members = [{ id: 'one', team: 1 as const }, { id: 'three', team: 1 as const }];
 const actor = (id: string) => ({ id, seat: 1 as const });
 const room = (game: GameId, aiStrength: 'normal' | 'high' = 'normal'): RoomSnapshot => ({
@@ -17,7 +17,7 @@ const room = (game: GameId, aiStrength: 'normal' | 'high' = 'normal'): RoomSnaps
 describe('ORDER 1 GREEN: merged effects, activities, catalog, renderer, filtering, and search request coexist', () => {
   it('retains both branch feature sets in one callable surface', () => {
     expect(ids).toEqual(['samok', 'omok', 'yukmok', 'reversi']);
-    expect(filterGames('', '2', [])).toHaveLength(4);
+    expect(filterGames('', '2', [])).toHaveLength(5);
     for (const id of ids) expect(BoardGame({ game: id, state: initGame(id), onMove: vi.fn() })).toBeTruthy();
     expect(EffectsTestPage).toBeTypeOf('function');
     expect(participantStatusLabel(room('samok'), { id: 'one', slot: 1, name: '하나', ready: true, present: true, activity: 'play' })).toBe('게임 중');

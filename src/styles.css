@@ -62,6 +62,22 @@ label { display: block; font-weight: 700; }
 .seat-badge.player-2 { --seat-color: var(--player-2); }
 .restart-notice { margin: 0; font-weight: 800; }
 .opening-coin { text-align: center; }
+.yacht-game { width: min(100%, 900px); margin: 1rem auto 0; padding-bottom: 5rem; }
+.yacht-head, .yacht-roll-actions, .yacht-holds { display: flex; align-items: center; justify-content: space-between; gap: .5rem; flex-wrap: wrap; }
+.yacht-dice { min-height: 32svh; display: grid; align-content: center; gap: .75rem; border: 2px solid var(--line); border-radius: 14px; padding: 1rem; background: var(--paper); }
+.yacht-dice.pinned { position: sticky; z-index: 6; top: 0; min-height: 15svh; padding: .4rem; }
+.yacht-dice.pinned .effect-grid { min-height: 64px; }
+.yacht-holds button { flex: 1 1 110px; padding: .35rem; }
+.yacht-holds button.selected { background: var(--accent); font-weight: 900; }
+.yacht-roll-actions button { flex: 1 1 120px; }
+.yacht-sheet { overflow-x: auto; margin-top: .75rem; border: 2px solid var(--line); border-radius: 14px; padding: .5rem; background: var(--paper); }
+.yacht-sheet table { width: 100%; border-collapse: collapse; }
+.yacht-sheet th, .yacht-sheet td { min-width: 70px; border: 1px solid var(--line); padding: .25rem; text-align: center; }
+.yacht-sheet th.player-1 { border-bottom: 5px solid var(--player-1); } .yacht-sheet th.player-2 { border-bottom: 5px solid var(--player-2); } .yacht-sheet th.player-3 { border-bottom: 5px solid var(--player-3); } .yacht-sheet th.player-4 { border-bottom: 5px solid var(--player-4); }
+.yacht-sheet td button { width: 100%; min-height: 38px; padding: .2rem; }
+.yacht-sheet .score-preview { background: var(--accent); box-shadow: inset 0 0 0 2px var(--line); }
+.yacht-register { position: sticky; bottom: 0; width: 100%; margin-top: .5rem; }
+.yacht-sheet-handle { position: fixed; z-index: 7; right: max(1rem, env(safe-area-inset-right)); bottom: max(.5rem, env(safe-area-inset-bottom)); left: max(1rem, env(safe-area-inset-left)); background: var(--accent); font-weight: 900; box-shadow: 0 -3px 0 var(--line); }
 .first-player-choice { position: fixed; z-index: 19; inset: 0; display: grid; place-items: center; padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left)); background: var(--first-player-overlay); }
 .first-player-choice-card { width: min(100%, 520px); border: 3px solid var(--line); border-radius: 16px; padding: clamp(1rem, 5vw, 2rem); text-align: center; background: var(--paper); }
 .first-player-choice-card > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GAME_CATALOG, actionForMove, initGame, legalGameMoves, moveKey, reduceGame, type GameId, type GameState } from '../game/catalog';
+import { BOARD_GAME_CATALOG, GAME_CATALOG, actionForMove, initGame, legalGameMoves, moveKey, reduceGame, type GameId, type GameState } from '../game/catalog';
 import type { GridCell } from '../game/line-grid';
 import { BoardGame } from '../components/BoardGame';
 import { GridBoard } from '../components/BoardGrid';
@@ -14,7 +14,7 @@ const lineThreat = (game: 'omok' | 'yukmok', seat: 1 | 2, length: number): GameS
 };
 
 describe('M1 shared deterministic search core', () => {
-  it.each(GAME_CATALOG.map(({ id }) => id))('%s returns a legal move through the same budget API', (id) => {
+  it.each(BOARD_GAME_CATALOG.map(({ id }) => id))('%s returns a legal move through the same budget API', (id) => {
     const state = initGame(id), result = chooseGameMoveDetailed(id, state, 8, (() => { let tick = 0; return () => tick += 1; })());
     expect(legalGameMoves(id, state).map(moveKey)).toContain(moveKey(result.move!));
     expect(result.completedDepth).toBeLessThanOrEqual(5);
@@ -66,9 +66,9 @@ describe('M1 game-list selection to renderer/local/AI/remote wiring', () => {
   });
 
   it('people, name, and narrowing multi-tag filters compose', () => {
-    expect(filterGames('', '1', [])).toHaveLength(0);
-    expect(filterGames('', '2', [])).toHaveLength(4);
-    expect(filterGames('', '3-4', [])).toHaveLength(0);
+    expect(filterGames('', '1', []).map((game) => game.id)).toEqual(['yacht']);
+    expect(filterGames('', '2', [])).toHaveLength(5);
+    expect(filterGames('', '3-4', []).map((game) => game.id)).toEqual(['yacht']);
     expect(filterGames('리버시', '2', []).map((game) => game.id)).toEqual(['reversi']);
     expect(filterGames('', 'all', ['봇 있음', '5분 이내']).map((game) => game.id)).toEqual(['samok']);
   });

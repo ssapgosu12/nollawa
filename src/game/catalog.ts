@@ -6,9 +6,13 @@ import type { GameMove, GameMoveKey, GridMove } from './contract';
 export type { GameMove, GameMoveKey, GridMove } from './contract';
 export { BOARD_SIZES, type BoardSize } from './omok';
 export type GameId = 'samok' | 'omok' | 'yukmok' | 'reversi'; export type GameState = SamokState | OmokState | YukmokState | ReversiState; export type GameAction = SamokAction | OmokAction | YukmokAction | ReversiAction;
+export type CatalogGameId = GameId | 'yacht';
 export type VoteAction = { type: 'vote'; move: GameMoveKey }; export type GameWireAction = GameAction | VoteAction;
-export const GAME_CATALOG = [{ id: 'samok', name: '사목', people: '2인', time: '5분', tags: ['봇 있음', '대전', '5분 이내'] }, { id: 'omok', name: '오목', people: '2인', time: '10분', tags: ['봇 있음', '대전'] }, { id: 'yukmok', name: '육목', people: '2인', time: '15분', tags: ['봇 있음', '대전'] }, { id: 'reversi', name: '리버시', people: '2인', time: '15분', tags: ['봇 있음', '대전'] }] as const;
-export const gameId = (value: string): GameId => GAME_CATALOG.some((game) => game.id === value) ? value as GameId : 'samok';
+export const BOARD_GAME_CATALOG = [{ id: 'samok', name: '사목', people: '2인', minPlayers: 2, maxPlayers: 2, time: '5분', tags: ['봇 있음', '대전', '5분 이내'] }, { id: 'omok', name: '오목', people: '2인', minPlayers: 2, maxPlayers: 2, time: '10분', tags: ['봇 있음', '대전'] }, { id: 'yukmok', name: '육목', people: '2인', minPlayers: 2, maxPlayers: 2, time: '15분', tags: ['봇 있음', '대전'] }, { id: 'reversi', name: '리버시', people: '2인', minPlayers: 2, maxPlayers: 2, time: '15분', tags: ['봇 있음', '대전'] }] as const;
+export const GAME_CATALOG = [...BOARD_GAME_CATALOG, { id: 'yacht', name: 'Yacht Dice', people: '1–4인', minPlayers: 1, maxPlayers: 4, time: '30분', tags: ['파티', '주사위'] }] as const;
+export const isBoardGameId = (value: string): value is GameId => BOARD_GAME_CATALOG.some((game) => game.id === value);
+export const gameId = (value: string): GameId => isBoardGameId(value) ? value : 'samok';
+export const catalogGameId = (value: string): CatalogGameId => GAME_CATALOG.some((game) => game.id === value) ? value as CatalogGameId : 'samok';
 export const hasBoardSize = (id: string): boolean => id === 'omok' || id === 'yukmok';
 export function initGame(id: GameId, size: BoardSize = 13): GameState { switch (id) { case 'omok': return omok.init(size); case 'yukmok': return yukmok.init(size); case 'reversi': return reversi.init(); default: return samok.init(); } }
 export function reduceGame(id: GameId, state: GameState, action: GameAction): GameState {
