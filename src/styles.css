@@ -54,19 +54,19 @@ label { display: block; font-weight: 700; }
 .tags span { border: 1px solid var(--line); border-radius: 999px; padding: .2rem .55rem; font-size: .8rem; }
 .game-actions { display: flex; flex-direction: column; justify-content: center; gap: .5rem; min-width: 130px; }
 .game-status { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-.game-status h1 { margin-bottom: 0; }
-.seat-badge { display: flex; align-items: center; gap: .45rem; margin: .65rem 0 0; font-weight: 900; }
+.game-status h1 { margin-bottom: 0; } .play-status-slot { min-height: 1.75rem; margin-top: .65rem; } .play-status-slot p { min-height: 1.75rem; margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.seat-badge { display: flex; align-items: center; gap: .45rem; margin: 0; font-weight: 900; }
 .seat-badge::before { width: 1rem; height: 1rem; border: 2px solid var(--line); border-radius: 50%; background: var(--seat-color, var(--paper)); content: ""; }
 .seat-badge.player-1 { --seat-color: var(--player-1); }
 .seat-badge.player-2 { --seat-color: var(--player-2); }
-.restart-notice { margin: .65rem 0 0; font-weight: 800; }
+.restart-notice { margin: 0; font-weight: 800; }
 .opening-coin { text-align: center; }
 .board { display: block; width: min(100%, 620px); max-height: calc(100svh - 230px); margin: 1rem auto 0; touch-action: manipulation; }
 .board [role="button"] { cursor: pointer; }
 .board-background { fill: #fff; stroke: var(--line); }
 .board-cell { fill: var(--paper); stroke: var(--line); }
 .board-hit-area { fill: transparent; }
-.roulette-highlight { fill: var(--accent); opacity: .55; pointer-events: none; }
+.roulette-highlight { fill: var(--accent); opacity: .55; pointer-events: none; } .move-preview { opacity: .5; pointer-events: none; } .last-turn-marker { fill: var(--ink); stroke: var(--paper); stroke-width: 6px; paint-order: stroke; pointer-events: none; }
 .vote-dot { fill: var(--ink); stroke: var(--paper); stroke-width: 3px; pointer-events: none; }
 .vote-dot.own-vote.player-1 { fill: var(--player-1); }
 .vote-dot.own-vote.player-2 { fill: var(--player-2); }
@@ -81,7 +81,7 @@ label { display: block; font-weight: 700; }
 .board-cell.player-4 { fill: var(--player-4); }
 .piece-shape { dominant-baseline: middle; font-size: 42px; font-weight: 900; fill: var(--ink); pointer-events: none; }
 .piece-number { dominant-baseline: middle; font-size: 21px; font-weight: 900; fill: var(--ink); stroke: var(--paper); stroke-width: 4px; paint-order: stroke; pointer-events: none; }
-.hint { margin: .7rem auto; text-align: center; color: var(--muted); font-size: .9rem; }
+.hint { margin: .7rem auto; text-align: center; color: var(--muted); font-size: .9rem; } .confirm-move { display: block; min-width: 8rem; margin: .7rem auto 0; }
 .restart { display: block; margin: .75rem auto; }
 .rematch { text-align: center; }
 .rematch p { margin: .35rem 0; }
@@ -162,7 +162,7 @@ label { display: block; font-weight: 700; }
 @media (min-width: 850px) and (orientation: landscape) {
   .play-layout { display: grid; grid-template-columns: minmax(280px, 620px) minmax(180px, 1fr); column-gap: 1.5rem; align-items: center; }
   .board { grid-row: 1 / span 3; margin: 0; }
-  .game-status, .hint, .rematch { grid-column: 2; }
+  .game-status, .confirm-move, .hint, .rematch { grid-column: 2; }
   .game-status { display: block; }
   .game-status button { margin-top: 1rem; }
 }
