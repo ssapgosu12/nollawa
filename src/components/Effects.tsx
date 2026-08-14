@@ -67,7 +67,7 @@ export function DeckShuffle({ deckName, replayKey = 0, settings }: DeckShufflePr
   return <div class="deck-shuffle-overlay" role="status" aria-label={`${deckName} 덱 섞기`} key={`${deckName}-${replayKey}`} style={timing}>
     <div class="shuffle-scene">
       <div class="shuffle-deck" aria-hidden="true" data-spawn-cards="8" data-shuffle-cards="2">
-        {Array.from({ length: 8 }, (_, index) => <i class="shuffle-card spawn-card" style={`--card-delay:${index * resolved.cardStaggerMs}ms;--stack-y:${(7 - index) * resolved.stackOffsetPct}%;--gather-y:${4 * resolved.stackOffsetPct}%;--card-order:${index + 1}`} />)}
+        {Array.from({ length: 8 }, (_, index) => <i class="shuffle-card spawn-card" style={`--card-delay:${index * resolved.cardStaggerMs}ms;--stack-y:${index * resolved.stackOffsetPct}%;--gather-y:${3 * resolved.stackOffsetPct}%;--card-order:${index + 1}`} />)}
         <i class="shuffle-card shuffle-card-a" data-top-cycles="right,right" />
         <i class="shuffle-card shuffle-card-b" data-top-cycles="left" />
         <i class="shuffle-card exit-band exit-left" />

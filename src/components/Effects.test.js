@@ -103,6 +103,18 @@ describe('E4: full deck-shuffle sequence', () => {
     expect(deriveDeckTimeline(DECK_DEFAULTS)).toEqual({ spawnEnd: 790, gatherStart: 1090, shuffleStart: 1240, splitStarts: [1240, 1660, 2000], joinStarts: [1490, 1830, 2170], directions: ['right', 'left', 'right'], exitStart: 2270, total: 2670 });
   });
 
+  it('E4-CORRECTION-SPAWN-DIRECTION: places each later spawn card above its predecessor at exactly 0 through 14 percent', () => {
+    const { cards } = renderedDeck();
+    const spawnStyles = cards.filter((card) => card.props.class === 'shuffle-card spawn-card').map((card) => card.props.style);
+    expect(spawnStyles.map((style) => Number(style.match(/--stack-y:(\d+)%/)?.[1]))).toEqual([0, 2, 4, 6, 8, 10, 12, 14]);
+  });
+
+  it('E4-CORRECTION-FOURTH-FROM-BOTTOM-GATHER: gathers all eight cards at the zero-based fourth position of 6 percent', () => {
+    const { cards } = renderedDeck();
+    const spawnStyles = cards.filter((card) => card.props.class === 'shuffle-card spawn-card').map((card) => card.props.style);
+    expect(spawnStyles.map((style) => Number(style.match(/--gather-y:(\d+)%/)?.[1]))).toEqual(Array(8).fill(6));
+  });
+
   it('E4-ALTERNATING-TOP: records the top-card direction as right-left-right and switches z-order per cycle', () => {
     const { cards } = renderedDeck();
     expect(deriveDeckTimeline(DECK_DEFAULTS).directions).toEqual(['right', 'left', 'right']);
@@ -124,10 +136,11 @@ describe('E4: full deck-shuffle sequence', () => {
     expect(css).toMatch(/@keyframes deck-exit-left[\s\S]*?from\s*{[^}]*opacity:\s*1[\s\S]*?to\s*{[^}]*opacity:\s*0[^}]*translate/);
   });
 
-  it('E4-CAPTION-GAP: puts the caption directly below the deck at exactly 20% of card width', () => {
+  it('E4-CORRECTION-CARD-WIDTH-CAPTION-GAP: puts the caption directly below the deck at exactly 20% of card width', () => {
     const { caption } = renderedDeck();
     expect(caption.props.children.join('')).toBe('테스트 카드 덱이 섞이고 있습니다');
-    expect(css).toMatch(/\.shuffle-scene\s*{[^}]*width:\s*min\(38vw, 150px\)[^}]*gap:\s*20%/);
+    expect(css).toMatch(/\.shuffle-scene\s*{[^}]*width:\s*min\(38vw, 150px\)[^}]*gap:\s*min\(7\.6vw, 30px\)/);
+    expect(css.match(/\.shuffle-scene\s*{[^}]*}/)?.[0]).not.toMatch(/gap:\s*20%/);
     expect(css.match(/\.shuffle-caption\s*{[^}]*}/)?.[0]).not.toMatch(/position|bottom/);
   });
 
