@@ -4,11 +4,11 @@ import { useEffect, useState } from 'preact/hooks';
 export type CoinFace = 'H' | 'T';
 export type DieFace = 1 | 2 | 3 | 4 | 5 | 6;
 
-export const demoCoinOutcomes = (count: number, replayKey: number): CoinFace[] =>
-  Array.from({ length: count }, (_, index) => (index + replayKey) % 2 ? 'T' : 'H');
+export const demoCoinOutcomes = (count: number, random: () => number = Math.random): CoinFace[] =>
+  Array.from({ length: count }, () => random() < .5 ? 'H' : 'T');
 
-export const demoDiceOutcomes = (count: number, replayKey: number): DieFace[] =>
-  Array.from({ length: count }, (_, index) => ((index + replayKey) % 6 + 1) as DieFace);
+export const demoDiceOutcomes = (count: number, random: () => number = Math.random): DieFace[] =>
+  Array.from({ length: count }, () => (Math.floor(random() * 6) + 1) as DieFace);
 
 interface ReplayProps { replayKey?: number }
 interface CoinResultsProps extends ReplayProps { outcomes: readonly CoinFace[] }
@@ -28,7 +28,7 @@ export function CoinResults({ outcomes, replayKey = 0 }: CoinResultsProps) {
 export function DiceResults({ outcomes, replayKey = 0 }: DiceResultsProps) {
   return <output class="effect-grid dice-results" aria-label="주사위 결과" data-replay={replayKey}>
     {outcomes.slice(0, 6).map((face, index) => <span class="effect-die" data-value={face} style={`--effect-index:${index}`} aria-label={`주사위 ${face}`} key={`${replayKey}-${index}`}>
-      {Array.from({ length: 9 }, (_, pip) => <i class={PIPS[face].includes(pip) ? 'die-pip is-on' : 'die-pip'} aria-hidden="true" />)}
+      {Array.from({ length: 9 }, (_, pip) => <i class={PIPS[face].includes(pip) ? 'die-pip is-on' : 'die-pip'} style={`--pip-index:${pip}`} aria-hidden="true" />)}
     </span>)}
   </output>;
 }
@@ -36,7 +36,10 @@ export function DiceResults({ outcomes, replayKey = 0 }: DiceResultsProps) {
 export function DeckShuffle({ deckName, replayKey = 0 }: DeckShuffleProps) {
   return <div class="deck-shuffle-overlay" role="status" aria-label={`${deckName} 덱 섞기`} key={`${deckName}-${replayKey}`}>
     <div class="shuffle-deck" aria-hidden="true">
-      {Array.from({ length: 10 }, (_, index) => <i class="shuffle-card" style={`--effect-index:${index};--effect-side:${index % 2 ? 1 : -1}`} />)}
+      <i class="shuffle-piece shuffle-half shuffle-left" />
+      <i class="shuffle-piece shuffle-half shuffle-right" />
+      <i class="shuffle-piece shuffle-stripe stripe-left" />
+      <i class="shuffle-piece shuffle-stripe stripe-right" />
     </div>
     <p class="shuffle-caption">{deckName} 덱이 섞이고 있습니다</p>
   </div>;
@@ -69,8 +72,8 @@ export function EffectsTestPage({ onBack }: { onBack: () => void }) {
       <label>동전 개수<select value={coinCount} onChange={(event) => setCoinCount(Number(event.currentTarget.value))}>{Array.from({ length: 12 }, (_, index) => <option value={index + 1}>{index + 1}</option>)}</select></label>
       <label>주사위 개수<select value={diceCount} onChange={(event) => setDiceCount(Number(event.currentTarget.value))}>{Array.from({ length: 6 }, (_, index) => <option value={index + 1}>{index + 1}</option>)}</select></label>
     </div>
-    <EffectDemo title="동전 던지기">{(replayKey) => <CoinResults outcomes={demoCoinOutcomes(coinCount, replayKey)} replayKey={replayKey} />}</EffectDemo>
-    <EffectDemo title="주사위 굴리기">{(replayKey) => <DiceResults outcomes={demoDiceOutcomes(diceCount, replayKey)} replayKey={replayKey} />}</EffectDemo>
-    <article class="effect-demo"><h2>덱 섞기</h2><button onClick={() => setShuffleKey((value) => value + 1)}>덱 섞기</button><DeckShuffle deckName="Nollawa 카드" replayKey={shuffleKey} /></article>
+    <EffectDemo title="동전 던지기">{(replayKey) => <CoinResults outcomes={demoCoinOutcomes(coinCount)} replayKey={replayKey} />}</EffectDemo>
+    <EffectDemo title="주사위 굴리기">{(replayKey) => <DiceResults outcomes={demoDiceOutcomes(diceCount)} replayKey={replayKey} />}</EffectDemo>
+    <article class="effect-demo"><h2>덱 섞기</h2><button onClick={() => setShuffleKey((value) => value + 1)}>덱 섞기</button>{shuffleKey > 0 && <DeckShuffle deckName="Nollawa 카드" replayKey={shuffleKey} />}</article>
   </section>;
 }
