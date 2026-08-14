@@ -95,7 +95,7 @@ describe('E4: full deck-shuffle sequence', () => {
 
 describe('E5: manual and automatic coin and dice execution', () => {
   it('provides both launch modes for each effect and removes all motion in reduced-motion mode', () => {
-    expect(source.match(/<EffectDemo title="(?:동전 던지기|주사위 굴리기)">/g)).toHaveLength(2);
+    expect(source.match(/<EffectDemo title="(?:동전 던지기|주사위 굴리기)"[^>]*>/g)).toHaveLength(2);
     expect(source.match(/>던지기!<\/button>/g)).toHaveLength(1);
     expect(source).toMatch(/demoCoinOutcomes\(coinCount\)[\s\S]*demoDiceOutcomes\(diceCount\)/);
     expect(source).toMatch(/type="checkbox"[\s\S]*자동/);
@@ -103,5 +103,15 @@ describe('E5: manual and automatic coin and dice execution', () => {
     expect(css).toMatch(/prefers-reduced-motion:\s*reduce[\s\S]*\.die-pip::before\s*{\s*display:\s*none/);
     expect(css).toMatch(/prefers-reduced-motion:\s*reduce[\s\S]*\.die-pip\.is-on\s*{\s*background:\s*var\(--ink\)/);
     expect(source).not.toMatch(/#[\da-f]{3,8}\b/i);
+  });
+});
+
+describe('D-015 후속: 값은 던질 때만 바뀐다', () => {
+  it('E2/E3-PIN: 던지기와 개수 변경 외의 재렌더에서는 결과를 다시 뽑지 않는다', () => {
+    const source = readFileSync(new URL('./Effects.tsx', import.meta.url), 'utf8');
+    const demo = source.match(/function EffectDemo[\s\S]*?\n}/)?.[0] ?? '';
+    expect(demo).toMatch(/useMemo\(\(\) => children\(replayKey\), \[replayKey, \.\.\.deps\]\)/);
+    expect(source).toMatch(/deps=\{\[coinCount\]\}/);
+    expect(source).toMatch(/deps=\{\[diceCount\]\}/);
   });
 });

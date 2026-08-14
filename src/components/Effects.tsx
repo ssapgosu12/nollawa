@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useMemo, useState } from 'preact/hooks';
 
 export type CoinFace = 'H' | 'T';
 export type DieFace = 1 | 2 | 3 | 4 | 5 | 6;
@@ -45,8 +45,8 @@ export function DeckShuffle({ deckName, replayKey = 0 }: DeckShuffleProps) {
   </div>;
 }
 
-interface DemoProps { title: string; children: (replayKey: number) => ComponentChildren }
-function EffectDemo({ title, children }: DemoProps) {
+interface DemoProps { title: string; deps: readonly unknown[]; children: (replayKey: number) => ComponentChildren }
+function EffectDemo({ title, deps, children }: DemoProps) {
   const [replayKey, setReplayKey] = useState(0);
   const [automatic, setAutomatic] = useState(false);
   useEffect(() => {
@@ -57,7 +57,7 @@ function EffectDemo({ title, children }: DemoProps) {
   }, [automatic]);
   return <article class="effect-demo">
     <h2>{title}</h2>
-    {children(replayKey)}
+    {useMemo(() => children(replayKey), [replayKey, ...deps])}
     <div class="effect-controls"><button onClick={() => setReplayKey((value) => value + 1)}>던지기!</button><label><input type="checkbox" checked={automatic} onChange={(event) => setAutomatic(event.currentTarget.checked)} /> 자동</label></div>
   </article>;
 }
@@ -72,8 +72,8 @@ export function EffectsTestPage({ onBack }: { onBack: () => void }) {
       <label>동전 개수<select value={coinCount} onChange={(event) => setCoinCount(Number(event.currentTarget.value))}>{Array.from({ length: 12 }, (_, index) => <option value={index + 1}>{index + 1}</option>)}</select></label>
       <label>주사위 개수<select value={diceCount} onChange={(event) => setDiceCount(Number(event.currentTarget.value))}>{Array.from({ length: 6 }, (_, index) => <option value={index + 1}>{index + 1}</option>)}</select></label>
     </div>
-    <EffectDemo title="동전 던지기">{(replayKey) => <CoinResults outcomes={demoCoinOutcomes(coinCount)} replayKey={replayKey} />}</EffectDemo>
-    <EffectDemo title="주사위 굴리기">{(replayKey) => <DiceResults outcomes={demoDiceOutcomes(diceCount)} replayKey={replayKey} />}</EffectDemo>
+    <EffectDemo title="동전 던지기" deps={[coinCount]}>{(replayKey) => <CoinResults outcomes={demoCoinOutcomes(coinCount)} replayKey={replayKey} />}</EffectDemo>
+    <EffectDemo title="주사위 굴리기" deps={[diceCount]}>{(replayKey) => <DiceResults outcomes={demoDiceOutcomes(diceCount)} replayKey={replayKey} />}</EffectDemo>
     <article class="effect-demo"><h2>덱 섞기</h2><button onClick={() => setShuffleKey((value) => value + 1)}>덱 섞기</button>{shuffleKey > 0 && <DeckShuffle deckName="Nollawa 카드" replayKey={shuffleKey} />}</article>
   </section>;
 }
