@@ -1,0 +1,30 @@
+M3-FLEET-3-INTEGRATION-CORRECTION-R2 evidence
+
+CAUSAL HYPOTHESIS: 322eac2 stored correct scout, shot-plan, and ship state behind scalar target/projection surfaces; extending only those surfaces closes the three remaining REDs.
+EXPECTED FALSIFIER OBSERVATION: an owner projection still cannot render its scout, carousel changes retarget a queued flare impact, or final-submarine projection exposes none/all rather than exactly the submarine.
+OBSERVED: the falsifier was not observed in the three direct tests. FleetGame consumes owner-filtered projected scouts; serialized flare actions retain one authority-validated target id per impact; active-opponent projection exposes only the final unsunk submarine.
+
+VERDICT: GREEN
+POPULATION: total 3 named projection/per-impact identity gaps; GREEN 3; RED 0; NOT-SUPPORTED 0; NOT-YET 0; BLOCKED 0; UNKNOWN 0; uninspected remainder 0.
+COVERED: 3/3
+
+GAP 1 GREEN: after a spy scout, projectFleetState returns the cell and occupied boolean only to owner p1; p2 and an unidentified spectator receive an empty privateScouts array. FleetGame maps view.privateScouts to a visible SCOUT target/coordinate and OCCUPIED or EMPTY result. The reducer creates neither a public shot nor a presentation item.
+GAP 2 GREEN: a JSON-serialized flare action retained targets p2, p3, and p4 for its normal, flare, and flare impacts respectively. Authority rejected target arrays with 2/3 impacts, self, missing participant, dead participant, and a scalar/first-impact mismatch. Existing single-target flare compatibility and salvo multi-target behavior remained GREEN in the full suite.
+GAP 3 GREEN: before the final-submarine condition, an active opponent receives no ships. With only the submarine unsunk, that opponent receives exactly the submarine and its two cells, not the sunk unrelated ship. The owner still receives both ships, and an eliminated spectator still receives full boards.
+
+DIRECT TEST POPULATION: total 3; GREEN 3; RED 0; skipped 0; uninspected remainder 0. File: src/m3-fleet-3-integration-correction-r2.test.js.
+FOCUSED TEST POPULATION: total 9; GREEN 9; RED 0; skipped 0; uninspected remainder 0. Command: .\node_modules\.bin\vitest.cmd run src/m3-fleet-3-integration-correction-r2.test.js src/m3-fleet-3-correction.test.js src/m3-fleet-3-integration.test.js; 3/3 files passed.
+AUTOMATED TEST POPULATION: total 374; GREEN 374; RED 0; skipped 0; uninspected remainder 0. Command: .\node_modules\.bin\vitest.cmd run; 39/39 files passed.
+
+GATE POPULATION: total 4; GREEN 4; RED 0; uninspected remainder 0.
+GATE: npm ci --ignore-scripts exit 0; 47 packages added; 0 vulnerabilities.
+GATE: npm run check:terms exit 0; 64 files checked against 30 terms.
+GATE: npm run build exit 0; nested term check, TypeScript noEmit, and Vite production build passed; 37 modules transformed.
+GATE: .\node_modules\.bin\vitest.cmd run exit 0; 39/39 files and 374/374 tests passed.
+
+STRUCTURE POPULATION: total 4 ceilings; GREEN 4; RED 0; uninspected remainder 0.
+STRUCTURE: non-test src 3,723/3,800 across the exact 36-file rg --files src filtered population; CSS 264/700; relay/worker.js 273/314 and unchanged; direct dependencies 4/4 and unchanged.
+TASK FILE POPULATION: total 4; GREEN 4 task-owned; RED 0; uninspected remainder 0. Files: m3-fleet-3-integration-correction-r2.raw.txt, src/components/FleetGame.tsx, src/game/fleet.ts, src/m3-fleet-3-integration-correction-r2.test.js.
+PROTECTED IMPLEMENTATION PATH POPULATION: total 4 groups (docs, pre-existing collab13 content, relay, dependency manifests); GREEN 4 unchanged; RED 0; uninspected remainder 0. Protocol ACK and result-card writes are BOOT-mandated control-plane artifacts.
+PUSH: NOT-SUPPORTED and not performed.
+PHYSICAL-DEVICE/BROWSER POPULATION: total 2; NOT-YET 2; GREEN 0; RED 0; uninspected remainder 0. No physical-device or browser visual validation was performed.

@@ -1,0 +1,35 @@
+M3-FLEET-3-INTEGRATION pre-implementation evidence
+
+CAUSAL HYPOTHESIS: Integrating the accepted pure helpers behind an explicit variant mode can support simultaneous planning and sequential resolution without changing classic serialized behavior.
+EXPECTED FALSIFIER OBSERVATION: Classic snapshots/actions/tests change, or simultaneous multi-target plans cannot be resolved deterministically through the existing authority snapshot path.
+STATUS: Recorded before integration source changes.
+
+M3-FLEET-3-INTEGRATION final evidence
+
+VERDICT: GREEN
+POPULATION: total 3 acceptance groups; GREEN 3; RED 0; NOT-SUPPORTED 0; NOT-YET 0; BLOCKED 0; UNKNOWN 0; uninspected remainder 0.
+COVERED: 3/3
+
+ACCEPTANCE 7 GREEN: Living participants can queue and submit in any actor order. No shot is resolved before every living participant submits. Resolution uses the shared pre-resolution participant map, so two attackers hitting the same target cell in the round both receive HIT-class results. Presentation is stored in participant order as alternating attacker-to-target caption and HIT/MISS entries.
+ACCEPTANCE 8 GREEN: Elimination is finalized after the round; participant and board populations are retained. An eliminated viewer projects every fleet. One survivor wins, while zero survivors sets draw=true and winnerId=null.
+ACCEPTANCE 9 GREEN: One participant draft can contain impacts against multiple enemies; reset-variant-plan clears the entire draft without changing the selected target. The UI contains the central `모든 발 회수`, a 3+-only carousel, retained eliminated targets, upper-left owner labels, tag tail labels and invalid-zone flash, five reused textures, preview-confirm, exact hit/miss/partial marks, pale-gray ships, and no score panel.
+
+PATH POPULATION: total 2 catalog paths; GREEN 2 (classic fleet, fleet-variant); RED 0; uninspected 0. Both local App start functions and remote lobby/opaque snapshot paths are exercised; relay/worker.js remains game-opaque and unchanged.
+CLASSIC FALSIFIER: GREEN; the expected falsifier was not observed. createFleetState still serializes the classic 9x9, 2-3-3-4-5, placement-first state without variant round fields; classic shoot remains one action per turn and the pre-existing classic acceptance tests are GREEN.
+HYPOTHESIS EVIDENCE: GREEN; variant helper integration did not require a second reducer or texture set, and multi-target simultaneous plans resolve deterministically through FleetState snapshots.
+
+GATE POPULATION: total 4; GREEN 4; RED 0; uninspected 0.
+GATE: `npm ci --ignore-scripts` exit 0; 47 packages installed, 0 vulnerabilities.
+GATE: `npm run check:terms` exit 0; 64 files checked against 30 terms.
+GATE: `npm run build` exit 0; terms, TypeScript noEmit, and Vite production build passed.
+GATE: `.\node_modules\.bin\vitest.cmd run` exit 0; 37/37 files and 368/368 tests passed.
+
+ACCEPTANCE TEST POPULATION: total 3; GREEN 3; RED 0; uninspected 0. Evidence: src/m3-fleet-3-integration.test.js.
+FULL TEST POPULATION: total 368; GREEN 368; RED 0; skipped 0; uninspected 0.
+STRUCTURE POPULATION: total 4 ceilings; GREEN 4; RED 0; uninspected 0.
+STRUCTURE: 3,615 non-test lines across the exact 36-file `rg --files src` population, limit 3,800; CSS 264/700; relay/worker.js 273/314; direct dependencies 4/4 (1 runtime + 3 dev).
+
+TASK FILE POPULATION: total 11; GREEN 11 task-owned; RED 0; uninspected 0. Files are m3-fleet-3-integration.raw.txt, src/m3-fleet-3-integration.test.js, src/game/fleet.ts, src/components/FleetGame.tsx, src/game/catalog.ts, src/App.tsx, src/lobby/room-state.ts, src/lobby/RoomLobby.tsx, src/styles.css, src/ai/game-ai.test.ts, and src/m1-games-2.acceptance.test.tsx.
+PROTECTED PATH POPULATION: total 2 groups (docs, collab13); GREEN 2; RED 0; uninspected 0. No protected path was modified.
+PUSH: NOT-SUPPORTED by the card and not performed.
+PHYSICAL-DEVICE/BROWSER POPULATION: total 2; NOT-YET 2; GREEN 0; RED 0; uninspected 0. No physical-device or browser visual validation was performed or claimed.
