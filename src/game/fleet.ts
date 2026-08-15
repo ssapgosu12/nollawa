@@ -99,7 +99,7 @@ export type FleetAction =
   | { type: 'place-ship'; shipIndex: number; origin: FleetCell; orientation: FleetOrientation }
   | { type: 'rotate-ship'; shipIndex: number }
   | { type: 'complete-placement' }
-  | { type: 'queue-variant-shot'; targetParticipantId: string; plan: FleetShotPlan }
+  | { type: 'queue-variant-shot'; targetParticipantId: string; targetParticipantIds?: readonly string[]; plan: FleetShotPlan }
   | { type: 'scout-variant-cell'; targetParticipantId: string; cell: FleetCell }
   | { type: 'reset-variant-plan' }
   | { type: 'submit-variant-plan' }
@@ -329,10 +329,15 @@ function queueVariantShot(state: FleetState, actorId: string, action: Extract<Fl
   }
   let planned;
   try { planned = planFleetShots(action.plan); } catch { return state; }
+  const suppliedTargets = action.targetParticipantIds;
+  if (suppliedTargets !== undefined && (action.plan.type !== 'flare' || !Array.isArray(suppliedTargets) || suppliedTargets.length !== planned.length)) return state;
+  const targetIds = suppliedTargets ?? planned.map(() => target.id);
+  const impactTargets = targetIds.map((id) => state.participants.find((participant) => participant.id === id));
+  if (targetIds[0] !== target.id || impactTargets.some((participant) => !participant?.alive || participant.id === actorId)) return state;
   const rangePlan = action.plan.type === 'explosive' || action.plan.type === 'scatter' || (action.plan.type === 'buckshot' && action.plan.choice === 'buckshot');
   if (!rangePlan && planned.some(({ cell }) => !validCell(cell, state.boardSize))) return state;
   const recordedType: FleetShotType = use === 'carrier' ? 'bonus-normal' : use === 'tracer' ? 'tracer' : use === 'pressure' ? 'high-explosive' : shotType;
-  const impacts = planned.filter(({ cell }) => validCell(cell, state.boardSize)).map(({ cell, kind }) => ({ targetParticipantId: target.id, cell, kind, shotType: recordedType }));
+  const impacts = planned.map(({ cell, kind }, index) => ({ targetParticipantId: targetIds[index]!, cell, kind, shotType: recordedType })).filter(({ cell }) => validCell(cell, state.boardSize));
   if (impacts.length === 0 && !rangePlan) return state;
   const next: FleetRoundPlan = { participantId: actorId, impacts: [...(current?.impacts ?? []), ...impacts], submitted: false, uses: [...uses, { kind: use, targetParticipantId: target.id }] };
   return { ...state, roundPlans: [...(state.roundPlans ?? []).filter(({ participantId }) => participantId !== actorId), next] };
@@ -481,10 +486,12 @@ export function projectFleetState(state: FleetState, viewerParticipantId?: strin
     ...state,
     participants: state.participants.map((participant) => {
       const common = { id: participant.id, name: participant.name, placementComplete: participant.placementComplete, alive: participant.alive };
-      return participant.id === viewerParticipantId || showEveryFleet || state.revealedFleetIds?.includes(participant.id) ? {
+      const fullFleet = participant.id === viewerParticipantId || showEveryFleet || state.revealedFleetIds?.includes(participant.id);
+      const unsunk = participant.ships.filter(({ sunk }) => !sunk), finalSubmarine = state.mode === 'variant' && viewer?.alive && participant.id !== viewerParticipantId && unsunk.length === 1 && unsunk[0]!.special === 'submarine' ? unsunk[0] : null;
+      return fullFleet || finalSubmarine ? {
         ...common,
-        ships: participant.ships.map((ship) => ({ ...ship, cells: ship.cells.map((cell) => ({ ...cell })) })),
-        ...(participant.variantSetup ? { variantSetup: {
+        ships: (fullFleet ? participant.ships : [finalSubmarine!]).map((ship) => ({ ...ship, cells: ship.cells.map((cell) => ({ ...cell })) })),
+        ...(fullFleet && participant.variantSetup ? { variantSetup: {
           ...participant.variantSetup,
           presetOffers: participant.variantSetup.presetOffers.map((preset) => ({ ...preset, specialShipOffers: [...preset.specialShipOffers] })),
           selectedSpecialShips: [...participant.variantSetup.selectedSpecialShips],
