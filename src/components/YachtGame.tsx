@@ -44,6 +44,7 @@ export function deriveYachtDieReplayKeys(events: readonly YachtInputEvent[]): re
 interface Props {
   events: readonly YachtInputEvent[];
   actorId: string | null;
+  viewerId: string | null;
   local?: boolean;
   onAction: (action: YachtTurnAction) => void;
   onUndo: () => void;
@@ -51,8 +52,8 @@ interface Props {
   random?: () => number;
 }
 
-export function YachtGame({ events, actorId, local = false, onAction, onUndo, onExit, random = Math.random }: Props) {
-  const view = yachtProjection(events, actorId ?? undefined), current = view.participants.find(({ id }) => id === view.currentParticipantId)!;
+export function YachtGame({ events, actorId, viewerId, local = false, onAction, onUndo, onExit, random = Math.random }: Props) {
+  const view = yachtProjection(events, viewerId ?? undefined), current = view.participants.find(({ id }) => id === view.currentParticipantId)!;
   const [sheetOpen, setSheetOpen] = useState(false), [selected, setSelected] = useState<YachtCategory | null>(null);
   const forced = current.phase !== 'rolling', canAct = actorId === current.id && !view.complete;
   const dieReplayKeys = deriveYachtDieReplayKeys(events);
@@ -65,7 +66,7 @@ export function YachtGame({ events, actorId, local = false, onAction, onUndo, on
       {current.dice ? <DiceResults outcomes={current.dice} replayKey={dieReplayKeys.reduce((latest, identity) => Math.max(latest, identity), 0)} replayKeys={dieReplayKeys} selected={current.held.map((held) => !held)} disabled={!canAct || forced} onSelect={(index) => onAction({ type: 'toggle-hold', index })} /> : <p>주사위를 굴려 시작하세요.</p>}
       <div class="yacht-roll-actions"><button class="primary" disabled={!canAct || forced} onClick={roll}>{current.rolls ? '다시 굴리기' : '굴리기'}</button><button disabled={!canAct || forced || !current.dice} onClick={() => onAction({ type: 'stop' })}>확정!</button>{local && <button disabled={events.length < 2} onClick={onUndo}>되돌리기</button>}</div>
     </div>
-    {(sheetOpen || forced) && <div class="yacht-sheet" aria-label="점수판"><table><thead><tr><th>항목</th>{view.participants.map((participant, index) => { const self = actorId === participant.id; return <th class={yachtColumnClass(index + 1, participant.id === current.id, self)} aria-current={participant.id === current.id ? 'true' : undefined} key={participant.id}>{participant.name}{self && <span class="yacht-self-marker">나</span>}</th>; })}</tr></thead><tbody>
+    {(sheetOpen || forced) && <div class="yacht-sheet" aria-label="점수판"><table><thead><tr><th>항목</th>{view.participants.map((participant, index) => { const self = viewerId === participant.id; return <th class={yachtColumnClass(index + 1, participant.id === current.id, self)} aria-current={participant.id === current.id ? 'true' : undefined} key={participant.id}>{participant.name}{self && <span class="yacht-self-marker">나</span>}</th>; })}</tr></thead><tbody>
       {YACHT_CATEGORIES.map((category) => <tr key={category}><th>{LABELS[category]}</th>{view.participants.map((participant) => { const used = participant.scoreCard.scores[category], active = participant.id === current.id, cell = yachtScoreCell(used, participant.previews[category], active, selected === category, 'score-preview'); return <td key={participant.id}><button class={cell.className} disabled={!canAct || !forced || !active || used !== undefined} onClick={() => setSelected(category)}>{cell.value}</button></td>; })}</tr>)}
       <tr><th>상단 보너스</th>{view.participants.map((participant) => <td key={participant.id}>{participant.scoreCard.upperBonus}</td>)}</tr><tr><th>합계</th>{view.participants.map((participant) => <td key={participant.id}>{participant.scoreCard.total}</td>)}</tr>
     </tbody></table><button class="primary yacht-register" disabled={!canAct || !forced || selected === null} onClick={() => selected && onAction({ type: 'register', category: selected })}>등록</button></div>}
