@@ -1,4 +1,4 @@
-import { actionForMove, legalGameMoves, moveKey, reduceGame, terminalGame, type GameId, type GameMove, type GameState } from '../game/catalog';
+import { actionForMove, legalGameMoves, moveKey, reduceGame, terminalGame, type AiGameId, type GameMove, type GameState } from '../game/catalog';
 import type { Seat } from '../game/samok';
 const WIN = 1_000_000, other = (seat: Seat): Seat => seat === 1 ? 2 : 1;
 export interface GameAdapter {
@@ -19,15 +19,15 @@ function longest(board: readonly (readonly number[])[], seat: Seat): number {
   for (let row = 0; row < board.length; row += 1) for (let column = 0; column < (board[row]?.length ?? 0); column += 1) if (board[row]?.[column] === seat) for (const [dr, dc] of [[1, 0], [0, 1], [1, 1], [1, -1]] as const) { let count = 1; while (board[row + dr * count]?.[column + dc * count] === seat) count += 1; best = Math.max(best, count); }
   return best;
 }
-const base = (id: GameId, evaluate: GameAdapter['evaluate']): GameAdapter => ({
+const base = (id: AiGameId, evaluate: GameAdapter['evaluate']): GameAdapter => ({
   legalMoves: (state) => legalGameMoves(id, state), apply: (state, move) => reduceGame(id, state, actionForMove(id, move)), terminal: (state) => terminalGame(id, state), evaluate,
   key: (state) => `${state.turn}|${'stonesLeft' in state ? state.stonesLeft : ''}|${state.board.flat().join('')}`, blockable: true,
 });
-const lineAdapter = (id: GameId, target: number): GameAdapter => ({ ...base(id, (state, seat) => lineValue(state.board, seat, target)), forcing: (before, after) => longest(after.board, before.turn) >= target - 1 });
-export const GAME_ADAPTERS: Record<GameId, GameAdapter> = {
+const lineAdapter = (id: AiGameId, target: number): GameAdapter => ({ ...base(id, (state, seat) => lineValue(state.board, seat, target)), forcing: (before, after) => longest(after.board, before.turn) >= target - 1 });
+export const GAME_ADAPTERS: Record<AiGameId, GameAdapter> = {
   samok: lineAdapter('samok', 4), omok: lineAdapter('omok', 5), yukmok: lineAdapter('yukmok', 6),
   reversi: { ...base('reversi', (state, seat) => { const flat = state.board.flat(), corners = [flat[0], flat[7], flat[56], flat[63]]; return flat.filter((cell) => cell === seat).length - flat.filter((cell) => cell === other(seat)).length + 20 * (corners.filter((cell) => cell === seat).length - corners.filter((cell) => cell === other(seat)).length); }), blockable: false, exactDepth: (state) => { const empty = state.board.flat().filter((cell) => cell === 0).length; return empty <= 10 ? empty : null; } },
 };
 for (const adapter of Object.values(GAME_ADAPTERS)) { const heuristic = adapter.evaluate; adapter.evaluate = (state, seat) => { const end = adapter.terminal(state); return end.ended ? end.draw ? 0 : end.winner === seat ? WIN : -WIN : heuristic(state, seat); }; }
-export const adapterFor = (id: GameId): GameAdapter => GAME_ADAPTERS[id];
-export const adapterMoveKeys = (id: GameId, state: GameState): string[] => adapterFor(id).legalMoves(state).map(moveKey);
+export const adapterFor = (id: AiGameId): GameAdapter => GAME_ADAPTERS[id];
+export const adapterMoveKeys = (id: AiGameId, state: GameState): string[] => adapterFor(id).legalMoves(state).map(moveKey);

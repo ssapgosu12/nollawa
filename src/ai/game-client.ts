@@ -1,6 +1,6 @@
-import { actionForMove, legalGameMoves, moveKey, type GameId, type GameMove, type GameState } from '../game/catalog';
+import { actionForMove, legalGameMoves, moveKey, type AiGameId, type GameMove, type GameState } from '../game/catalog';
 import { fallbackGameMove } from './game-ai';
-export function requestGameMove(game: GameId, state: GameState, budgetMs: number): Promise<GameMove | null> {
+export function requestGameMove(game: AiGameId, state: GameState, budgetMs: number): Promise<GameMove | null> {
   const fallback = fallbackGameMove(game, state), legal = legalGameMoves(game, state).map(moveKey);
   return new Promise((resolve) => {
     let worker: Worker; try { worker = new Worker(new URL('./game.worker.ts', import.meta.url)); } catch { resolve(fallback); return; }
@@ -11,4 +11,4 @@ export function requestGameMove(game: GameId, state: GameState, budgetMs: number
     worker.postMessage({ game, state, budgetMs });
   });
 }
-export const requestedAction = (game: GameId, move: GameMove | null) => move === null ? null : actionForMove(game, move);
+export const requestedAction = (game: AiGameId, move: GameMove | null) => move === null ? null : actionForMove(game, move);

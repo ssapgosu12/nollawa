@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOARD_GAME_CATALOG, GAME_CATALOG, actionForMove, initGame, legalGameMoves, moveKey, reduceGame, type GameId, type GameState } from '../game/catalog';
+import { BOARD_GAME_CATALOG, GAME_CATALOG, actionForMove, initGame, legalGameMoves, moveKey, reduceGame, type AiGameId, type GameId, type GameState } from '../game/catalog';
 import type { GridCell } from '../game/line-grid';
 import { BoardGame } from '../components/BoardGame';
 import { GridBoard } from '../components/BoardGrid';
@@ -50,7 +50,7 @@ describe('M1 shared deterministic search core', () => {
 });
 
 describe('M1 game-list selection to renderer/local/AI/remote wiring', () => {
-  it.each(['omok', 'yukmok', 'reversi'] as GameId[])('%s is independently wired end to end', (id) => {
+  it.each(['omok', 'yukmok', 'reversi'] as AiGameId[])('%s is independently wired end to end', (id) => {
     const selected = GAME_CATALOG.find((game) => game.id === id); expect(selected?.id).toBe(id);
     const initial = initGame(id), rendered = BoardGame({ game: id, state: initial, onMove: () => undefined }); expect(rendered.type).toBe(GridBoard);
     const move = chooseGameMoveDetailed(id, initial, 4, (() => { let tick = 0; return () => tick += 1; })()).move!; expect(reduceGame(id, initial, actionForMove(id, move))).not.toBe(initial);
@@ -58,7 +58,7 @@ describe('M1 game-list selection to renderer/local/AI/remote wiring', () => {
     expect(applyAuthorityGameAction(id, initial, actionForMove(id, move), { id: 'seat-two', seat: 2 }, true)).toBe(initial);
   });
 
-  it.each(['omok', 'yukmok', 'reversi'] as GameId[])('%s remote rematch waits for the authoritative room population', (id) => {
+  it.each(['omok', 'yukmok', 'reversi'] as AiGameId[])('%s remote rematch waits for the authoritative room population', (id) => {
     const room = { code: 'ABC-67', hostId: 'one', game: id, teamNames: ['왼쪽', '오른쪽'] as [string, string], settings: { aiOpponent: false }, phase: 'play' as const, participants: [{ id: 'one', slot: 1, name: '하나', ready: true, present: true }, { id: 'two', slot: 2, name: '둘', ready: true, present: true }] };
     const terminal = { ...initGame(id), winner: 1 as const }, first = applyAuthorityGameRematch(id, terminal, { id: 'one', seat: 1 }, room, true);
     expect(first).toMatchObject({ winner: 1, rematchConsent: ['one'] });
@@ -67,7 +67,7 @@ describe('M1 game-list selection to renderer/local/AI/remote wiring', () => {
 
   it('people, name, and narrowing multi-tag filters compose', () => {
     expect(filterGames('', '1', []).map((game) => game.id)).toEqual(['yacht']);
-    expect(filterGames('', '2', [])).toHaveLength(7);
+    expect(filterGames('', '2', [])).toHaveLength(8);
     expect(filterGames('', '3-4', []).map((game) => game.id)).toEqual(['yacht', 'fleet-variant']);
     expect(filterGames('리버시', '2', []).map((game) => game.id)).toEqual(['reversi']);
     expect(filterGames('', 'all', ['봇 있음', '5분 이내']).map((game) => game.id)).toEqual(['samok']);

@@ -146,7 +146,7 @@ label { display: block; font-weight: 700; }
 .board-background { fill: #fff; stroke: var(--line); }
 .board-cell { fill: var(--paper); stroke: var(--line); }
 .board-hit-area { fill: transparent; }
-.roulette-highlight { fill: var(--accent); opacity: .55; pointer-events: none; } .move-preview { opacity: .5; pointer-events: none; } .last-turn-marker { fill: var(--ink); stroke: var(--paper); stroke-width: 6px; paint-order: stroke; pointer-events: none; }
+.roulette-highlight { fill: var(--accent); opacity: .55; pointer-events: none; } .move-preview { opacity: .5; pointer-events: none; } .dead-stone { opacity: .35; } .last-turn-marker { fill: var(--ink); stroke: var(--paper); stroke-width: 6px; paint-order: stroke; pointer-events: none; }
 .vote-dot { fill: var(--ink); stroke: var(--paper); stroke-width: 3px; pointer-events: none; }
 .vote-dot.own-vote.player-1 { fill: var(--player-1); }
 .vote-dot.own-vote.player-2 { fill: var(--player-2); }
@@ -162,6 +162,7 @@ label { display: block; font-weight: 700; }
 .piece-shape { dominant-baseline: middle; font-size: 42px; font-weight: 900; fill: var(--ink); pointer-events: none; }
 .piece-number { dominant-baseline: middle; font-size: 21px; font-weight: 900; fill: var(--ink); stroke: var(--paper); stroke-width: 4px; paint-order: stroke; pointer-events: none; }
 .hint { margin: .7rem auto; text-align: center; color: var(--muted); font-size: .9rem; } .confirm-move { display: block; min-width: 8rem; margin: .7rem auto 0; }
+.baduk-pass { display: block; min-width: 8rem; margin: .7rem auto 0; } .baduk-scoring { margin: .75rem 0; padding: .8rem; border: 2px solid var(--line); border-radius: 14px; text-align: center; } .baduk-scoring p { margin: .45rem 0; } .baduk-score-seats { display: flex; justify-content: center; gap: .5rem; } .baduk-scoring-hint { text-align: center; color: var(--muted); }
 .restart { display: block; margin: .75rem auto; }
 .rematch { text-align: center; }
 .rematch p { margin: .35rem 0; }
@@ -247,7 +248,7 @@ label { display: block; font-weight: 700; }
 @media (min-width: 850px) and (orientation: landscape) {
   .play-layout { display: grid; grid-template-columns: minmax(280px, 620px) minmax(180px, 1fr); column-gap: 1.5rem; align-items: center; }
   .board { grid-row: 1 / span 3; margin: 0; }
-  .game-status, .confirm-move, .hint, .rematch { grid-column: 2; }
+  .game-status, .confirm-move, .baduk-pass, .baduk-scoring, .baduk-scoring-hint, .hint, .rematch { grid-column: 2; }
   .game-status { display: block; }
   .game-status button { margin-top: 1rem; }
 }
