@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { App, planHistorySync, remoteBackTransition, remoteMatchRoute, type AppHistoryRoute } from './App';
+import { App, bindAppPopState, planHistorySync, remoteBackTransition, remoteMatchRoute, type AppHistoryRoute } from './App';
 import { GAME_CATALOG, type CatalogGameId } from './game/catalog';
 
 const remoteGames: { game: CatalogGameId; label: string; route: 'play' | 'yacht' }[] = [
@@ -43,7 +43,8 @@ describe('M2-YACHT-2 acceptance 8: deterministic remote browser-back routes', ()
     expect(planHistorySync('lobby', 'games')).toEqual({ type: 'push', routes: ['games'] });
     expect(planHistorySync('play', 'lobby')).toEqual({ type: 'go', delta: -1, route: 'lobby' });
     expect(planHistorySync('lobby', 'lobby')).toEqual({ type: 'none' });
-    expect(App.toString()).toMatch(/addEventListener\(["']popstate["']/);
+    expect(App.toString()).toContain('bindAppPopState');
+    expect(bindAppPopState.toString()).toMatch(/addEventListener\(["']popstate["']/);
     expect(App.toString()).toContain('window.history.pushState');
   });
 });

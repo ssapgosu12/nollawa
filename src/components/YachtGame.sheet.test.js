@@ -13,9 +13,9 @@ describe('Yacht score sheet parent acceptance', () => {
     expect(css).toMatch(/\.yacht-sheet \{[^}]*position: fixed;[^}]*top: 15svh;[^}]*bottom: 0;/);
     expect(css).toMatch(/\.yacht-sheet-handle \{[^}]*z-index: 10;/);
     expect(css).toMatch(/\.yacht-sheet-handle:disabled \{ display: none; \}/);
-    expect(component).toContain("sheetOpen || forced ? ' sheet-active' : ''");
+    expect(component).toContain("sheetOpen ? ' sheet-active' : ''");
     expect(component).toContain('disabled={forced}');
-    expect(component).toContain('setSheetOpen((open) => !open)');
+    expect(component).toContain("onSheetOpenChange(nextYachtSheetOpen(sheetOpen, 'manual-toggle'))");
   });
 
   it('acceptance 6 keeps all current unused previews gray including zero and only selection yellow', () => {

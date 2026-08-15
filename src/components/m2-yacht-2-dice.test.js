@@ -17,8 +17,8 @@ describe('M2-YACHT-2-DICE parent acceptance 1-4', () => {
     expect(yachtSource).not.toMatch(/yacht-holds|번 \{die\} ·|남김/);
   });
 
-  it('M2-YACHT-2-DICE-2-SELECTED-SPRING-TRANSFORM: moves selected reroll dice by their own width and rotates them on one reversible 70ms spring transition', () => {
-    expect(css).toMatch(/\.yacht-die-button \{[^}]*transition:\s*transform 70ms cubic-bezier\(\.2, 1\.4, \.4, 1\)/);
+  it('M2-YACHT-2-DICE-2-SELECTED-SPRING-TRANSFORM: moves selected reroll dice by their own width and rotates them on one reversible 120ms spring transition', () => {
+    expect(css).toMatch(/\.yacht-die-button \{[^}]*transition:\s*transform 120ms cubic-bezier\(\.2, 1\.4, \.4, 1\)/);
     expect(css).toMatch(/\.yacht-die-button\.reroll-selected \{[^}]*transform:\s*translateY\(-70%\) rotate\(15deg\)/);
     expect(css.match(/\.yacht-die-button\.reroll-selected \{[^}]*\}/)?.[0]).not.toMatch(/transition/);
   });
