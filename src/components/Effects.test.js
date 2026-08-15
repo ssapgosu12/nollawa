@@ -55,37 +55,37 @@ describe('E3: caller-supplied six-sided dice results', () => {
   it('E3-FALL-FREEZE: keeps the first real-die pattern unchanged throughout the full fall', () => {
     const timeline = deriveDiceTimeline(DICE_DEFAULTS);
     const generated = buildDiceTimeline('dice-test', timeline);
-    expect(timeline).toMatchObject({ fallEnd: 250, firstChange: 270, total: 520 });
+    expect(timeline).toMatchObject({ fallEnd: 300, firstChange: 350, total: 620 });
     expect(timeline.firstChange).toBeGreaterThan(timeline.fallEnd);
-    expect(generated).toMatch(/@keyframes dice-test-pip-10 \{ 0% \{ opacity: 1; \} 51\.9231% \{ opacity: 0; \}/);
-    expect(generated).not.toMatch(/@keyframes dice-test-pip-[01]{2}[\s\S]*48\.0769% \{ opacity:/);
+    expect(generated).toMatch(/@keyframes dice-test-pip-10 \{ 0% \{ opacity: 1; \} 56\.4516% \{ opacity: 0; \}/);
+    expect(generated).not.toMatch(/@keyframes dice-test-pip-[01]{2}[\s\S]*48\.3871% \{ opacity:/);
   });
 
   it('E3-TWO-UNEQUAL-BOUNCES: lands, makes exactly two peaks, and keeps the first peak higher', () => {
     const timeline = deriveDiceTimeline(DICE_DEFAULTS);
     const generated = buildDiceTimeline('dice-test', timeline);
-    expect(timeline).toEqual({ fallEnd: 250, firstPeak: 335, firstBounceEnd: 420, secondPeak: 470, motionEnd: 520, firstChange: 270, finalChange: 440, total: 520 });
+    expect(timeline).toEqual({ fallEnd: 300, firstPeak: 400, firstBounceEnd: 500, secondPeak: 560, motionEnd: 620, firstChange: 350, finalChange: 550, total: 620 });
     expect(generated.match(/translateY\(-(?:18|8)px\)/g)).toEqual(['translateY(-18px)', 'translateY(-8px)']);
     expect(18).toBeGreaterThan(8);
-    expect(generated).toMatch(/48\.0769%[^}]*translateY\(0\)[\s\S]*80\.7692%[^}]*translateY\(0\)[\s\S]*100%[^}]*translateY\(0\)/);
+    expect(generated).toMatch(/48\.3871%[^}]*translateY\(0\)[\s\S]*80\.6452%[^}]*translateY\(0\)[\s\S]*100%[^}]*translateY\(0\)/);
   });
 
   it('E3-TWO-DELAYED-CHANGES-FINAL-OWNERSHIP: changes the configured delay after each impact and ends at the supplied d6 face', () => {
     const timeline = deriveDiceTimeline(DICE_DEFAULTS);
-    expect(timeline.firstChange - timeline.fallEnd).toBe(20);
-    expect(timeline.finalChange - timeline.firstBounceEnd).toBe(20);
+    expect(timeline.firstChange - timeline.fallEnd).toBe(50);
+    expect(timeline.finalChange - timeline.firstBounceEnd).toBe(50);
     const patterns = [1, 2, 3, 4, 5, 6].map((face) => deriveDicePatterns(face));
     expect(patterns).toEqual([[2, 3, 1], [3, 4, 2], [4, 5, 3], [5, 6, 4], [6, 1, 5], [1, 2, 6]]);
     expect(patterns.every(([first, second, final]) => first !== final && second !== final && first !== second)).toBe(true);
     const rendered = children(DiceResults({ outcomes: [1, 2, 3, 4, 5, 6], replayKey: 9 })).flat(Infinity).filter((node) => node.props.class === 'effect-die');
     expect(rendered.map((die) => die.props['data-patterns'])).toEqual(['2,3,1', '3,4,2', '4,5,3', '5,6,4', '6,1,5', '1,2,6']);
     expect(rendered.map((die) => children(die).filter((pip) => pip.props.class.endsWith(' is-on')).length)).toEqual([1, 2, 3, 4, 5, 6]);
-    expect(buildDiceTimeline('dice-test', timeline)).toMatch(/51\.9231% \{ opacity:[^}]+\} 84\.6154%, 100% \{ opacity: 0; \}/);
-    expect(buildDiceTimeline('dice-test', timeline)).toMatch(/@keyframes dice-test-final \{ 0% \{ background: transparent; \} 84\.6154%, 100% \{ background: var\(--ink\); \} \}/);
+    expect(buildDiceTimeline('dice-test', timeline)).toMatch(/56\.4516% \{ opacity:[^}]+\} 88\.7097%, 100% \{ opacity: 0; \}/);
+    expect(buildDiceTimeline('dice-test', timeline)).toMatch(/@keyframes dice-test-final \{ 0% \{ background: transparent; \} 88\.7097%, 100% \{ background: var\(--ink\); \} \}/);
   });
 
   it('E3-FOUR-SLIDER-WIRING: exposes only the four required defaults and routes every value into generated timing', () => {
-    expect(DICE_DEFAULTS).toEqual({ fallMs: 250, firstBounceMs: 170, secondBounceMs: 100, pipChangeDelayMs: 20 });
+    expect(DICE_DEFAULTS).toEqual({ fallMs: 300, firstBounceMs: 200, secondBounceMs: 120, pipChangeDelayMs: 50 });
     expect(DICE_CONTROLS.map(([key]) => key)).toEqual(['fallMs', 'firstBounceMs', 'secondBounceMs', 'pipChangeDelayMs']);
     const baseline = buildDiceTimeline('dice-test', deriveDiceTimeline(DICE_DEFAULTS));
     for (const [key] of DICE_CONTROLS) {
