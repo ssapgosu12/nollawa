@@ -128,3 +128,32 @@ describe('M3-FLEET-2 UI correction population 6', () => {
     expect(css).toMatch(/\.fleet-ship-picker button\.selected[^}]*background:\s*var\(--accent\)/);
   });
 });
+
+describe('M3-FLEET-2 exact texture geometry correction population 3', () => {
+  const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+  const ruleBody = (selector) => css.match(new RegExp(`${selector}\\s*\\{([^}]*)\\}`))?.[1] ?? '';
+
+  it('1/3 places the wide-body single horizontal rule at y=90%', () => {
+    const wideBody = ruleBody('\\.fleet-ship-texture\\.texture-wide-body::before');
+    expect(wideBody).toMatch(/inset:\s*0\s+0\s+10%/);
+    expect(wideBody.match(/border-(?:top|bottom)/g)).toEqual(['border-bottom']);
+    expect(wideBody).not.toMatch(/inset:\s*0\s*;/);
+  });
+
+  it('2/3 bounds the centered radius-40% right bow half-circle at x=50%-90% and y=10%-90%', () => {
+    const connector = ruleBody('\\.fleet-ship-texture\\.texture-bow::before,\\s*\\.fleet-ship-texture\\.texture-stern::before');
+    const bow = ruleBody('\\.fleet-ship-texture\\.texture-bow::after');
+    expect(connector).toMatch(/top:\s*10%;\s*right:\s*50%;\s*bottom:\s*10%;\s*left:\s*0/);
+    expect(bow).toMatch(/top:\s*10%;\s*right:\s*10%;\s*bottom:\s*10%;\s*left:\s*50%/);
+    expect(bow).toMatch(/border-radius:\s*0\s+100%\s+100%\s+0\s*\/\s*0\s+50%\s+50%\s+0/);
+    expect(bow).not.toMatch(/width:\s*80%/);
+  });
+
+  it('3/3 joins the centered height-80% stern half-square to the same x=50% connectors', () => {
+    const connector = ruleBody('\\.fleet-ship-texture\\.texture-bow::before,\\s*\\.fleet-ship-texture\\.texture-stern::before');
+    const stern = ruleBody('\\.fleet-ship-texture\\.texture-stern::after');
+    expect(connector).toMatch(/right:\s*50%/);
+    expect(stern).toMatch(/top:\s*10%;\s*right:\s*10%;\s*bottom:\s*10%;\s*left:\s*50%/);
+    expect(stern).not.toMatch(/right:\s*10%;\s*width:\s*40%/);
+  });
+});

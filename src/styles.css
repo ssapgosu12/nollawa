@@ -107,10 +107,10 @@ label { display: block; font-weight: 700; }
 .fleet-ship-texture { position: absolute; z-index: 1; inset: 0; transform-origin: center; pointer-events: none; }
 .fleet-ship-texture::before, .fleet-ship-texture::after { position: absolute; content: ""; }
 .fleet-ship-texture.texture-body::before { inset: 10% 0; border-top: 2px solid var(--fleet-ship-line); border-bottom: 2px solid var(--fleet-ship-line); background: var(--fleet-ship-fill); }
-.fleet-ship-texture.texture-wide-body::before { inset: 0; border-bottom: 2px solid var(--fleet-ship-line); background: var(--fleet-ship-fill); }
-.fleet-ship-texture.texture-bow::before, .fleet-ship-texture.texture-stern::before { top: 10%; right: 40%; bottom: 10%; left: 0; border-top: 2px solid var(--fleet-ship-line); border-bottom: 2px solid var(--fleet-ship-line); background: var(--fleet-ship-fill); }
-.fleet-ship-texture.texture-bow::after { top: 10%; right: 10%; width: 80%; height: 80%; border: 2px solid var(--fleet-ship-line); border-left: 0; border-radius: 0 50% 50% 0; background: var(--fleet-ship-fill); }
-.fleet-ship-texture.texture-stern::after { top: 10%; right: 10%; width: 40%; height: 80%; border: 2px solid var(--fleet-ship-line); border-left: 0; background: var(--fleet-ship-fill); }
+.fleet-ship-texture.texture-wide-body::before { inset: 0 0 10%; border-bottom: 2px solid var(--fleet-ship-line); background: var(--fleet-ship-fill); }
+.fleet-ship-texture.texture-bow::before, .fleet-ship-texture.texture-stern::before { top: 10%; right: 50%; bottom: 10%; left: 0; border-top: 2px solid var(--fleet-ship-line); border-bottom: 2px solid var(--fleet-ship-line); background: var(--fleet-ship-fill); }
+.fleet-ship-texture.texture-bow::after { top: 10%; right: 10%; bottom: 10%; left: 50%; border: 2px solid var(--fleet-ship-line); border-left: 0; border-radius: 0 100% 100% 0 / 0 50% 50% 0; background: var(--fleet-ship-fill); }
+.fleet-ship-texture.texture-stern::after { top: 10%; right: 10%; bottom: 10%; left: 50%; border: 2px solid var(--fleet-ship-line); border-left: 0; background: var(--fleet-ship-fill); }
 .fleet-ship-texture.texture-corner::before { inset: 10% 0 0 10%; border-top: 2px solid var(--fleet-ship-line); border-left: 2px solid var(--fleet-ship-line); border-radius: 35% 0 0; background: var(--fleet-ship-fill); }
 .fleet-shot-mark { position: absolute; z-index: 3; inset: 0; display: grid; place-items: center; font-size: clamp(1rem, 4vw, 1.45rem); font-weight: 1000; line-height: 1; pointer-events: none; }
 .fleet-shot-mark.hit { color: var(--fleet-hit); }
