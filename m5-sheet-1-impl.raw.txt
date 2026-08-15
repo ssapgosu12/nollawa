@@ -1,0 +1,56 @@
+M5-SHEET-1 implementation evidence
+BOOT: boardgames-fleet-20260815T1800Z-m5-sheet-1-impl
+ticket: M5-SHEET-1
+root: C:/Localai/boardgames-fleet
+branch: track/fleet
+
+INITIAL STATE
+- `git status --short --branch`: `## track/fleet`; no pre-existing dirty files.
+
+CAUSAL HYPOTHESIS
+- YachtGame.tsx coupled the score-sheet markup and opening control to Yacht. A controlled, persistence-free shared shell plus an extracted Yacht table should preserve Yacht behavior and let Fleet reuse the same display/opening contract.
+- Falsifier: Yacht forced-open/locked-handle behavior, Fleet manual-only opening/remaining ships/ammo/current-enemy top, or storage separation is absent from a distinct acceptance test; or source inspection finds a storage API in the shared shell.
+
+TASK-OWNED IMPLEMENTATION
+- Added `src/components/ScoreSheet.tsx`: controlled `open`, `locked`, `onOpenChange` contract; shared overlay and handle; no owned persistence or hook state.
+- Added `src/components/YachtScoreTable.tsx`: Yacht-specific rows, previews, seat/self/current presentation, selection and registration outside YachtGame.tsx.
+- Updated `src/components/YachtGame.tsx`: consumes ScoreSheet and YachtScoreTable; existing forced-open transition remains game-owned.
+- Updated `src/components/FleetGame.tsx`: consumes ScoreSheet with local manual-only open state; displays every player's remaining ships and ammunition type; keeps the currently viewed enemy board in the upper area while open.
+- Updated `src/styles.css`: shared sheet overlay/handle rules and Fleet open-state top-15-percent/table presentation, using existing CSS variables.
+- Added `src/components/ScoreSheet.test.js`: four explicitly named population tests.
+- Updated `src/components/YachtGame.sheet.test.js`, `src/components/YachtGame.test.tsx`, and `src/m3-fleet-3-integration.test.js` to follow the extracted shared component and the new Fleet requirement.
+- `src/App.tsx` and `src/game/catalog.ts` required no change.
+
+POPULATION: total 4; GREEN 4; RED 0; NOT-SUPPORTED 0; NOT-YET 0; BLOCKED 0; UNKNOWN 0; uninspected remainder 0.
+1. GREEN - common component separation: both YachtGame and FleetGame import and render the single ScoreSheet shell; Yacht table markup is absent from YachtGame.tsx.
+2. GREEN - Yacht unchanged contract: manual toggle, forced open after rolling ends, locked handle while forced, 15svh dice top, gray zero/nonzero previews, yellow selected cell, explicit register, fixed seat/color columns, remote-only self marker, and local no-self-marker are covered by named tests.
+3. GREEN - Fleet reuse: manual-only unlocked ScoreSheet, remaining ship counts, Korean ammunition labels, all participant columns, and current target board in the fixed 15svh upper area are covered by named tests.
+4. GREEN - persistence separation: shared ScoreSheet contains no state/effect hook or storage API; Yacht parent and Fleet parent own their respective open/persistence policy.
+
+AUTOMATED CHECKS
+- `npm ci --ignore-scripts`: exit 0; added 47 packages; audited 48; 0 vulnerabilities.
+- `npm run check:terms`: exit 0; Forbidden-term gate passed: 67 files, 30 terms.
+- `npm run build`: exit 0; TypeScript no-emit and Vite build passed; 39 modules transformed.
+- `./node_modules/.bin/vitest run`: exit 0; 41 test files passed; 379/379 tests passed.
+- Focused command `./node_modules/.bin/vitest run src/components/ScoreSheet.test.js src/components/YachtGame.sheet.test.js src/components/YachtGame.test.tsx src/fleet.acceptance.test.js`: exit 0 after corrections; 4 files passed; 23/23 tests passed.
+
+RECORDED NONTERMINAL FAILURES AND CORRECTIONS
+- First focused run: 20/23 passed; three static assertions still expected Yacht markup in YachtGame.tsx. Assertions were redirected to the extracted shared/Yacht table artifacts; rerun passed 23/23.
+- First full run: 378/379 passed; old M3-FLEET-3 assertion prohibited any Fleet score sheet. The current M5 requirement supersedes that negative assertion, which was replaced with a one-shared-ScoreSheet assertion; focused rerun passed 3/3 and final full rerun passed 379/379.
+- First direct-dependency measurement expression failed because PowerShell treated property counts as arrays; corrected command below returned 4.
+
+STRUCTURAL BUDGET POPULATION: total 4; GREEN 4; RED 0; uninspected remainder 0.
+- GREEN - src non-test lines: 3616/4000. Denominator: every path from `rg --files src` excluding names matching `.(test|spec).`, then `Measure-Object -Line` over their contents.
+- GREEN - CSS lines: 269/700 from `(Get-Content -LiteralPath 'src/styles.css').Count`.
+- GREEN - relay lines: 273/314 from `(Get-Content -LiteralPath 'relay/worker.js').Count`; relay file unchanged.
+- GREEN - direct dependencies: 4/4 from dependency plus devDependency property counts in package.json.
+
+SCOPE AND FALSIFIER CHECKS
+- `git diff --check`: exit 0 (line-ending normalization warnings only).
+- `git status --short | rg -i 'baduk|docs/|collab13/|relay/worker\.js'`: no matches; exit 1 is the expected empty result.
+- `rg -n 'sessionStorage|localStorage|indexedDB|caches\.' src/components/ScoreSheet.tsx`: no matches; exit 1 is the expected empty result.
+- `rg -n '#[0-9a-fA-F]{3,8}'` over the four changed component implementation files: no matches; exit 1 is the expected empty result.
+- No push was performed.
+
+DEVICE EVIDENCE
+- NOT-YET - browser/physical-device inspection was not performed and is not claimed as GREEN.

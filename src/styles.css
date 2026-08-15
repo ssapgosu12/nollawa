@@ -80,7 +80,9 @@ label { display: block; font-weight: 700; }
 .yacht-die-button.reroll-selected { transform: translateY(-70%) rotate(15deg); }
 .yacht-die-button .effect-die { width: 100%; }
 .yacht-roll-actions button { flex: 1 1 120px; }
-.yacht-sheet { position: fixed; z-index: 8; top: 15svh; right: 0; bottom: 0; left: 0; overflow: auto; margin: 0; border: 2px solid var(--line); border-radius: 0; padding: .5rem; background: var(--paper); }
+.score-sheet-panel { position: fixed; z-index: 8; top: 15svh; right: 0; bottom: 0; left: 0; overflow: auto; margin: 0; border: 2px solid var(--line); border-radius: 0; padding: .5rem; background: var(--paper); }
+.score-sheet-handle { position: fixed; z-index: 10; right: max(1rem, env(safe-area-inset-right)); bottom: max(.5rem, env(safe-area-inset-bottom)); left: max(1rem, env(safe-area-inset-left)); background: var(--accent); font-weight: 900; box-shadow: 0 -3px 0 var(--line); }
+.score-sheet-handle:disabled { display: none; }
 .yacht-sheet table { width: 100%; border-collapse: collapse; }
 .yacht-sheet th, .yacht-sheet td { min-width: 70px; border: 1px solid var(--line); padding: .25rem; text-align: center; }
 .yacht-sheet th.player-1 { border-bottom: 5px solid var(--player-1); } .yacht-sheet th.player-2 { border-bottom: 5px solid var(--player-2); } .yacht-sheet th.player-3 { border-bottom: 5px solid var(--player-3); } .yacht-sheet th.player-4 { border-bottom: 5px solid var(--player-4); }
@@ -90,8 +92,6 @@ label { display: block; font-weight: 700; }
 .yacht-sheet .score-preview { color: var(--muted); }
 .yacht-sheet .score-preview.selected { color: var(--ink); background: var(--accent); box-shadow: inset 0 0 0 2px var(--line); }
 .yacht-register { position: sticky; bottom: 0; width: 100%; margin-top: .5rem; }
-.yacht-sheet-handle { position: fixed; z-index: 10; right: max(1rem, env(safe-area-inset-right)); bottom: max(.5rem, env(safe-area-inset-bottom)); left: max(1rem, env(safe-area-inset-left)); background: var(--accent); font-weight: 900; box-shadow: 0 -3px 0 var(--line); }
-.yacht-sheet-handle:disabled { display: none; }
 .fleet-screen { position: relative; display: grid; grid-template-rows: 45% 10% 45%; width: min(100%, calc((100svh - 58px) * 9 / 16)); height: min(calc(100vw * 16 / 9), calc(100svh - 58px)); aspect-ratio: 9 / 16; margin: 0 auto; }
 .fleet-zone { display: grid; grid-template-columns: 15% 70% 15%; min-height: 0; }
 .fleet-board-shell { position: relative; isolation: isolate; align-self: center; width: 100%; height: 88%; aspect-ratio: 1; }
@@ -101,6 +101,11 @@ label { display: block; font-weight: 700; }
 .fleet-board-name { position: absolute; z-index: 4; top: .15rem; left: .25rem; max-width: 80%; overflow: hidden; border: 1px solid var(--line); border-radius: 3px; padding: 0 .18rem; color: var(--ink); background: var(--paper); box-shadow: 0 1px 0 var(--line); font-size: clamp(.55rem, 2.4vw, .8rem); font-weight: 900; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
 .fleet-board { display: grid; grid-template-columns: repeat(var(--fleet-board-size, 9), 1fr); grid-template-rows: repeat(var(--fleet-board-size, 9), 1fr); width: 100%; height: 100%; border: 2px solid var(--line); background: var(--paper); }
 .fleet-board.fleet-summary { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .5rem; text-align: center; }
+.fleet-screen.sheet-active .fleet-upper { position: fixed; z-index: 9; top: 0; right: 0; left: 0; height: 15svh; background: var(--paper); }
+.fleet-screen.sheet-active .fleet-upper .fleet-board-shell { width: min(70vw, 15svh); height: min(70vw, 15svh); justify-self: center; }
+.fleet-sheet table { width: 100%; border-collapse: collapse; }
+.fleet-sheet th, .fleet-sheet td { min-width: 70px; border: 1px solid var(--line); padding: .5rem .25rem; text-align: center; }
+.fleet-sheet th.player-1 { border-bottom: 5px solid var(--player-1); } .fleet-sheet th.player-2 { border-bottom: 5px solid var(--player-2); } .fleet-sheet th.player-3 { border-bottom: 5px solid var(--player-3); } .fleet-sheet th.player-4 { border-bottom: 5px solid var(--player-4); }
 .fleet-cell { position: relative; min-width: 0; min-height: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 0; padding: 0; background: var(--paper); font-size: clamp(.65rem, 3vw, 1rem); }
 .fleet-cell.occupied { background: var(--fleet-ship-fill); }
 .fleet-cell.target-selected { background: var(--accent); box-shadow: inset 0 0 0 3px var(--line); }

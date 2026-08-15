@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { startYachtWakeLock, yachtProjection, YachtGame } from './YachtGame';
+import { YachtScoreTable, yachtScoreCell } from './YachtScoreTable';
 import { appendYachtInput, createYachtEventLog } from '../game/yacht-events';
 import { GAME_CATALOG } from '../game/catalog';
 import { App, filterGames } from '../App';
@@ -23,8 +24,8 @@ describe('YachtGame screen contract', () => {
   });
 
   it('keeps selection as preview-only UI and exposes one bottom register action plus forced/pinned sheet hooks', () => {
-    const source = YachtGame.toString();
-    expect(source).toContain('DiceResults'); expect(source).toContain('score-preview'); expect(source).toContain('yacht-register');
+    const source = `${YachtGame.toString()} ${YachtScoreTable.toString()}`;
+    expect(source).toContain('DiceResults'); expect(yachtScoreCell(undefined, 12, true, false).className).toBe('score-preview'); expect(source).toContain('yacht-register');
     expect(source).toMatch(/type:\s*["']register["']/); expect(source).toContain('pinned'); expect(source).toContain('yacht-sheet-handle');
   });
 
