@@ -15,7 +15,7 @@ describe('append-only Yacht event replay and persistence', () => {
     const state = replayYachtEvents(events);
     expect(state.currentParticipantId).toBe('two');
     expect(state.participants[0]?.turn.entries).toEqual([{ category: 'choice', dice: [1, 2, 3, 4, 5] }]);
-    expect(yachtPersisted(events)).toEqual({ kind: 'yacht', events });
+    expect(yachtPersisted(events)).toEqual({ kind: 'yacht', semantics: 'reroll-v2', events });
     expect(JSON.stringify(yachtPersisted(events))).not.toMatch(/upperBonus|upperSubtotal|lowerSubtotal|total/);
   });
 
@@ -30,7 +30,39 @@ describe('append-only Yacht event replay and persistence', () => {
     const memory = new Map<string, string>(), storage = { setItem: (key: string, value: string) => memory.set(key, value), getItem: (key: string) => memory.get(key) ?? null };
     const events = appendYachtInput(createYachtEventLog(participants), 'one', { type: 'roll', dice });
     saveYachtEvents(storage, events);
+    expect(loadYachtEvents(storage)).toEqual(events);
     expect(replayYachtEvents(loadYachtEvents(storage)!)).toEqual(replayYachtEvents(events));
+    expect(JSON.parse(memory.values().next().value!).semantics).toBe('reroll-v2');
+  });
+
+  it('migrates an actual pre-reroll v1 storage log with legacy hold meaning before returning it', () => {
+    const legacy = JSON.stringify({ kind: 'yacht', events: [
+      { type: 'start', participants: [{ id: 'one', name: '?섎굹' }] },
+      { type: 'input', actorId: 'one', action: { type: 'roll', dice: [1, 2, 3, 4, 5] } },
+      { type: 'input', actorId: 'one', action: { type: 'toggle-hold', index: 1 } },
+      { type: 'input', actorId: 'one', action: { type: 'roll', dice: [6, 6, 6, 6, 6] } },
+    ] });
+    const memory = new Map([['nollawa-yacht-events-v1', legacy]]), storage = { getItem: (key: string) => memory.get(key) ?? null };
+    const restored = loadYachtEvents(storage);
+    expect(restored).not.toBeNull();
+    expect(replayYachtEvents(restored!).participants[0]?.turn.dice).toEqual([6, 2, 6, 6, 6]);
+    expect(JSON.stringify(restored)).not.toContain('toggle-hold');
+    expect(memory.get('nollawa-yacht-events-v1')).toBe(legacy);
+    expect(undoYachtInput(restored!)).toHaveLength(8);
+  });
+
+  it('fails malformed legacy logs safely instead of accepting or overwriting them', () => {
+    const malformed = JSON.stringify({ kind: 'yacht', events: [
+      { type: 'start', participants: [{ id: 'one', name: '?섎굹' }] },
+      { type: 'input', actorId: 'one', action: { type: 'roll', dice: [1, 2, 3, 4, 5] } },
+      { type: 'input', actorId: 'one', action: { type: 'toggle-hold', index: 9 } },
+    ] });
+    const malformedCurrent = JSON.stringify({ kind: 'yacht', semantics: 'reroll-v2', events: [
+      { type: 'start', participants: [{ id: 'one', name: '?섎굹' }] },
+      { type: 'input', actorId: 'one', action: { type: 'toggle-reroll', index: 0 } },
+    ] });
+    expect(loadYachtEvents({ getItem: () => malformed })).toBeNull();
+    expect(loadYachtEvents({ getItem: () => malformedCurrent })).toBeNull();
   });
 
   it('restores a completed one-player match without persisting derived totals', () => {
