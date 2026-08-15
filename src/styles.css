@@ -67,18 +67,25 @@ label { display: block; font-weight: 700; }
 .yacht-dice { min-height: 32svh; display: grid; align-content: center; gap: .75rem; border: 2px solid var(--line); border-radius: 14px; padding: 1rem; background: var(--paper); }
 .yacht-dice.pinned { position: sticky; z-index: 6; top: 0; min-height: 15svh; padding: .4rem; }
 .yacht-dice.pinned .effect-grid { min-height: 64px; }
+.yacht-game.sheet-active .yacht-dice { position: fixed; z-index: 9; top: 0; right: 0; left: 0; width: 100%; height: 15svh; min-height: 15svh; border-radius: 0; padding: .25rem; }
+.yacht-game.sheet-active .yacht-dice .effect-grid { min-height: 0; }
+.yacht-game.sheet-active .yacht-roll-actions { display: none; }
 .yacht-die-button { justify-self: center; width: clamp(42px, 11vw, 64px); border: 0; padding: 0; background: transparent; transition: transform 70ms cubic-bezier(.2, 1.4, .4, 1); }
 .yacht-die-button.reroll-selected { transform: translateY(-70%) rotate(15deg); }
 .yacht-die-button .effect-die { width: 100%; }
 .yacht-roll-actions button { flex: 1 1 120px; }
-.yacht-sheet { overflow-x: auto; margin-top: .75rem; border: 2px solid var(--line); border-radius: 14px; padding: .5rem; background: var(--paper); }
+.yacht-sheet { position: fixed; z-index: 8; top: 15svh; right: 0; bottom: 0; left: 0; overflow: auto; margin: 0; border: 2px solid var(--line); border-radius: 0; padding: .5rem; background: var(--paper); }
 .yacht-sheet table { width: 100%; border-collapse: collapse; }
 .yacht-sheet th, .yacht-sheet td { min-width: 70px; border: 1px solid var(--line); padding: .25rem; text-align: center; }
 .yacht-sheet th.player-1 { border-bottom: 5px solid var(--player-1); } .yacht-sheet th.player-2 { border-bottom: 5px solid var(--player-2); } .yacht-sheet th.player-3 { border-bottom: 5px solid var(--player-3); } .yacht-sheet th.player-4 { border-bottom: 5px solid var(--player-4); }
+.yacht-sheet th.current-turn { background: var(--accent); box-shadow: inset 0 0 0 2px var(--line); }
+.yacht-self-marker { display: block; width: max-content; margin: .15rem auto 0; border: 1px solid var(--line); border-radius: 999px; padding: 0 .35rem; font-size: .7rem; }
 .yacht-sheet td button { width: 100%; min-height: 38px; padding: .2rem; }
-.yacht-sheet .score-preview { background: var(--accent); box-shadow: inset 0 0 0 2px var(--line); }
+.yacht-sheet .score-preview { color: var(--muted); }
+.yacht-sheet .score-preview.selected { color: var(--ink); background: var(--accent); box-shadow: inset 0 0 0 2px var(--line); }
 .yacht-register { position: sticky; bottom: 0; width: 100%; margin-top: .5rem; }
-.yacht-sheet-handle { position: fixed; z-index: 7; right: max(1rem, env(safe-area-inset-right)); bottom: max(.5rem, env(safe-area-inset-bottom)); left: max(1rem, env(safe-area-inset-left)); background: var(--accent); font-weight: 900; box-shadow: 0 -3px 0 var(--line); }
+.yacht-sheet-handle { position: fixed; z-index: 10; right: max(1rem, env(safe-area-inset-right)); bottom: max(.5rem, env(safe-area-inset-bottom)); left: max(1rem, env(safe-area-inset-left)); background: var(--accent); font-weight: 900; box-shadow: 0 -3px 0 var(--line); }
+.yacht-sheet-handle:disabled { display: none; }
 .first-player-choice { position: fixed; z-index: 19; inset: 0; display: grid; place-items: center; padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left)); background: var(--first-player-overlay); }
 .first-player-choice-card { width: min(100%, 520px); border: 3px solid var(--line); border-radius: 16px; padding: clamp(1rem, 5vw, 2rem); text-align: center; background: var(--paper); }
 .first-player-choice-card > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }

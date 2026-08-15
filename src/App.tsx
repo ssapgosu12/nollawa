@@ -299,7 +299,7 @@ export function App() {
     let ordered = [...participants], coin: FirstPlayerCoin | undefined, diceOpening: YachtDiceOpening | undefined;
     if (participants.length === 2) { coin = createFirstPlayerCoin(); ordered = coin.firstPlayer === 1 ? ordered : [ordered[1]!, ordered[0]!]; }
     else if (participants.length > 2) { diceOpening = createYachtDiceOpening(participants); ordered = [...diceOpening.order]; }
-    const events = createYachtEventLog(ordered);
+    const events = createYachtEventLog(participants, ordered.map(({ id }) => id));
     setYachtEvents(events);
     if (shared) send({ type: 'snapshot', game: 'yacht', state: yachtPersisted(events), opening: coin, yachtOpening: diceOpening, startsGame: true });
     else { saveYachtEvents(typeof sessionStorage === 'undefined' ? undefined : sessionStorage, events); if (coin) showOpening(coin, 'yacht'); else if (diceOpening) showYachtDiceOpening(diceOpening); else setScreen('yacht'); }

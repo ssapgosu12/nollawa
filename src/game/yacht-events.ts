@@ -1,22 +1,22 @@
 import { reduceAuthorityYachtSession, createYachtSession, resolveYachtOpeningOrder, type YachtOpeningRollRound, type YachtParticipant, type YachtSessionState } from './yacht-session';
 import type { YachtDie, YachtTurnAction } from './yacht';
 export type YachtInputEvent =
-  | { type: 'start'; participants: readonly YachtParticipant[] }
+  | { type: 'start'; participants: readonly YachtParticipant[]; turnOrder?: readonly string[] }
   | { type: 'input'; actorId: string; action: YachtTurnAction };
 export interface YachtPersisted { kind: 'yacht'; events: readonly YachtInputEvent[] }
 export interface YachtDiceOpening { rounds: readonly YachtOpeningRollRound[]; order: readonly YachtParticipant[]; replayKey: number }
 export const YACHT_STORAGE_KEY = 'nollawa-yacht-events-v1';
 const cloneEvents = (events: readonly YachtInputEvent[]): YachtInputEvent[] => events.map((event) => event.type === 'start'
-  ? { ...event, participants: event.participants.map((participant) => ({ ...participant })) }
+  ? { ...event, participants: event.participants.map((participant) => ({ ...participant })), ...('turnOrder' in event && event.turnOrder ? { turnOrder: [...event.turnOrder] } : {}) }
   : { ...event, action: { ...event.action, ...('dice' in event.action && Array.isArray(event.action.dice) ? { dice: [...event.action.dice] } : {}) } });
-export function createYachtEventLog(participants: readonly YachtParticipant[]): YachtInputEvent[] {
-  createYachtSession(participants);
-  return [{ type: 'start', participants: participants.map((participant) => ({ ...participant })) }];
+export function createYachtEventLog(participants: readonly YachtParticipant[], turnOrder: readonly string[] = participants.map(({ id }) => id)): YachtInputEvent[] {
+  createYachtSession(participants, turnOrder);
+  return [{ type: 'start', participants: participants.map((participant) => ({ ...participant })), turnOrder: [...turnOrder] }];
 }
 export function replayYachtEvents(events: readonly YachtInputEvent[]): YachtSessionState {
   const start = events[0];
   if (!start || start.type !== 'start' || events.slice(1).some((event) => event.type === 'start')) throw new RangeError('Yacht event log requires one leading start event');
-  let state = createYachtSession(start.participants);
+  let state = createYachtSession(start.participants, start.turnOrder);
   for (const event of events.slice(1)) { if (event.type !== 'input') throw new RangeError('Invalid Yacht input event'); const next = reduceAuthorityYachtSession(state, event.actorId, event.action); if (next === state) throw new RangeError('Yacht log contains a rejected input'); state = next; }
   return state;
 }

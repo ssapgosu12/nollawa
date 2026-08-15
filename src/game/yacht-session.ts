@@ -24,6 +24,7 @@ export interface YachtParticipantState extends YachtParticipant {
 
 export interface YachtSessionState {
   participants: readonly YachtParticipantState[];
+  turnOrder: readonly string[];
   currentParticipantId: string;
   complete: boolean;
 }
@@ -71,19 +72,26 @@ function cloneEntries(entries: readonly YachtScoreEntry[]): YachtScoreEntry[] {
   return entries.map((entry) => ({ ...entry, dice: [...entry.dice] }));
 }
 
-export function createYachtSession(participants: readonly YachtParticipant[]): YachtSessionState {
+export function createYachtSession(participants: readonly YachtParticipant[], turnOrder: readonly string[] = participants.map(({ id }) => id)): YachtSessionState {
   validateParticipants(participants);
+  const participantIds = new Set(participants.map(({ id }) => id));
+  if (turnOrder.length !== participants.length || new Set(turnOrder).size !== participants.length || turnOrder.some((id) => !participantIds.has(id))) {
+    throw new RangeError('Yacht turn order must contain every participant exactly once');
+  }
   return {
     participants: participants.map((participant) => ({ ...participant, turn: createYachtTurn() })),
-    currentParticipantId: participants[0]!.id,
+    turnOrder: [...turnOrder],
+    currentParticipantId: turnOrder[0]!,
     complete: false,
   };
 }
 
-function nextParticipantIndex(state: YachtSessionState, currentIndex: number): number | null {
-  for (let offset = 1; offset <= state.participants.length; offset += 1) {
-    const candidate = (currentIndex + offset) % state.participants.length;
-    if (state.participants[candidate]!.turn.entries.length < YACHT_CATEGORIES.length) return candidate;
+function nextParticipantIndex(state: YachtSessionState): number | null {
+  const currentTurnIndex = state.turnOrder.indexOf(state.currentParticipantId);
+  for (let offset = 1; offset <= state.turnOrder.length; offset += 1) {
+    const candidateId = state.turnOrder[(currentTurnIndex + offset) % state.turnOrder.length]!;
+    const candidate = state.participants.findIndex(({ id }) => id === candidateId);
+    if (candidate >= 0 && state.participants[candidate]!.turn.entries.length < YACHT_CATEGORIES.length) return candidate;
   }
   return null;
 }
@@ -104,14 +112,14 @@ export function reduceAuthorityYachtSession(
   participants[currentIndex] = { ...current, turn };
   if (turn.phase !== 'complete') return { ...state, participants };
 
-  const nextIndex = nextParticipantIndex({ ...state, participants }, currentIndex);
-  if (nextIndex === null) return { participants, currentParticipantId: current.id, complete: true };
+  const nextIndex = nextParticipantIndex({ ...state, participants });
+  if (nextIndex === null) return { ...state, participants, currentParticipantId: current.id, complete: true };
   const next = participants[nextIndex]!;
   participants[nextIndex] = {
     ...next,
     turn: createYachtTurn(cloneEntries(next.turn.entries)),
   };
-  return { participants, currentParticipantId: next.id, complete: false };
+  return { ...state, participants, currentParticipantId: next.id, complete: false };
 }
 
 export const reduceYachtSession = reduceAuthorityYachtSession;
