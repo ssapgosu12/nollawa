@@ -1,7 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { App, filterGames } from './App';
-import { FleetGame } from './components/FleetGame';
+import {
+  canConfirmFleetTarget,
+  CLASSIC_FLEET_NAMES,
+  FLEET_SHIP_TEXTURE_ROLES,
+  FleetGame,
+  fleetShipTexture,
+  fleetShotMark,
+} from './components/FleetGame';
 import { GAME_CATALOG } from './game/catalog';
 import { createFleetState } from './game/fleet';
 import { RoomLobby } from './lobby/RoomLobby';
@@ -47,5 +54,106 @@ describe('M3-FLEET-1 screen and integration acceptance', () => {
     expect(source.match(/<div class="fleet-side" aria-hidden="true" \/>/g)).toHaveLength(2);
     expect(source).toContain('일반탄 · 턴당 한 발');
     expect(source).toMatch(/fleet-lower-center[^]*fleet-shot-description[^]*일반탄 — 선택한 한 칸을 공격합니다\.[^]*fleet-board-shell/);
+  });
+});
+
+describe('M3-FLEET-2 UI correction population 6', () => {
+  const component = readFileSync(new URL('./components/FleetGame.tsx', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+
+  it('1/6 keeps targeting as preview then one explicit existing shoot action, with replaceable and stale-safe selection', () => {
+    const state = {
+      ...createFleetState([{ id: 'p1', name: '1P' }, { id: 'p2', name: '2P' }]),
+      phase: 'targeting', placementParticipantId: null, turnParticipantId: 'p1',
+    };
+    const first = { targetParticipantId: 'p2', cell: { row: 1, column: 2 }, turnParticipantId: 'p1', shotCount: 0 };
+    const changed = { ...first, cell: { row: 3, column: 4 } };
+    expect(canConfirmFleetTarget(state, 'p1', first)).toBe(true);
+    expect(canConfirmFleetTarget(state, 'p1', changed)).toBe(true);
+    expect(canConfirmFleetTarget({ ...state, turnParticipantId: 'p2' }, 'p1', changed)).toBe(false);
+    expect(component).toMatch(/onCell=\{\(cell\) => target[^}]*setTargetPreview/);
+    expect(component).toContain('class="primary fleet-confirm-shot"');
+    expect(component.match(/type: 'shoot'/g)).toHaveLength(1);
+    expect(component).not.toMatch(/onCell=\{\(cell\)[^\n]*onAction\(\{ type: 'shoot'/);
+  });
+
+  it('2/6 protects both owner labels above dark or occupied board layers with explicit contrast', () => {
+    expect(component.match(/class="fleet-board-name"/g)).toHaveLength(2);
+    expect(component).toContain('<span class="fleet-board-name">{target');
+    expect(component).toContain('<span class="fleet-board-name">{own');
+    expect(css).toMatch(/\.fleet-board-shell[^}]*isolation:\s*isolate/);
+    expect(css).toMatch(/\.fleet-board-name[^}]*z-index:\s*4[^}]*color:\s*var\(--ink\)[^}]*background:\s*var\(--paper\)/);
+  });
+
+  it('3/6 preserves portrait partitions and four blank sides while bounding landscape height without page scroll', () => {
+    expect(css).toMatch(/\.fleet-screen[^}]*grid-template-rows:\s*45%\s+10%\s+45%[^}]*aspect-ratio:\s*9\s*\/\s*16/);
+    expect(css).toMatch(/\.fleet-zone[^}]*grid-template-columns:\s*15%\s+70%\s+15%/);
+    expect(component.match(/<div class="fleet-side" aria-hidden="true" \/>/g)).toHaveLength(2);
+    expect(component.match(/<div aria-hidden="true" \/>/g)).toHaveLength(2);
+    expect(css).toMatch(/@media \(orientation:\s*landscape\)[^]*\.app-shell:has\(> \.fleet-screen\)[^}]*height:\s*100svh[^}]*overflow:\s*hidden/);
+    expect(css).toMatch(/@media \(orientation:\s*landscape\)[^]*\.fleet-screen[^}]*max-height:\s*calc\(100svh - 58px[^}]*overflow:\s*hidden/);
+  });
+
+  it('4/6 renders hit as red X, miss as black X, and UI-only partial as a smaller red X', () => {
+    expect(fleetShotMark('hit')).toEqual({ kind: 'hit', symbol: '×', label: '명중' });
+    expect(fleetShotMark('miss')).toEqual({ kind: 'miss', symbol: '×', label: '빗나감' });
+    expect(fleetShotMark('partial')).toEqual({ kind: 'partial', symbol: '×', label: '부분 파괴' });
+    expect(css).toMatch(/\.fleet-shot-mark\.hit[^}]*color:\s*var\(--fleet-hit\)/);
+    expect(css).toMatch(/\.fleet-shot-mark\.miss[^}]*color:\s*var\(--fleet-miss\)/);
+    expect(css).toMatch(/\.fleet-shot-mark\.partial[^}]*color:\s*var\(--fleet-hit\)[^}]*font-size:/);
+  });
+
+  it('5/6 uses exactly five reusable roles, rotates vertical geometry, and limits a 4x2 supply shape to corner/body roles', () => {
+    expect(FLEET_SHIP_TEXTURE_ROLES).toEqual(['body', 'bow', 'stern', 'corner', 'wide-body']);
+    const horizontal = { index: 0, length: 3, orientation: 'horizontal', cells: [{ row: 0, column: 0 }, { row: 0, column: 1 }, { row: 0, column: 2 }] };
+    const vertical = { ...horizontal, orientation: 'vertical', cells: [{ row: 0, column: 0 }, { row: 1, column: 0 }, { row: 2, column: 0 }] };
+    expect(horizontal.cells.map((_, index) => fleetShipTexture(horizontal, index))).toEqual([
+      { role: 'stern', rotation: 0 }, { role: 'body', rotation: 0 }, { role: 'bow', rotation: 0 },
+    ]);
+    expect(vertical.cells.map((_, index) => fleetShipTexture(vertical, index))).toEqual([
+      { role: 'stern', rotation: 90 }, { role: 'body', rotation: 90 }, { role: 'bow', rotation: 90 },
+    ]);
+    const supply = { index: 5, length: 8, orientation: 'horizontal', cells: Array.from({ length: 8 }, (_, index) => ({ row: Math.floor(index / 4), column: index % 4 })) };
+    expect(new Set(supply.cells.map((_, index) => fleetShipTexture(supply, index).role))).toEqual(new Set(['corner', 'wide-body']));
+    expect(new Set(supply.cells.map((_, index) => fleetShipTexture(supply, index).rotation))).toEqual(new Set([0, 90, 180, 270]));
+  });
+
+  it('6/6 keeps ships pale gray, yellow limited to selection, and all five classic names and lengths identifiable', () => {
+    expect(CLASSIC_FLEET_NAMES).toEqual(['2칸 함선', '3칸 함선 A', '3칸 함선 B', '4칸 함선', '5칸 함선']);
+    expect(component).toContain('aria-label={`${CLASSIC_FLEET_NAMES[index]}, ${length}칸`}');
+    expect(css).toMatch(/--fleet-ship-fill:\s*#f7f7f3/i);
+    expect(css).toMatch(/\.fleet-cell\.occupied[^}]*background:\s*var\(--fleet-ship-fill\)/);
+    expect(css).not.toMatch(/\.fleet-cell\.occupied[^}]*var\(--accent\)/);
+    expect(css).toMatch(/\.fleet-cell\.target-selected[^}]*background:\s*var\(--accent\)/);
+    expect(css).toMatch(/\.fleet-ship-picker button\.selected[^}]*background:\s*var\(--accent\)/);
+  });
+});
+
+describe('M3-FLEET-2 exact texture geometry correction population 3', () => {
+  const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+  const ruleBody = (selector) => css.match(new RegExp(`${selector}\\s*\\{([^}]*)\\}`))?.[1] ?? '';
+
+  it('1/3 places the wide-body single horizontal rule at y=90%', () => {
+    const wideBody = ruleBody('\\.fleet-ship-texture\\.texture-wide-body::before');
+    expect(wideBody).toMatch(/inset:\s*0\s+0\s+10%/);
+    expect(wideBody.match(/border-(?:top|bottom)/g)).toEqual(['border-bottom']);
+    expect(wideBody).not.toMatch(/inset:\s*0\s*;/);
+  });
+
+  it('2/3 bounds the centered radius-40% right bow half-circle at x=50%-90% and y=10%-90%', () => {
+    const connector = ruleBody('\\.fleet-ship-texture\\.texture-bow::before,\\s*\\.fleet-ship-texture\\.texture-stern::before');
+    const bow = ruleBody('\\.fleet-ship-texture\\.texture-bow::after');
+    expect(connector).toMatch(/top:\s*10%;\s*right:\s*50%;\s*bottom:\s*10%;\s*left:\s*0/);
+    expect(bow).toMatch(/top:\s*10%;\s*right:\s*10%;\s*bottom:\s*10%;\s*left:\s*50%/);
+    expect(bow).toMatch(/border-radius:\s*0\s+100%\s+100%\s+0\s*\/\s*0\s+50%\s+50%\s+0/);
+    expect(bow).not.toMatch(/width:\s*80%/);
+  });
+
+  it('3/3 joins the centered height-80% stern half-square to the same x=50% connectors', () => {
+    const connector = ruleBody('\\.fleet-ship-texture\\.texture-bow::before,\\s*\\.fleet-ship-texture\\.texture-stern::before');
+    const stern = ruleBody('\\.fleet-ship-texture\\.texture-stern::after');
+    expect(connector).toMatch(/right:\s*50%/);
+    expect(stern).toMatch(/top:\s*10%;\s*right:\s*10%;\s*bottom:\s*10%;\s*left:\s*50%/);
+    expect(stern).not.toMatch(/right:\s*10%;\s*width:\s*40%/);
   });
 });

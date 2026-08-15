@@ -9,6 +9,10 @@
   --line: #111;
   --accent: #f2c94c;
   --danger: #a51d28;
+  --fleet-hit: #d71920;
+  --fleet-miss: #111;
+  --fleet-ship-fill: #f7f7f3;
+  --fleet-ship-line: #6b6b68;
   --effect-overlay: rgb(10 12 18 / .92);
   --first-player-overlay: rgb(17 17 17 / .58);
   --effect-card: rgb(247 244 232);
@@ -90,26 +94,44 @@ label { display: block; font-weight: 700; }
 .yacht-sheet-handle:disabled { display: none; }
 .fleet-screen { position: relative; display: grid; grid-template-rows: 45% 10% 45%; width: min(100%, calc((100svh - 58px) * 9 / 16)); height: min(calc(100vw * 16 / 9), calc(100svh - 58px)); aspect-ratio: 9 / 16; margin: 0 auto; }
 .fleet-zone { display: grid; grid-template-columns: 15% 70% 15%; min-height: 0; }
-.fleet-board-shell { position: relative; align-self: center; width: 100%; height: 88%; aspect-ratio: 1; }
+.fleet-board-shell { position: relative; isolation: isolate; align-self: center; width: 100%; height: 88%; aspect-ratio: 1; }
 .fleet-lower-center { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; min-height: 0; }
 .fleet-lower-center .fleet-board-shell { flex: 0 0 88%; }
 .fleet-shot-description { display: grid; place-items: center; width: 100%; height: 12%; margin: 0; font-size: clamp(.55rem, 2.3vw, .78rem); text-align: center; }
-.fleet-board-name { position: absolute; z-index: 2; top: .15rem; left: .25rem; max-width: 80%; overflow: hidden; font-size: clamp(.55rem, 2.4vw, .8rem); font-weight: 900; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
+.fleet-board-name { position: absolute; z-index: 4; top: .15rem; left: .25rem; max-width: 80%; overflow: hidden; border: 1px solid var(--line); border-radius: 3px; padding: 0 .18rem; color: var(--ink); background: var(--paper); box-shadow: 0 1px 0 var(--line); font-size: clamp(.55rem, 2.4vw, .8rem); font-weight: 900; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
 .fleet-board { display: grid; grid-template-columns: repeat(9, 1fr); grid-template-rows: repeat(9, 1fr); width: 100%; height: 100%; border: 2px solid var(--line); background: var(--paper); }
 .fleet-board.fleet-summary { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .5rem; text-align: center; }
-.fleet-cell { position: relative; min-width: 0; min-height: 0; border: 1px solid var(--line); border-radius: 0; padding: 0; font-size: clamp(.65rem, 3vw, 1rem); }
-.fleet-cell.occupied { background: var(--accent); }
-.fleet-cell.hit, .fleet-cell.sunk { color: var(--paper); background: var(--ink); }
-.fleet-cell.miss { color: var(--muted); }
-.fleet-ship-label { position: absolute; right: 0; bottom: 0; font-size: .55rem; font-weight: 900; }
+.fleet-cell { position: relative; min-width: 0; min-height: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 0; padding: 0; background: var(--paper); font-size: clamp(.65rem, 3vw, 1rem); }
+.fleet-cell.occupied { background: var(--fleet-ship-fill); }
+.fleet-cell.target-selected { background: var(--accent); box-shadow: inset 0 0 0 3px var(--line); }
+.fleet-ship-texture { position: absolute; z-index: 1; inset: 0; transform-origin: center; pointer-events: none; }
+.fleet-ship-texture::before, .fleet-ship-texture::after { position: absolute; content: ""; }
+.fleet-ship-texture.texture-body::before { inset: 10% 0; border-top: 2px solid var(--fleet-ship-line); border-bottom: 2px solid var(--fleet-ship-line); background: var(--fleet-ship-fill); }
+.fleet-ship-texture.texture-wide-body::before { inset: 0 0 10%; border-bottom: 2px solid var(--fleet-ship-line); background: var(--fleet-ship-fill); }
+.fleet-ship-texture.texture-bow::before, .fleet-ship-texture.texture-stern::before { top: 10%; right: 50%; bottom: 10%; left: 0; border-top: 2px solid var(--fleet-ship-line); border-bottom: 2px solid var(--fleet-ship-line); background: var(--fleet-ship-fill); }
+.fleet-ship-texture.texture-bow::after { top: 10%; right: 10%; bottom: 10%; left: 50%; border: 2px solid var(--fleet-ship-line); border-left: 0; border-radius: 0 100% 100% 0 / 0 50% 50% 0; background: var(--fleet-ship-fill); }
+.fleet-ship-texture.texture-stern::after { top: 10%; right: 10%; bottom: 10%; left: 50%; border: 2px solid var(--fleet-ship-line); border-left: 0; background: var(--fleet-ship-fill); }
+.fleet-ship-texture.texture-corner::before { inset: 10% 0 0 10%; border-top: 2px solid var(--fleet-ship-line); border-left: 2px solid var(--fleet-ship-line); border-radius: 35% 0 0; background: var(--fleet-ship-fill); }
+.fleet-shot-mark { position: absolute; z-index: 3; inset: 0; display: grid; place-items: center; font-size: clamp(1rem, 4vw, 1.45rem); font-weight: 1000; line-height: 1; pointer-events: none; }
+.fleet-shot-mark.hit { color: var(--fleet-hit); }
+.fleet-shot-mark.miss { color: var(--fleet-miss); }
+.fleet-shot-mark.partial { color: var(--fleet-hit); font-size: clamp(.65rem, 2.5vw, .9rem); }
+.fleet-ship-label { position: absolute; z-index: 2; right: 0; bottom: 0; border-radius: 2px 0 0; padding: 0 .08rem; color: var(--ink); background: var(--paper); font-size: .5rem; font-weight: 900; }
 .fleet-side { display: grid; place-items: center; }
 .fleet-side button { min-width: 0; padding: .3rem; font-size: 1.4rem; }
 .fleet-middle { display: flex; align-items: center; justify-content: center; gap: .3rem; width: 100%; min-height: 0; }
 .fleet-middle button { min-height: 34px; padding: .25rem .4rem; font-size: clamp(.6rem, 2.4vw, .78rem); }
 .fleet-ship-picker { display: flex; gap: .15rem; }
+.fleet-ship-picker button { display: grid; place-items: center; line-height: 1; }
+.fleet-ship-picker button span { font-size: clamp(.42rem, 1.7vw, .62rem); }
+.fleet-ship-picker button small { margin-top: .1rem; font-size: clamp(.45rem, 1.8vw, .66rem); }
 .fleet-ship-picker button.selected { background: var(--accent); font-weight: 900; }
 .fleet-shot-choice { display: flex; align-items: center; justify-content: center; gap: .5rem; font-size: clamp(.65rem, 2.6vw, .85rem); }
 .fleet-shot-choice [role="radio"] { border: 2px solid var(--line); padding: .25rem .4rem; background: var(--accent); font-weight: 900; }
+@media (orientation: landscape) {
+  .app-shell:has(> .fleet-screen) { height: 100svh; min-height: 0; overflow: hidden; }
+  .fleet-screen { width: min(100%, calc((100svh - 58px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * 9 / 16)); height: calc(100svh - 58px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); max-height: calc(100svh - 58px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow: hidden; }
+}
 .first-player-choice { position: fixed; z-index: 19; inset: 0; display: grid; place-items: center; padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left)); background: var(--first-player-overlay); }
 .first-player-choice-card { width: min(100%, 520px); border: 3px solid var(--line); border-radius: 16px; padding: clamp(1rem, 5vw, 2rem); text-align: center; background: var(--paper); }
 .first-player-choice-card > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
