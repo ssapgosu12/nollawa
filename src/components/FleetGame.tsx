@@ -7,6 +7,7 @@ import {
   type FleetCell,
   type FleetOrientation,
   type FleetParticipantView,
+  type FleetRoundPlan,
   type FleetShip,
   type FleetShootingCard,
   type FleetSpecialShipType,
@@ -43,6 +44,11 @@ export function canConfirmFleetTarget(state: FleetState, viewerId: string | null
   return Boolean(target?.alive && target.id !== viewerId && preview.turnParticipantId === state.turnParticipantId
     && preview.shotCount === state.shots.length
     && !state.shots.some((shot) => shot.shooter === viewerId && shot.target === target.id && sameCell(shot.cell, preview.cell)));
+}
+
+export function canResetFleetVariantPlan(localSelectionCount: number, draft: FleetRoundPlan | undefined): boolean {
+  if (draft?.submitted) return false;
+  return localSelectionCount > 0 || Boolean(draft && (draft.impacts.length > 0 || draft.uses?.length));
 }
 
 export function fleetShotMark(result: FleetDisplayResult) {
@@ -136,6 +142,7 @@ export function FleetGame({ state, viewerId, onAction, onExit }: Props) {
   const confirmableTarget = variant ? canShoot && variantSelections.length >= selectionNeeded ? targetPreview : null : canConfirmFleetTarget(state, viewerId, targetPreview) ? targetPreview : null;
   const selectedPlaced = own?.ships?.some(({ index }) => index === shipIndex) ?? false;
   const draft = state.roundPlans?.find(({ participantId }) => participantId === viewerId), selectedImpacts = draft?.impacts.filter(({ targetParticipantId }) => targetParticipantId === target?.id).map(({ cell }) => cell) ?? [];
+  const canResetVariantPlan = canResetFleetVariantPlan(variantSelections.length, draft);
   const selectedCells = variantSelections.filter(({ targetParticipantId }) => targetParticipantId === target?.id).map(({ cell }) => cell);
   const carousel = variant && state.participants.length >= 3;
   const abilities = viewerId ? fleetVariantAbilitiesForOwner(state, viewerId) : null;
@@ -195,7 +202,7 @@ export function FleetGame({ state, viewerId, onAction, onExit }: Props) {
         {variant && <>{setup?.shootingCard === 'buckshot' && <button class={spread ? 'selected' : ''} onClick={() => setSpread((value) => !value)}>{spread ? '산탄 6발' : '일반탄 대체'}</button>}{abilities?.carrierExtraShots ? <button onClick={() => setBonusMode('carrier')}>항모 추가탄</button> : null}{abilities?.tracerShots ? <button onClick={() => setBonusMode('tracer')}>추가 예광탄</button> : null}{abilities?.privateScouts ? <button onClick={() => setBonusMode('spy')}>비공개 정찰</button> : null}{abilities?.glassCannonPressure && (state.round ?? 1) % 2 === 0 ? <button onClick={() => setBonusMode('pressure')}>압박 고폭탄</button> : null}</>}
         {variant && !bonusMode && (setup?.shootingCard === 'high-explosive' || setup?.shootingCard === 'scatter' || setup?.shootingCard === 'buckshot' && spread) && <div aria-label="판 밖 범위 중심"><button onClick={() => shiftRange(-1, 0)}>↑</button><button onClick={() => shiftRange(1, 0)}>↓</button><button onClick={() => shiftRange(0, -1)}>←</button><button onClick={() => shiftRange(0, 1)}>→</button></div>}
         <button class="primary fleet-confirm-shot" disabled={!confirmableTarget} onClick={confirmTarget}>확인</button>
-        {variant && <><button disabled={!draft || draft.submitted} onClick={() => { onAction({ type: 'reset-variant-plan' }); setVariantSelections([]); }}>모든 발 회수</button><button class="primary" disabled={!draft || draft.submitted || !draft.uses?.some(({ kind }) => kind === 'card')} onClick={() => onAction({ type: 'submit-variant-plan' })}>사격 확정</button></>}</>}
+        {variant && <><button disabled={!canResetVariantPlan} onClick={() => { if (!canResetVariantPlan) return; setVariantSelections([]); if (draft) onAction({ type: 'reset-variant-plan' }); }}>모든 발 회수</button><button class="primary" disabled={!draft || draft.submitted || !draft.uses?.some(({ kind }) => kind === 'card')} onClick={() => onAction({ type: 'submit-variant-plan' })}>사격 확정</button></>}</>}
       <button class="fleet-exit" onClick={onExit}>나가기</button>
     </div>
     <div class="fleet-zone fleet-lower">
