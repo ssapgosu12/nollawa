@@ -67,7 +67,7 @@ describe('M1 game-list selection to renderer/local/AI/remote wiring', () => {
 
   it('people, name, and narrowing multi-tag filters compose', () => {
     expect(filterGames('', '1', []).map((game) => game.id)).toEqual(['yacht']);
-    expect(filterGames('', '2', [])).toHaveLength(5);
+    expect(filterGames('', '2', [])).toHaveLength(6);
     expect(filterGames('', '3-4', []).map((game) => game.id)).toEqual(['yacht']);
     expect(filterGames('리버시', '2', []).map((game) => game.id)).toEqual(['reversi']);
     expect(filterGames('', 'all', ['봇 있음', '5분 이내']).map((game) => game.id)).toEqual(['samok']);

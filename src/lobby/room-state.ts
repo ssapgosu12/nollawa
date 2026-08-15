@@ -25,8 +25,11 @@ export const readyLabel = (room: RoomSnapshot) => {
 };
 export function canStartRoom(room: RoomSnapshot): boolean {
   const ready = Number(room.participants.some((person) => person.id === room.hostId)) + room.participants.filter((person) => person.id !== room.hostId && person.ready).length;
-  const yacht = room.game === 'yacht';
-  return room.phase === 'lobby' && ready >= requiredReady(room.participants.length) && (yacht ? room.participants.length <= 4 && [1, 2].every((team) => room.participants.some((person) => teamForSlot(person.slot) === team)) : room.settings.aiOpponent || [1, 2].every((team) => room.participants.some((person) => teamForSlot(person.slot) === team)));
+  const yacht = room.game === 'yacht', fleet = room.game === 'fleet';
+  return room.phase === 'lobby' && ready >= requiredReady(room.participants.length) && (yacht
+    ? room.participants.length <= 4 && [1, 2].every((team) => room.participants.some((person) => teamForSlot(person.slot) === team))
+    : fleet ? !room.settings.aiOpponent && room.participants.length === 2
+      : room.settings.aiOpponent || [1, 2].every((team) => room.participants.some((person) => teamForSlot(person.slot) === team)));
 }
 export function lobbyAction(room: RoomSnapshot, id: string | null) {
   const host = isRoomHost(room, id);

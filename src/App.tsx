@@ -2,10 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { requestGameMove } from './ai/game-client';
 import { BoardGame, nextLastTurnView, type LastTurnView } from './components/BoardGame';
 import { CoinResults, DiceResults, EffectsTestPage } from './components/Effects';
+import { FleetGame } from './components/FleetGame';
 import { YachtGame } from './components/YachtGame';
 import { Countdown, Vignette } from './components/TableEffects';
 import { reduceRematchConsent, reduceSharedRematch, rematchProgress, type RematchMember, type RematchState } from './game/rematch-consent';
 import { actionForMove, BOARD_SIZES, GAME_CATALOG, catalogGameId, gameId, hasBoardSize, initGame, isBoardGameId, legalGameMoveKeys, moveKey, reduceGame, reduceGameMove, restartAction, terminalGame, voteActionForMove, type BoardSize, type CatalogGameId, type GameAction, type GameId, type GameMove, type GameMoveKey, type GameState, type GameWireAction } from './game/catalog';
+import { createFleetState, fleetActorId, isFleetAction, isFleetState, reduceFleet, type FleetAction, type FleetState } from './game/fleet';
 import { appendYachtInput, createYachtDiceOpening, createYachtEventLog, isYachtPersisted, loadYachtEvents, replayYachtEvents, saveYachtEvents, undoYachtInput, yachtPersisted, type YachtDiceOpening, type YachtInputEvent, type YachtPersisted } from './game/yacht-events';
 import type { YachtParticipant } from './game/yacht-session';
 import type { YachtTurnAction } from './game/yacht';
@@ -15,7 +17,7 @@ import { normalizeRoomCode, requestReservation, reserveRoomCode } from './lobby/
 import { RoomLobby } from './lobby/RoomLobby';
 import { isRoomHost, MAIN_DESTINATIONS, reuseRemoteTransport, roomScreen, teamForSlot, type RoomCommand, type RoomSnapshot } from './lobby/room-state';
 import { deviceReconnectKey, LoopbackTransport, WebSocketTransport, type Transport } from './transport/transport';
-export type Screen = 'name' | 'room' | 'lobby' | 'games' | 'effects' | 'opening' | 'play' | 'yacht';
+export type Screen = 'name' | 'room' | 'lobby' | 'games' | 'effects' | 'opening' | 'play' | 'yacht' | 'fleet';
 export type PlayMode = 'local' | 'ai' | 'remote';
 export type AppHistoryRoute = 'name' | 'lobby' | 'games' | 'play' | 'yacht';
 interface AppHistoryState { nollawa: 'route-v1'; route: AppHistoryRoute }
@@ -48,10 +50,10 @@ interface ActionActor { id: string; seat: Seat | null }
 interface AcceptedActionSource { actor: ActionActor; action: GameWireAction }
 export interface FirstPlayerCoin { outcomes: readonly ['H' | 'T']; replayKey: number; firstPlayer: Seat }
 interface FirstPlayerChoice { game: GameId; size: BoardSize; shared: boolean }
-const isYachtAction = (action: GameWireAction | YachtTurnAction): action is YachtTurnAction => ['roll', 'toggle-hold', 'stop', 'register'].includes(action.type);
+const isYachtAction = (action: GameWireAction | YachtTurnAction | FleetAction): action is YachtTurnAction => ['roll', 'toggle-hold', 'stop', 'register'].includes(action.type);
 type GameMessage =
-  | { type: 'action'; action: GameWireAction | YachtTurnAction; actor?: ActionActor }
-  | { type: 'snapshot'; game?: CatalogGameId; state: GameState | YachtPersisted; source?: AcceptedActionSource; opening?: FirstPlayerCoin; yachtOpening?: YachtDiceOpening; openingChoice?: { game: GameId; size: BoardSize }; startsGame?: boolean }
+  | { type: 'action'; action: GameWireAction | YachtTurnAction | FleetAction; actor?: ActionActor }
+  | { type: 'snapshot'; game?: CatalogGameId; state: GameState | YachtPersisted | FleetState; source?: AcceptedActionSource; opening?: FirstPlayerCoin; yachtOpening?: YachtDiceOpening; openingChoice?: { game: GameId; size: BoardSize }; startsGame?: boolean }
   | { type: 'identity'; id: string; authority: string; seat: Seat | null }
   | { type: 'authority'; authority: string | null }
   | { type: 'room'; room: RoomSnapshot }
@@ -169,6 +171,7 @@ export function App() {
   const [openingChoice, setOpeningChoice] = useState<FirstPlayerChoice | null>(null);
   const [yachtEvents, setYachtEvents] = useState<YachtInputEvent[] | null>(() => loadYachtEvents(typeof sessionStorage === 'undefined' ? undefined : sessionStorage));
   const [yachtPlayers, setYachtPlayers] = useState(2), [yachtOpening, setYachtOpening] = useState<YachtDiceOpening | null>(null);
+  const [fleetState, setFleetState] = useState<FleetState | null>(null);
   const [clock, setClock] = useState(() => Date.now());
   const [preview, setPreview] = useState<MovePreview | null>(null);
   const [lastTurn, setLastTurn] = useState<LastTurnView>({ game: 'samok', moves: 0, cells: [] });
@@ -205,9 +208,18 @@ export function App() {
         setRoom(message.room);
         setBoardSize(message.room.settings.boardSize ?? 13);
         if (isBoardGameId(message.room.game)) { const transition = roomMessageTransition(selectedGameRef.current, state, message.room); selectedGameRef.current = transition.game; setSelectedGame(transition.game); }
-        setScreen(message.room.game === 'yacht' && message.room.phase === 'play' ? 'yacht' : roomScreen(message.room, clientId.current));
+        setScreen(message.room.phase === 'play' && (message.room.game === 'yacht' || message.room.game === 'fleet') ? message.room.game : roomScreen(message.room, clientId.current));
       }
       if (message.type === 'room-error') setConnection(message.message);
+      if (message.type === 'action' && isFleetAction(message.action)) {
+        if (nextMode === 'remote' && isAuthority.current && message.actor) setFleetState((current) => {
+          if (!current) return current;
+          const next = reduceFleet(current, message.actor!.id, message.action as FleetAction);
+          if (next !== current) queueMicrotask(() => transport.send({ type: 'snapshot', game: 'fleet', state: next }));
+          return next;
+        });
+        return;
+      }
       if (message.type === 'action' && isYachtAction(message.action)) {
         if (nextMode === 'remote' && isAuthority.current && message.actor) setYachtEvents((current) => {
           if (!current) return current;
@@ -248,6 +260,7 @@ export function App() {
         return next;
       }); }
       if (message.type === 'snapshot') {
+        if (isFleetState(message.state)) { setFleetState(message.state); setScreen('fleet'); return; }
         if (isYachtPersisted(message.state)) {
           setYachtEvents([...message.state.events]);
           if (message.opening) showOpening(message.opening, 'yacht');
@@ -314,7 +327,8 @@ export function App() {
     } catch (error) { setRoomError(error instanceof Error ? error.message : '방을 만들지 못했습니다.'); }
     finally { setCreatingRoom(false); }
   }
-  async function startLocal(nextMode: PlayMode, game: GameId, size: BoardSize = boardSize) {
+  async function startLocal(nextMode: PlayMode, game: CatalogGameId, size: BoardSize = boardSize) {
+    if (!isBoardGameId(game)) return;
     closeTransport();
     const transport: Transport<GameMessage> = new LoopbackTransport();
     bindTransport(transport, nextMode);
@@ -340,6 +354,14 @@ export function App() {
   function startLocalYacht() {
     closeTransport(); setMode('local'); setConnection('이 기기 연결'); setSelfId(null); setLocalSeat(null);
     publishYachtStart(Array.from({ length: yachtPlayers }, (_, index) => ({ id: `local-${index + 1}`, name: index === 0 ? name.trim() : `${index + 1}P` })), false);
+  }
+  function publishFleetStart(participants: readonly { id: string; name: string }[], shared: boolean) {
+    const next = createFleetState(participants); setFleetState(next);
+    if (shared) send({ type: 'snapshot', game: 'fleet', state: next, startsGame: true }); else setScreen('fleet');
+  }
+  function startLocalFleet() {
+    closeTransport(); setMode('local'); setConnection('이 기기 연결'); setSelfId(null); setLocalSeat(null);
+    publishFleetStart([{ id: 'local-1', name: name.trim() }, { id: 'local-2', name: '2P' }], false);
   }
   function beginOpening(game: GameId, size: BoardSize, nextMode: PlayMode, current: GameState = initGame(game, size)) {
     if (firstPlayerMethodFor(nextMode, roomRef.current) === 'choice') {
@@ -394,7 +416,7 @@ export function App() {
   function undoYacht() { if (mode === 'remote') return; setYachtEvents((current) => { if (!current) return current; const next = undoYachtInput(current); saveYachtEvents(typeof sessionStorage === 'undefined' ? undefined : sessionStorage, next); return next; }); }
   const sendSharedGameSnapshot = (snapshot: ReturnType<typeof createSharedGameSelection> | ReturnType<typeof createSharedGameStart>) => { selectedGameRef.current = snapshot.game; setSelectedGame(snapshot.game); setState(snapshot.state); send(snapshot); };
   const selectSharedGame = (game: GameId, size: BoardSize) => sendSharedGameSnapshot(createSharedGameSelection(game, size));
-  const initializeSharedGame = (game: CatalogGameId, size: BoardSize) => { if (game === 'yacht') { const participants = [...roomRef.current!.participants].sort((a, b) => a.slot - b.slot).slice(0, 4).map(({ id, name }) => ({ id, name })); publishYachtStart(participants, true); } else if (firstPlayerMethodFor('remote', roomRef.current) === 'choice') beginOpening(game, size, 'remote'); else sendSharedGameSnapshot(createSharedGameStart(game, createFirstPlayerCoin, size)); };
+  const initializeSharedGame = (game: CatalogGameId, size: BoardSize) => { const participants = [...roomRef.current!.participants].sort((a, b) => a.slot - b.slot).map(({ id, name }) => ({ id, name })); if (game === 'yacht') publishYachtStart(participants.slice(0, 4), true); else if (game === 'fleet') publishFleetStart(participants.slice(0, 2), true); else if (firstPlayerMethodFor('remote', roomRef.current) === 'choice') beginOpening(game, size, 'remote'); else sendSharedGameSnapshot(createSharedGameStart(game, createFirstPlayerCoin, size)); };
   const sendRoom = (command: RoomCommand) => { send({ type: 'room-command', ...command }); if (command.command === 'start' && isAuthority.current) initializeSharedGame(catalogGameId(roomRef.current?.game ?? selectedGameRef.current), roomRef.current?.settings.boardSize ?? 13); };
   function applyRemoteBrowserBack(route: AppHistoryRoute) {
     const transition = remoteBackTransition(route);
@@ -503,8 +525,8 @@ export function App() {
     {screen === 'lobby' && !room && <section class="panel"><h1>{roomCode}</h1><p>{connection}</p></section>}
     {screen === 'games' && <section class="panel" aria-labelledby="games-title"><p class="eyebrow">{mode === 'remote' ? `방 ${roomCode}` : '이 기기'}</p><h1 id="games-title">게임을 골라 주세요</h1>{mode === 'remote' && <button onClick={() => { sendRoom({ command: 'set-activity', activity: 'lobby' }); setScreen('lobby'); }}>방 로비</button>}<label>게임 검색<input type="search" value={query} onInput={(event) => setQuery(event.currentTarget.value)} /></label><div class="filters" aria-label="게임 필터"><div>{(['all', '1', '2', '3-4'] as const).map((value) => <button key={value} class={peopleFilter === value ? 'selected' : ''} aria-pressed={peopleFilter === value} onClick={() => setPeopleFilter(value)}>{value === 'all' ? '전체' : `${value}인`}</button>)}</div><div>{['봇 있음', '대전', '5분 이내'].map((tag) => <button key={tag} class={tagFilters.includes(tag) ? 'selected' : ''} aria-pressed={tagFilters.includes(tag)} onClick={() => setTagFilters((current) => current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag])}>{tag}</button>)}</div></div><div class="game-list">
       {visibleGames.map((game) => <article class="game-card" key={game.name}><div><h2>{game.name}</h2><p class="people">{game.people} · {game.time}</p><div class="tags">{game.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>{mode !== 'remote' && hasBoardSize(game.id) && <label>판 크기<select value={boardSize} onChange={(event) => setBoardSize(Number(event.currentTarget.value) as BoardSize)}>{BOARD_SIZES.map((size) => <option value={size} key={size}>{size}×{size}</option>)}</select></label>}{mode !== 'remote' && game.id === 'yacht' && <label>참가자 수<select value={yachtPlayers} onChange={(event) => setYachtPlayers(Number(event.currentTarget.value))}>{[1, 2, 3, 4].map((count) => <option value={count} key={count}>{count}명</option>)}</select></label>}</div><div class="game-actions">
-        {mode === 'remote' ? <button class="primary" disabled={!isHost} onClick={() => { sendRoom({ command: 'select-game', game: game.id }); if (game.id === 'yacht') sendRoom({ command: 'set-ai-opponent', enabled: false }); else selectSharedGame(game.id, room?.settings.boardSize ?? 13); sendRoom({ command: 'set-activity', activity: 'lobby' }); setScreen('lobby'); }}>게임 선택</button> : game.id === 'yacht' ? <><button class="primary" onClick={startLocalYacht}>{yachtPlayers}명이 시작</button>{yachtEvents && <button onClick={() => setScreen('yacht')}>저장된 경기 열기</button>}</> : <button class="primary" onClick={() => void startLocal(mode, game.id, boardSize)}>두 사람이 시작</button>}
-        {game.id !== 'yacht' && <>{mode === 'local' && <button onClick={() => void startLocal('ai', game.id, boardSize)}>AI와 시작</button>}</>}
+        {mode === 'remote' ? <button class="primary" disabled={!isHost} onClick={() => { sendRoom({ command: 'select-game', game: game.id }); if (game.id === 'yacht' || game.id === 'fleet') sendRoom({ command: 'set-ai-opponent', enabled: false }); else if (isBoardGameId(game.id)) selectSharedGame(game.id, room?.settings.boardSize ?? 13); setScreen('lobby'); }}>게임 선택</button> : game.id === 'yacht' ? <><button class="primary" onClick={startLocalYacht}>{yachtPlayers}명이 시작</button>{yachtEvents && <button onClick={() => setScreen('yacht')}>저장된 경기 열기</button>}</> : game.id === 'fleet' ? <button class="primary" onClick={startLocalFleet}>두 사람이 시작</button> : <button class="primary" onClick={() => void startLocal(mode, game.id, boardSize)}>두 사람이 시작</button>}
+        {isBoardGameId(game.id) && <>{mode === 'local' && <button onClick={() => void startLocal('ai', game.id, boardSize)}>AI와 시작</button>}</>}
       </div></article>)}
       <article class="game-card effects-entry"><div><h2>연출 테스트</h2><p class="people">동전 · 주사위 · 덱 섞기</p><div class="tags"><span>E1–E5</span></div></div><div class="game-actions"><button class="primary" onClick={() => setScreen('effects')}>테스트 열기</button></div></article>
     </div></section>}
@@ -513,6 +535,7 @@ export function App() {
     {screen === 'opening' && opening && <section class="panel narrow opening-coin" aria-labelledby="opening-title"><p class="eyebrow">{connection}</p><h1 id="opening-title">선공 결정</h1><CoinResults outcomes={opening.outcomes} replayKey={opening.replayKey} /><p>{opening.firstPlayer}번이 먼저 시작합니다</p></section>}
     {screen === 'opening' && yachtOpening && <section class="panel opening-coin" aria-labelledby="yacht-opening-title"><p class="eyebrow">참가자마다 주사위 한 개</p><h1 id="yacht-opening-title">차례 순서 결정</h1>{yachtOpening.rounds.map((round, index) => <div key={index}><p>{index + 1}차 · 동점 참가자만 다시 굴림</p><DiceResults outcomes={Object.values(round)} replayKey={yachtOpening.replayKey + index} /></div>)}<p>{yachtOpening.order.map(({ name }) => name).join(' → ')}</p></section>}
     {screen === 'yacht' && yachtEvents && <YachtGameRoute events={yachtEvents} mode={mode} selfId={selfId} onAction={actYacht} onUndo={undoYacht} onExit={() => mode === 'remote' ? returnToLobby(sendRoom) : setScreen('games')} />}
+    {screen === 'fleet' && fleetState && <FleetGame state={fleetState} viewerId={mode === 'remote' ? selfId : fleetActorId(fleetState) ?? fleetState.winnerId} onAction={(action) => mode === 'remote' ? send({ type: 'action', action }) : setFleetState((current) => current ? reduceFleet(current, fleetActorId(current) ?? '', action) : current)} onExit={() => mode === 'remote' ? returnToLobby(sendRoom) : setScreen('games')} />}
     {screen === 'play' && <section class="play-layout" aria-labelledby="play-title"><div class="game-status"><div><p class="eyebrow">{connection}</p><h1 id="play-title">{outcome}</h1><div class="play-status-slot" role="status" aria-live="polite"><p class={`${seatStatus ? `seat-badge ${localSeat ? `player-${localSeat}` : ''}` : restartNotice ? 'restart-notice' : ''}`} aria-hidden={!playStatus}>{playStatus || '\u00a0'}</p></div></div>{mode === 'remote' ? <div><button onClick={() => returnToLobby(sendRoom)}>로비로 돌아가기</button><button onClick={showTitle}>타이틀로 나가기</button></div> : <button onClick={() => setScreen('games')}>게임 목록</button>}</div><BoardGame game={selectedGame} state={state} selfId={mode === 'remote' ? selfId : null} seat={localSeat} rouletteMove={rouletteMove} preview={confirmedPreview?.move ?? null} lastTurn={lastTurnCells} disabled={boardDisabled} onSelect={(move) => setPreview(createMovePreview(selectedGame, state, move))} /><button class="primary confirm-move" disabled={!confirmedPreview} onClick={() => { if (!confirmedPreview) return; send({ type: 'action', action: confirmedActionFor(mode, selectedGame, confirmedPreview.move) }); setPreview(null); }}>확인</button><p class="hint">자리를 선택한 뒤 확인하세요. 키보드는 Enter 또는 Space를 씁니다. ● 흑돌 · ■ 백돌</p>{terminalGame(selectedGame, state).ended && <div class="rematch"><div>{mode === 'remote' && room && <><p>{rematch.ready}/{rematch.total} 다음 판 준비</p><p>아직: {rematch.pendingNames.join(', ')}</p></>}</div><button class="primary restart" disabled={mode === 'remote' && (localSeat === null || rematch.selfReady)} onClick={() => send({ type: 'action', action: restartAction() })}>다음 판</button></div>}</section>}
     {screen === 'play' && voteTimer.visible && <Vignette intensity={voteTimer.intensity} periodMs={voteTimer.periodMs} />}
     {screen === 'play' && <Countdown remaining={voteTimer.remaining} visible={voteTimer.visible} />}
