@@ -48,13 +48,14 @@ describe('append-only Yacht event replay and persistence', () => {
     const state = replayYachtEvents(restored!);
     expect(state.participants[0]?.turn.dice).toEqual([6, 2, 6, 6, 6]);
     expect(state.participants[0]?.turn.rerollSelected).toEqual([false, false, false, false, false]);
-    const finalRollIndex = restored!.map((event) => event.type === 'input' ? event.action.type : event.type).lastIndexOf('roll');
-    expect(replayYachtEvents(restored!.slice(0, finalRollIndex)).participants[0]?.turn.rerollSelected).toEqual([true, false, true, true, true]);
     expect(JSON.stringify(restored)).not.toContain('toggle-hold');
     expect(memory.get('nollawa-yacht-events-v1')).toBe(legacy);
-    const undone = undoYachtInput(restored!);
-    expect(undone).toHaveLength(3);
-    expect(new Set(undone.slice(1).map((event) => event.type === 'input' ? event.legacyGroup : undefined))).toEqual(new Set([1, 2]));
+    const withoutSecondRoll = undoYachtInput(restored!), afterFirstUndo = replayYachtEvents(withoutSecondRoll);
+    expect(afterFirstUndo.participants[0]?.turn.dice).toEqual([1, 2, 3, 4, 5]);
+    expect(afterFirstUndo.participants[0]?.turn.rerollSelected).toEqual([true, false, true, true, true]);
+    const withoutHold = undoYachtInput(withoutSecondRoll), afterSecondUndo = replayYachtEvents(withoutHold);
+    expect(afterSecondUndo.participants[0]?.turn.dice).toEqual([1, 2, 3, 4, 5]);
+    expect(afterSecondUndo.participants[0]?.turn.rerollSelected).toEqual([false, false, false, false, false]);
   });
 
   it('restores a legacy log ending after its first roll with no reroll selection', () => {

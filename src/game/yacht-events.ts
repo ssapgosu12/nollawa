@@ -65,8 +65,12 @@ function migrateLegacyYachtEvents(events: readonly unknown[]): YachtInputEvent[]
     if (legacyAction.type === 'toggle-hold') {
       const index = legacyAction.index;
       if (!Number.isInteger(index) || (index as number) < 0 || (index as number) >= 5) throw new RangeError('Invalid legacy Yacht hold index');
-      append(actorId, { type: 'toggle-reroll', index: index as number }, group);
       held[index as number] = !held[index as number];
+      const current = state.participants.find((participant) => participant.id === state.currentParticipantId)?.turn;
+      if (!current || current.dice === null) throw new RangeError('Legacy Yacht hold requires rolled dice');
+      held.forEach((isHeld, rerollIndex) => {
+        if (current.rerollSelected[rerollIndex] !== !isHeld) append(actorId, { type: 'toggle-reroll', index: rerollIndex }, group);
+      });
       return;
     }
     if (!['roll', 'stop', 'register'].includes(String(legacyAction.type))) throw new RangeError('Invalid legacy Yacht action');
