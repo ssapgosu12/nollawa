@@ -135,7 +135,7 @@ export function App() {
   const [restartNotice, setRestartNotice] = useState('');
   const [opening, setOpening] = useState<FirstPlayerCoin | null>(null);
   const [openingChoice, setOpeningChoice] = useState<FirstPlayerChoice | null>(null);
-  const [yachtEvents, setYachtEvents] = useState<YachtInputEvent[] | null>(() => loadYachtEvents(typeof localStorage === 'undefined' ? undefined : localStorage));
+  const [yachtEvents, setYachtEvents] = useState<YachtInputEvent[] | null>(() => loadYachtEvents(typeof sessionStorage === 'undefined' ? undefined : sessionStorage));
   const [yachtPlayers, setYachtPlayers] = useState(2), [yachtOpening, setYachtOpening] = useState<YachtDiceOpening | null>(null);
   const [clock, setClock] = useState(() => Date.now());
   const [preview, setPreview] = useState<MovePreview | null>(null);
@@ -302,7 +302,7 @@ export function App() {
     const events = createYachtEventLog(ordered);
     setYachtEvents(events);
     if (shared) send({ type: 'snapshot', game: 'yacht', state: yachtPersisted(events), opening: coin, yachtOpening: diceOpening, startsGame: true });
-    else { saveYachtEvents(typeof localStorage === 'undefined' ? undefined : localStorage, events); if (coin) showOpening(coin, 'yacht'); else if (diceOpening) showYachtDiceOpening(diceOpening); else setScreen('yacht'); }
+    else { saveYachtEvents(typeof sessionStorage === 'undefined' ? undefined : sessionStorage, events); if (coin) showOpening(coin, 'yacht'); else if (diceOpening) showYachtDiceOpening(diceOpening); else setScreen('yacht'); }
   }
   function startLocalYacht() {
     closeTransport(); setMode('local'); setConnection('이 기기 연결'); setSelfId(null); setLocalSeat(null);
@@ -354,9 +354,9 @@ export function App() {
   }
   function actYacht(action: YachtTurnAction) {
     if (mode === 'remote') { send({ type: 'action', action }); return; }
-    setYachtEvents((current) => { if (!current) return current; const actor = replayYachtEvents(current).currentParticipantId, next = appendYachtInput(current, actor, action); if (next !== current) saveYachtEvents(typeof localStorage === 'undefined' ? undefined : localStorage, next); return next; });
+    setYachtEvents((current) => { if (!current) return current; const actor = replayYachtEvents(current).currentParticipantId, next = appendYachtInput(current, actor, action); if (next !== current) saveYachtEvents(typeof sessionStorage === 'undefined' ? undefined : sessionStorage, next); return next; });
   }
-  function undoYacht() { if (mode === 'remote') return; setYachtEvents((current) => { if (!current) return current; const next = undoYachtInput(current); saveYachtEvents(typeof localStorage === 'undefined' ? undefined : localStorage, next); return next; }); }
+  function undoYacht() { if (mode === 'remote') return; setYachtEvents((current) => { if (!current) return current; const next = undoYachtInput(current); saveYachtEvents(typeof sessionStorage === 'undefined' ? undefined : sessionStorage, next); return next; }); }
   const sendSharedGameSnapshot = (snapshot: ReturnType<typeof createSharedGameSelection> | ReturnType<typeof createSharedGameStart>) => { selectedGameRef.current = snapshot.game; setSelectedGame(snapshot.game); setState(snapshot.state); send(snapshot); };
   const selectSharedGame = (game: GameId, size: BoardSize) => sendSharedGameSnapshot(createSharedGameSelection(game, size));
   const initializeSharedGame = (game: CatalogGameId, size: BoardSize) => { if (game === 'yacht') { const participants = [...roomRef.current!.participants].sort((a, b) => a.slot - b.slot).slice(0, 4).map(({ id, name }) => ({ id, name })); publishYachtStart(participants, true); } else if (firstPlayerMethodFor('remote', roomRef.current) === 'choice') beginOpening(game, size, 'remote'); else sendSharedGameSnapshot(createSharedGameStart(game, createFirstPlayerCoin, size)); };
