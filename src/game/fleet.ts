@@ -17,7 +17,7 @@ export type FleetMode = 'classic' | 'variant';
 export type FleetShootingCard = typeof VARIANT_SHOOTING_CARDS[number];
 export type FleetSpecialShipType = typeof VARIANT_SPECIAL_SHIPS[number];
 export type FleetShotType = 'classic' | FleetShootingCard;
-export type FleetShotResult = 'hit' | 'miss' | 'sunk';
+export type FleetShotResult = 'hit' | 'miss' | 'sunk' | 'partial';
 
 export interface FleetVariantPreset {
   id: string;
@@ -31,6 +31,8 @@ export interface FleetVariantSetup {
   shootingCard: FleetShootingCard | null;
   selectedSpecialShips: readonly FleetSpecialShipType[];
   complete: boolean;
+  fleet?: readonly FleetTaggedShip[];
+  tagOffset: number;
 }
 
 export interface FleetShip {
@@ -38,6 +40,11 @@ export interface FleetShip {
   length: number;
   orientation: FleetOrientation;
   cells: readonly FleetCell[];
+  blueprintId?: string;
+  special?: FleetSpecialKind | null;
+  placementTag?: FleetPlacementTag | null;
+  damage?: readonly number[];
+  sunk?: boolean;
 }
 
 export interface FleetParticipant {
@@ -55,7 +62,13 @@ export interface FleetShot {
   cell: FleetCell;
   shotType: FleetShotType;
   result: FleetShotResult;
+  round?: number;
+  impactKind?: FleetImpactKind;
 }
+
+export interface FleetVariantImpact { targetParticipantId: string; cell: FleetCell; kind: FleetImpactKind; shotType: FleetShootingCard }
+export interface FleetRoundPlan { participantId: string; impacts: readonly FleetVariantImpact[]; submitted: boolean }
+export interface FleetPresentation { kind: 'caption' | 'result'; text: string; attackerId: string; targetId: string }
 
 export interface FleetState {
   kind: 'fleet';
@@ -69,6 +82,10 @@ export interface FleetState {
   shots: readonly FleetShot[];
   phase: 'setup' | 'placement' | 'targeting' | 'complete';
   winnerId: string | null;
+  draw?: boolean;
+  round?: number;
+  roundPlans?: readonly FleetRoundPlan[];
+  presentationQueue?: readonly FleetPresentation[];
 }
 
 export type FleetAction =
@@ -77,10 +94,13 @@ export type FleetAction =
   | { type: 'place-ship'; shipIndex: number; origin: FleetCell; orientation: FleetOrientation }
   | { type: 'rotate-ship'; shipIndex: number }
   | { type: 'complete-placement' }
+  | { type: 'queue-variant-shot'; targetParticipantId: string; plan: FleetShotPlan }
+  | { type: 'reset-variant-plan' }
+  | { type: 'submit-variant-plan' }
   | { type: 'shoot'; targetParticipantId: string; cell: FleetCell; shotType: FleetShotType };
 
 export const isFleetAction = (value: unknown): value is FleetAction => Boolean(value && typeof value === 'object'
-  && ['choose-variant-preset', 'choose-special-ships', 'place-ship', 'rotate-ship', 'complete-placement', 'shoot'].includes(String((value as { type?: unknown }).type)));
+  && ['choose-variant-preset', 'choose-special-ships', 'place-ship', 'rotate-ship', 'complete-placement', 'queue-variant-shot', 'reset-variant-plan', 'submit-variant-plan', 'shoot'].includes(String((value as { type?: unknown }).type)));
 
 export interface FleetParticipantView {
   id: string;
@@ -153,10 +173,11 @@ export function createVariantFleetState(
       variantSetup: {
         presetOffers: variantPresetOffers(participantIndex, twoPlayer, random),
         selectedPresetId: null, shootingCard: null, selectedSpecialShips: [], complete: false,
+        tagOffset: Math.floor(Math.min(Math.max(random(), 0), 0.9999999999999999) * VARIANT_SPECIAL_SHIPS.length),
       },
     })),
     setupParticipantId: participants[0]!.id, placementParticipantId: null, turnParticipantId: null,
-    shots: [], phase: 'setup', winnerId: null,
+    shots: [], phase: 'setup', winnerId: null, draw: false, round: 1, roundPlans: [], presentationQueue: [],
   };
 }
 
@@ -175,18 +196,29 @@ export function fleetShipCells(length: number, origin: FleetCell, orientation: F
   }));
 }
 
+function blueprintCells(blueprint: FleetShipBlueprint, origin: FleetCell, orientation: FleetOrientation): readonly FleetCell[] {
+  const rows = orientation === 'horizontal' ? blueprint.shape.rows : blueprint.shape.columns;
+  const columns = orientation === 'horizontal' ? blueprint.shape.columns : blueprint.shape.rows;
+  return Array.from({ length: rows * columns }, (_, index) => ({ row: origin.row + Math.floor(index / columns), column: origin.column + index % columns }));
+}
+
 function placeShip(state: FleetState, actorId: string, action: Extract<FleetAction, { type: 'place-ship' }>): FleetState {
   if (state.phase !== 'placement' || state.placementParticipantId !== actorId) return state;
-  const expectedLength = state.baseFleetLengths[action.shipIndex];
-  if (expectedLength === undefined) return state;
-  const cells = fleetShipCells(expectedLength, action.origin, action.orientation);
-  if (!cells.every((cell) => validCell(cell, state.boardSize))) return state;
   const participantIndex = state.participants.findIndex(({ id }) => id === actorId);
   const participant = state.participants[participantIndex];
+  const blueprint = state.mode === 'variant' ? participant?.variantSetup?.fleet?.[action.shipIndex] : undefined;
+  const expectedLength = blueprint ? blueprint.shape.rows * blueprint.shape.columns : state.baseFleetLengths[action.shipIndex];
+  if (expectedLength === undefined) return state;
+  const cells = blueprint ? blueprintCells(blueprint, action.origin, action.orientation) : fleetShipCells(expectedLength, action.origin, action.orientation);
+  if (!cells.every((cell) => validCell(cell, state.boardSize))) return state;
   if (!participant || participant.placementComplete) return state;
+  if (blueprint?.placementTag && !isFleetTaggedPlacementValid(blueprint, blueprint.placementTag, state.boardSize as 10 | 12, action.origin, action.orientation)) return state;
   const occupied = new Set(participant.ships.filter(({ index }) => index !== action.shipIndex).flatMap(({ cells: shipCells }) => shipCells.map(cellKey)));
   if (cells.some((cell) => occupied.has(cellKey(cell)))) return state;
-  const ship: FleetShip = { index: action.shipIndex, length: expectedLength, orientation: action.orientation, cells };
+  const ship: FleetShip = {
+    index: action.shipIndex, length: expectedLength, orientation: action.orientation, cells,
+    ...(blueprint ? { blueprintId: blueprint.id, special: blueprint.special, placementTag: blueprint.placementTag, damage: cells.map(() => 0), sunk: false } : {}),
+  };
   const ships = [...participant.ships.filter(({ index }) => index !== action.shipIndex), ship].sort((a, b) => a.index - b.index);
   const participants = [...state.participants];
   participants[participantIndex] = { ...participant, ships };
@@ -207,7 +239,8 @@ function completePlacement(state: FleetState, actorId: string): FleetState {
   if (state.phase !== 'placement' || state.placementParticipantId !== actorId) return state;
   const participantIndex = state.participants.findIndex(({ id }) => id === actorId);
   const participant = state.participants[participantIndex];
-  if (!participant || participant.ships.length !== state.baseFleetLengths.length) return state;
+  const expectedCount = state.mode === 'variant' ? participant?.variantSetup?.fleet?.length : state.baseFleetLengths.length;
+  if (!participant || participant.ships.length !== expectedCount) return state;
   const participants = [...state.participants];
   participants[participantIndex] = { ...participant, placementComplete: true };
   const next = participants.find(({ placementComplete }) => !placementComplete);
@@ -238,6 +271,80 @@ function shoot(state: FleetState, actorId: string, action: Extract<FleetAction, 
   return { ...state, participants, shots, turnParticipantId: next.id };
 }
 
+const helperShotTypeFor = (card: FleetShootingCard): FleetShotPlan['type'] => ({
+  salvo: 'salvo', flare: 'flare', tracer: 'tracer', 'high-explosive': 'explosive', scatter: 'scatter',
+  piercing: 'piercing', 'random-shot': 'random', buckshot: 'buckshot',
+})[card] as FleetShotPlan['type'];
+
+function queueVariantShot(state: FleetState, actorId: string, action: Extract<FleetAction, { type: 'queue-variant-shot' }>): FleetState {
+  if (state.mode !== 'variant' || state.phase !== 'targeting') return state;
+  const actor = state.participants.find(({ id }) => id === actorId), target = state.participants.find(({ id }) => id === action.targetParticipantId);
+  const shotType = actor?.variantSetup?.shootingCard;
+  const current = state.roundPlans?.find(({ participantId }) => participantId === actorId);
+  if (!actor?.alive || !target?.alive || target.id === actorId || !shotType || current?.submitted || action.plan.type !== helperShotTypeFor(shotType)) return state;
+  let planned;
+  try { planned = planFleetShots(action.plan); } catch { return state; }
+  const impacts = planned.filter(({ cell }) => validCell(cell, state.boardSize)).map(({ cell, kind }) => ({ targetParticipantId: target.id, cell, kind, shotType }));
+  if (impacts.length === 0) return state;
+  const next: FleetRoundPlan = { participantId: actorId, impacts: [...(current?.impacts ?? []), ...impacts], submitted: false };
+  return { ...state, roundPlans: [...(state.roundPlans ?? []).filter(({ participantId }) => participantId !== actorId), next] };
+}
+
+function resetVariantPlan(state: FleetState, actorId: string): FleetState {
+  const plan = state.roundPlans?.find(({ participantId }) => participantId === actorId);
+  if (state.mode !== 'variant' || state.phase !== 'targeting' || plan?.submitted) return state;
+  return { ...state, roundPlans: (state.roundPlans ?? []).filter(({ participantId }) => participantId !== actorId) };
+}
+
+function resolveVariantRound(state: FleetState, plans: readonly FleetRoundPlan[]): FleetState {
+  let participants = state.participants.map((participant) => ({ ...participant, ships: participant.ships.map((ship) => ({ ...ship, damage: ship.damage ? [...ship.damage] : undefined })) }));
+  const preResolution = new Map(state.participants.map((participant) => [participant.id, participant]));
+  const shots: FleetShot[] = [...state.shots], presentationQueue: FleetPresentation[] = [];
+  for (const attacker of state.participants) {
+    const plan = plans.find(({ participantId }) => participantId === attacker.id);
+    for (const impact of plan?.impacts ?? []) {
+      const targetIndex = participants.findIndex(({ id }) => id === impact.targetParticipantId), target = participants[targetIndex]!;
+      const originalTarget = preResolution.get(impact.targetParticipantId)!;
+      const originalShip = originalTarget.ships.find(({ cells }) => cells.some((cell) => sameCell(cell, impact.cell)));
+      let result: FleetShotResult = 'miss';
+      if (originalShip) {
+        const shipIndex = target.ships.findIndex(({ index }) => index === originalShip.index), currentShip = target.ships[shipIndex]!;
+        const blueprint = target.variantSetup?.fleet?.[currentShip.index];
+        if (blueprint) {
+          const cellIndex = originalShip.cells.findIndex((cell) => sameCell(cell, impact.cell));
+          const initial = createFleetShipState(target.id, blueprint), applied = applyFleetImpact({ ...initial, damage: currentShip.damage ?? initial.damage, sunk: currentShip.sunk ?? false }, { kind: impact.kind === 'flare' ? 'flare' : 'damage', cellIndex });
+          const targetShips = [...target.ships];
+          targetShips[shipIndex] = { ...currentShip, damage: [...applied.ship.damage], sunk: applied.ship.sunk };
+          participants[targetIndex] = { ...target, ships: targetShips };
+          result = applied.publicResult === 'partial' ? 'partial' : applied.publicResult === 'sunk' ? 'sunk'
+            : applied.publicResult === 'hit' || applied.publicResult === 'revealed' || (applied.publicResult === null && blueprint.special !== 'submarine') ? 'hit' : 'miss';
+        }
+      }
+      shots.push({ shooter: attacker.id, target: impact.targetParticipantId, cell: { ...impact.cell }, shotType: impact.shotType, result, round: state.round ?? 1, impactKind: impact.kind });
+      presentationQueue.push({ kind: 'caption', text: `${attacker.name} → ${target.name} 공격!`, attackerId: attacker.id, targetId: target.id });
+      presentationQueue.push({ kind: 'result', text: result === 'miss' ? 'MISS!' : 'HIT!', attackerId: attacker.id, targetId: target.id });
+    }
+  }
+  participants = participants.map((participant) => ({ ...participant, alive: participant.ships.some(({ sunk }) => !sunk) }));
+  const survivors = participants.filter(({ alive }) => alive), complete = survivors.length <= 1;
+  return {
+    ...state, participants, shots, presentationQueue, roundPlans: [], round: (state.round ?? 1) + 1,
+    phase: complete ? 'complete' : 'targeting', winnerId: survivors.length === 1 ? survivors[0]!.id : null,
+    draw: survivors.length === 0, turnParticipantId: complete ? null : survivors[0]!.id,
+  };
+}
+
+function submitVariantPlan(state: FleetState, actorId: string): FleetState {
+  if (state.mode !== 'variant' || state.phase !== 'targeting') return state;
+  const actor = state.participants.find(({ id }) => id === actorId), current = state.roundPlans?.find(({ participantId }) => participantId === actorId);
+  if (!actor?.alive || !current || current.submitted || current.impacts.length === 0) return state;
+  const plans = (state.roundPlans ?? []).map((plan) => plan.participantId === actorId ? { ...plan, submitted: true } : plan);
+  const living = state.participants.filter(({ alive }) => alive);
+  if (living.every(({ id }) => plans.some((plan) => plan.participantId === id && plan.submitted))) return resolveVariantRound(state, plans);
+  const next = living.find(({ id }) => !plans.some((plan) => plan.participantId === id && plan.submitted));
+  return { ...state, roundPlans: plans, turnParticipantId: next?.id ?? null };
+}
+
 function chooseVariantPreset(state: FleetState, actorId: string, presetId: string): FleetState {
   if (state.mode !== 'variant' || state.phase !== 'setup' || state.setupParticipantId !== actorId) return state;
   const participantIndex = state.participants.findIndex(({ id }) => id === actorId);
@@ -254,6 +361,21 @@ function chooseVariantPreset(state: FleetState, actorId: string, presetId: strin
   return { ...state, participants };
 }
 
+const specialKindFor = (kind: FleetSpecialShipType): FleetSpecialKind => ({
+  'extra-armor': 'armor', submarine: 'submarine', 'aircraft-carrier': 'carrier', 'glass-cannon': 'glass-cannon',
+  'spy-ship': 'spy', 'supply-ship': 'supply', 'paper-ship': 'paper',
+})[kind] as FleetSpecialKind;
+
+function taggedFleet(selected: readonly FleetSpecialShipType[], boardSize: 10 | 12, offset: number): readonly FleetTaggedShip[] {
+  const fleet = buildVariantFleet(selected.map(specialKindFor));
+  const candidates = fleet.map((_, index) => fleet[(index + offset) % fleet.length]!);
+  const coastal = candidates.find((ship) => isFleetTaggedPlacementValid(ship, 'coastal', boardSize, { row: 0, column: 0 }, 'horizontal'))!;
+  const ocean = candidates.find((ship) => ship.id !== coastal.id && isFleetTaggedPlacementValid(ship, 'ocean', boardSize, { row: boardSize === 10 ? 2 : 3, column: boardSize === 10 ? 2 : 3 }, 'horizontal'))!;
+  const assigned = assignFleetPlacementTags(fleet, { coastalShipId: coastal.id, oceanShipId: ocean.id }, boardSize);
+  if (!assigned.ok) throw new Error(`variant fleet tags failed: ${assigned.reason}`);
+  return assigned.ships;
+}
+
 function chooseSpecialShips(state: FleetState, actorId: string, selected: readonly FleetSpecialShipType[]): FleetState {
   if (state.mode !== 'variant' || state.phase !== 'setup' || state.setupParticipantId !== actorId) return state;
   const participantIndex = state.participants.findIndex(({ id }) => id === actorId);
@@ -266,7 +388,7 @@ function chooseSpecialShips(state: FleetState, actorId: string, selected: readon
   const participants = [...state.participants];
   participants[participantIndex] = {
     ...participant,
-    variantSetup: { ...setup, selectedSpecialShips: [...selected], complete: true },
+    variantSetup: { ...setup, selectedSpecialShips: [...selected], complete: true, fleet: taggedFleet(selected, state.boardSize as 10 | 12, setup.tagOffset) },
   };
   const next = participants.find(({ variantSetup }) => !variantSetup?.complete);
   return next
@@ -280,19 +402,26 @@ export function reduceFleet(state: FleetState, actorId: string, action: FleetAct
   if (action.type === 'place-ship') return placeShip(state, actorId, action);
   if (action.type === 'rotate-ship') return rotateShip(state, actorId, action.shipIndex);
   if (action.type === 'complete-placement') return completePlacement(state, actorId);
+  if (action.type === 'queue-variant-shot') return queueVariantShot(state, actorId, action);
+  if (action.type === 'reset-variant-plan') return resetVariantPlan(state, actorId);
+  if (action.type === 'submit-variant-plan') return submitVariantPlan(state, actorId);
   return shoot(state, actorId, action);
 }
 
 export const fleetActorId = (state: FleetState): string | null => state.phase === 'setup'
   ? state.setupParticipantId
-  : state.phase === 'placement' ? state.placementParticipantId : state.turnParticipantId;
+  : state.phase === 'placement' ? state.placementParticipantId
+    : state.mode === 'variant' && state.phase === 'targeting'
+      ? state.participants.find(({ alive, id }) => alive && !(state.roundPlans ?? []).some((plan) => plan.participantId === id && plan.submitted))?.id ?? null
+      : state.turnParticipantId;
 
 export function projectFleetState(state: FleetState, viewerParticipantId?: string): FleetView {
+  const viewer = state.participants.find(({ id }) => id === viewerParticipantId), showEveryFleet = state.mode === 'variant' && viewer?.alive === false;
   return {
     ...state,
     participants: state.participants.map((participant) => {
       const common = { id: participant.id, name: participant.name, placementComplete: participant.placementComplete, alive: participant.alive };
-      return participant.id === viewerParticipantId ? {
+      return participant.id === viewerParticipantId || showEveryFleet ? {
         ...common,
         ships: participant.ships.map((ship) => ({ ...ship, cells: ship.cells.map((cell) => ({ ...cell })) })),
         ...(participant.variantSetup ? { variantSetup: {
@@ -305,3 +434,8 @@ export function projectFleetState(state: FleetState, viewerParticipantId?: strin
     shots: state.shots.map((shot) => ({ ...shot, cell: { ...shot.cell } })),
   };
 }
+import { planFleetShots, type FleetImpactKind, type FleetShotPlan } from './fleet-shots';
+import {
+  applyFleetImpact, assignFleetPlacementTags, buildVariantFleet, createFleetShipState, isFleetTaggedPlacementValid,
+  type FleetPlacementTag, type FleetShipBlueprint, type FleetSpecialKind, type FleetTaggedShip,
+} from './fleet-special';

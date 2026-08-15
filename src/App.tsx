@@ -7,7 +7,7 @@ import { YachtGame } from './components/YachtGame';
 import { Countdown, Vignette } from './components/TableEffects';
 import { reduceRematchConsent, reduceSharedRematch, rematchProgress, type RematchMember, type RematchState } from './game/rematch-consent';
 import { actionForMove, BOARD_SIZES, GAME_CATALOG, catalogGameId, gameId, hasBoardSize, initGame, isBoardGameId, legalGameMoveKeys, moveKey, reduceGame, reduceGameMove, restartAction, terminalGame, voteActionForMove, type BoardSize, type CatalogGameId, type GameAction, type GameId, type GameMove, type GameMoveKey, type GameState, type GameWireAction } from './game/catalog';
-import { createFleetState, fleetActorId, isFleetAction, isFleetState, reduceFleet, type FleetAction, type FleetState } from './game/fleet';
+import { createFleetState, createVariantFleetState, fleetActorId, isFleetAction, isFleetState, reduceFleet, type FleetAction, type FleetState } from './game/fleet';
 import { appendYachtInput, createYachtDiceOpening, createYachtEventLog, isYachtPersisted, loadYachtEvents, replayYachtEvents, saveYachtEvents, undoYachtInput, yachtPersisted, type YachtDiceOpening, type YachtInputEvent, type YachtPersisted } from './game/yacht-events';
 import type { YachtParticipant } from './game/yacht-session';
 import type { YachtTurnAction } from './game/yacht';
@@ -226,7 +226,7 @@ export function App() {
   const [openingFading, setOpeningFading] = useState(false);
   const [yachtEvents, setYachtEvents] = useState<YachtInputEvent[] | null>(() => loadYachtEvents(typeof sessionStorage === 'undefined' ? undefined : sessionStorage));
   const [yachtPlayers, setYachtPlayers] = useState(2), [yachtOpening, setYachtOpening] = useState<YachtDiceOpening | null>(null), [yachtSheetOpen, setYachtSheetOpen] = useState(false);
-  const [fleetState, setFleetState] = useState<FleetState | null>(null);
+  const [fleetState, setFleetState] = useState<FleetState | null>(null), [variantPlayers, setVariantPlayers] = useState(3);
   const [clock, setClock] = useState(() => Date.now());
   const [preview, setPreview] = useState<MovePreview | null>(null);
   const [lastTurn, setLastTurn] = useState<LastTurnView>({ game: 'samok', moves: 0, cells: [] });
@@ -263,14 +263,14 @@ export function App() {
         setRoom(message.room);
         setBoardSize(message.room.settings.boardSize ?? 13);
         if (isBoardGameId(message.room.game)) { const transition = roomMessageTransition(selectedGameRef.current, state, message.room); selectedGameRef.current = transition.game; setSelectedGame(transition.game); }
-        setScreen(message.room.phase === 'play' && (message.room.game === 'yacht' || message.room.game === 'fleet') ? message.room.game : roomScreen(message.room, clientId.current));
+        setScreen(message.room.phase === 'play' && (message.room.game === 'yacht' || message.room.game === 'fleet' || message.room.game === 'fleet-variant') ? message.room.game === 'yacht' ? 'yacht' : 'fleet' : roomScreen(message.room, clientId.current));
       }
       if (message.type === 'room-error') setConnection(message.message);
       if (message.type === 'action' && isFleetAction(message.action)) {
         if (nextMode === 'remote' && isAuthority.current && message.actor) setFleetState((current) => {
           if (!current) return current;
           const next = reduceFleet(current, message.actor!.id, message.action as FleetAction);
-          if (next !== current) queueMicrotask(() => transport.send({ type: 'snapshot', game: 'fleet', state: next }));
+          if (next !== current) queueMicrotask(() => transport.send({ type: 'snapshot', game: next.mode === 'variant' ? 'fleet-variant' : 'fleet', state: next }));
           return next;
         });
         return;
@@ -420,6 +420,14 @@ export function App() {
     closeTransport(); setMode('local'); setConnection('이 기기 연결'); setSelfId(null); setLocalSeat(null);
     publishFleetStart([{ id: 'local-1', name: name.trim() }, { id: 'local-2', name: '2P' }], false);
   }
+  function publishVariantFleetStart(participants: readonly { id: string; name: string }[], shared: boolean) {
+    const next = createVariantFleetState(participants); setFleetState(next);
+    if (shared) send({ type: 'snapshot', game: 'fleet-variant', state: next, startsGame: true }); else setScreen('fleet');
+  }
+  function startLocalVariantFleet() {
+    closeTransport(); setMode('local'); setConnection('이 기기 연결'); setSelfId(null); setLocalSeat(null);
+    publishVariantFleetStart(Array.from({ length: variantPlayers }, (_, index) => ({ id: `local-${index + 1}`, name: index === 0 ? name.trim() : `${index + 1}P` })), false);
+  }
   function beginOpening(game: GameId, size: BoardSize, nextMode: PlayMode, current: GameState = initGame(game, size)) {
     if (firstPlayerMethodFor(nextMode, roomRef.current) === 'choice') {
       if (nextMode === 'remote') send({ type: 'snapshot', game, state: current, openingChoice: { game, size } });
@@ -476,7 +484,7 @@ export function App() {
   function undoYacht() { if (mode === 'remote') return; setYachtEvents((current) => { if (!current) return current; const next = undoYachtInput(current); saveYachtEvents(typeof sessionStorage === 'undefined' ? undefined : sessionStorage, next); return next; }); }
   const sendSharedGameSnapshot = (snapshot: ReturnType<typeof createSharedGameSelection> | ReturnType<typeof createSharedGameStart>) => { selectedGameRef.current = snapshot.game; setSelectedGame(snapshot.game); setState(snapshot.state); send(snapshot); };
   const selectSharedGame = (game: GameId, size: BoardSize) => sendSharedGameSnapshot(createSharedGameSelection(game, size));
-  const initializeSharedGame = (game: CatalogGameId, size: BoardSize) => { const participants = [...roomRef.current!.participants].sort((a, b) => a.slot - b.slot).map(({ id, name }) => ({ id, name })); if (game === 'yacht') publishYachtStart(participants.slice(0, 4), true); else if (game === 'fleet') publishFleetStart(participants.slice(0, 2), true); else if (firstPlayerMethodFor('remote', roomRef.current) === 'choice') beginOpening(game, size, 'remote'); else sendSharedGameSnapshot(createSharedGameStart(game, createFirstPlayerCoin, size)); };
+  const initializeSharedGame = (game: CatalogGameId, size: BoardSize) => { const participants = [...roomRef.current!.participants].sort((a, b) => a.slot - b.slot).map(({ id, name }) => ({ id, name })); if (game === 'yacht') publishYachtStart(participants.slice(0, 4), true); else if (game === 'fleet') publishFleetStart(participants.slice(0, 2), true); else if (game === 'fleet-variant') publishVariantFleetStart(participants, true); else if (firstPlayerMethodFor('remote', roomRef.current) === 'choice') beginOpening(game, size, 'remote'); else sendSharedGameSnapshot(createSharedGameStart(game, createFirstPlayerCoin, size)); };
   const sendRoom = (command: RoomCommand) => { send({ type: 'room-command', ...command }); if (command.command === 'start' && isAuthority.current) initializeSharedGame(catalogGameId(roomRef.current?.game ?? selectedGameRef.current), roomRef.current?.settings.boardSize ?? 13); };
   function applyBrowserBack(transition: AppBackTransition) {
     setYachtSheetOpen(transition.sheetOpen);
@@ -571,8 +579,8 @@ export function App() {
     {screen === 'lobby' && room && <RoomLobby room={room} selfId={selfId} send={sendRoom} openGames={() => setScreen('games')} />}
     {screen === 'lobby' && !room && <section class="panel"><h1>{roomCode}</h1><p>{connection}</p></section>}
     {screen === 'games' && <section class="panel" aria-labelledby="games-title"><p class="eyebrow">{mode === 'remote' ? `방 ${roomCode}` : '이 기기'}</p><h1 id="games-title">게임을 골라 주세요</h1>{mode === 'remote' && <button onClick={() => { sendRoom({ command: 'set-activity', activity: 'lobby' }); setScreen('lobby'); }}>방 로비</button>}<label>게임 검색<input type="search" value={query} onInput={(event) => setQuery(event.currentTarget.value)} /></label><div class="filters" aria-label="게임 필터"><div>{(['all', '1', '2', '3-4'] as const).map((value) => <button key={value} class={peopleFilter === value ? 'selected' : ''} aria-pressed={peopleFilter === value} onClick={() => setPeopleFilter(value)}>{value === 'all' ? '전체' : `${value}인`}</button>)}</div><div>{['봇 있음', '대전', '5분 이내'].map((tag) => <button key={tag} class={tagFilters.includes(tag) ? 'selected' : ''} aria-pressed={tagFilters.includes(tag)} onClick={() => setTagFilters((current) => current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag])}>{tag}</button>)}</div></div><div class="game-list">
-      {visibleGames.map((game) => <article class="game-card" key={game.name}><div><h2>{game.name}</h2><p class="people">{game.people} · {game.time}</p><div class="tags">{game.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>{mode !== 'remote' && hasBoardSize(game.id) && <label>판 크기<select value={boardSize} onChange={(event) => setBoardSize(Number(event.currentTarget.value) as BoardSize)}>{BOARD_SIZES.map((size) => <option value={size} key={size}>{size}×{size}</option>)}</select></label>}{mode !== 'remote' && game.id === 'yacht' && <label>참가자 수<select value={yachtPlayers} onChange={(event) => setYachtPlayers(Number(event.currentTarget.value))}>{[1, 2, 3, 4].map((count) => <option value={count} key={count}>{count}명</option>)}</select></label>}</div><div class="game-actions">
-        {mode === 'remote' ? <button class="primary" disabled={!isHost} onClick={() => { sendRoom({ command: 'select-game', game: game.id }); if (game.id === 'yacht' || game.id === 'fleet') sendRoom({ command: 'set-ai-opponent', enabled: false }); else if (isBoardGameId(game.id)) selectSharedGame(game.id, room?.settings.boardSize ?? 13); setScreen('lobby'); }}>게임 선택</button> : game.id === 'yacht' ? <><button class="primary" onClick={startLocalYacht}>{yachtPlayers}명이 시작</button>{yachtEvents && <button onClick={() => setScreen('yacht')}>저장된 경기 열기</button>}</> : game.id === 'fleet' ? <button class="primary" onClick={startLocalFleet}>두 사람이 시작</button> : <button class="primary" onClick={() => void startLocal(mode, game.id, boardSize)}>두 사람이 시작</button>}
+      {visibleGames.map((game) => <article class="game-card" key={game.name}><div><h2>{game.name}</h2><p class="people">{game.people} · {game.time}</p><div class="tags">{game.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>{mode !== 'remote' && hasBoardSize(game.id) && <label>판 크기<select value={boardSize} onChange={(event) => setBoardSize(Number(event.currentTarget.value) as BoardSize)}>{BOARD_SIZES.map((size) => <option value={size} key={size}>{size}×{size}</option>)}</select></label>}{mode !== 'remote' && game.id === 'yacht' && <label>참가자 수<select value={yachtPlayers} onChange={(event) => setYachtPlayers(Number(event.currentTarget.value))}>{[1, 2, 3, 4].map((count) => <option value={count} key={count}>{count}명</option>)}</select></label>}{mode !== 'remote' && game.id === 'fleet-variant' && <label>참가자 수<select value={variantPlayers} onChange={(event) => setVariantPlayers(Number(event.currentTarget.value))}>{[2, 3, 4, 5, 6].map((count) => <option value={count} key={count}>{count}명</option>)}</select></label>}</div><div class="game-actions">
+        {mode === 'remote' ? <button class="primary" disabled={!isHost} onClick={() => { sendRoom({ command: 'select-game', game: game.id }); if (game.id === 'yacht' || game.id === 'fleet' || game.id === 'fleet-variant') sendRoom({ command: 'set-ai-opponent', enabled: false }); else if (isBoardGameId(game.id)) selectSharedGame(game.id, room?.settings.boardSize ?? 13); setScreen('lobby'); }}>게임 선택</button> : game.id === 'yacht' ? <><button class="primary" onClick={startLocalYacht}>{yachtPlayers}명이 시작</button>{yachtEvents && <button onClick={() => setScreen('yacht')}>저장된 경기 열기</button>}</> : game.id === 'fleet' ? <button class="primary" onClick={startLocalFleet}>두 사람이 시작</button> : game.id === 'fleet-variant' ? <button class="primary" onClick={startLocalVariantFleet}>{variantPlayers}명이 시작</button> : <button class="primary" onClick={() => void startLocal(mode, game.id, boardSize)}>두 사람이 시작</button>}
         {isBoardGameId(game.id) && <>{mode === 'local' && <button onClick={() => void startLocal('ai', game.id, boardSize)}>AI와 시작</button>}</>}
       </div></article>)}
       <article class="game-card effects-entry"><div><h2>연출 테스트</h2><p class="people">동전 · 주사위 · 덱 섞기</p><div class="tags"><span>E1–E5</span></div></div><div class="game-actions"><button class="primary" onClick={() => setScreen('effects')}>테스트 열기</button></div></article>
