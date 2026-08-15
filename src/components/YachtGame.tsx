@@ -25,7 +25,6 @@ export function yachtScoreCell(used: number | undefined, preview: number | undef
 }
 
 export const yachtColumnClass = (seat: number, current: boolean, self: boolean) => [`player-${seat}`, current ? 'current-turn' : '', self ? 'self-column' : ''].filter(Boolean).join(' ');
-export const yachtDieSelection = (held: readonly boolean[]): readonly boolean[] => held;
 export const showYachtSelfMarker = (local: boolean, viewerId: string | null, participantId: string): boolean => !local && viewerId === participantId;
 export const YACHT_SCORE_ROWS: readonly (YachtCategory | 'upper-bonus')[] = [...YACHT_CATEGORIES.slice(0, 6), 'upper-bonus', ...YACHT_CATEGORIES.slice(6)];
 export type YachtSheetEvent = 'manual-toggle' | 'rolling-continues' | 'rolling-ended' | 'new-rolling-turn' | 'browser-back';
@@ -38,14 +37,14 @@ export function nextYachtSheetOpen(open: boolean, event: YachtSheetEvent): boole
 
 export function deriveYachtDieReplayKeys(events: readonly YachtInputEvent[]): readonly number[] {
   const turnStart = events.reduce((start, event, index) => event.type === 'input' && event.action.type === 'register' ? index + 1 : start, 1);
-  const held = [false, false, false, false, false], identities = [0, 0, 0, 0, 0];
+  const rerollSelected = [false, false, false, false, false], identities = [0, 0, 0, 0, 0];
   let rolled = false;
   events.slice(turnStart).forEach((event, offset) => {
     if (event.type !== 'input') return;
-    if (event.action.type === 'toggle-hold') held[event.action.index] = !held[event.action.index];
+    if (event.action.type === 'toggle-reroll') rerollSelected[event.action.index] = !rerollSelected[event.action.index];
     if (event.action.type === 'roll') {
-      identities.forEach((_, index) => { if (!rolled || !held[index]) identities[index] = turnStart + offset; });
-      rolled = true;
+      identities.forEach((_, index) => { if (!rolled || rerollSelected[index]) identities[index] = turnStart + offset; });
+      rerollSelected.fill(false); rolled = true;
     }
   });
   return identities;
@@ -75,7 +74,7 @@ export function YachtGame({ events, actorId, viewerId, local = false, onAction, 
   return <section class={`yacht-game${sheetOpen ? ' sheet-active' : ''}`} aria-labelledby="yacht-title">
     <header class="yacht-head"><div><p class="eyebrow">{view.complete ? '경기 완료' : `${current.name} 차례 · ${current.rolls}/3회`}</p><h1 id="yacht-title">Yacht Dice</h1></div><button onClick={onExit}>나가기</button></header>
     <div class={`yacht-dice${forced ? ' pinned' : ''}`}>
-      {current.dice ? <DiceResults outcomes={current.dice} replayKey={dieReplayKeys.reduce((latest, identity) => Math.max(latest, identity), 0)} replayKeys={dieReplayKeys} selected={yachtDieSelection(current.held)} disabled={!canAct || forced} onSelect={(index) => onAction({ type: 'toggle-hold', index })} /> : <p>주사위를 굴려 시작하세요.</p>}
+      {current.dice ? <DiceResults outcomes={current.dice} replayKey={dieReplayKeys.reduce((latest, identity) => Math.max(latest, identity), 0)} replayKeys={dieReplayKeys} selected={current.rerollSelected} disabled={!canAct || forced} onSelect={(index) => onAction({ type: 'toggle-reroll', index })} /> : <p>주사위를 굴려 시작하세요.</p>}
       <div class="yacht-roll-actions"><button class="primary" disabled={!canAct || forced} onClick={roll}>{current.rolls ? '다시 굴리기' : '굴리기'}</button><button disabled={!canAct || forced || !current.dice} onClick={() => onAction({ type: 'stop' })}>확정!</button>{local && <button disabled={events.length < 2} onClick={onUndo}>되돌리기</button>}</div>
     </div>
     {sheetOpen && <div class="yacht-sheet" aria-label="점수판"><table><thead><tr><th>항목</th>{view.participants.map((participant, index) => { const self = showYachtSelfMarker(local, viewerId, participant.id); return <th class={yachtColumnClass(index + 1, participant.id === current.id, self)} aria-current={participant.id === current.id ? 'true' : undefined} key={participant.id}>{participant.name}{self && <span class="yacht-self-marker">나</span>}</th>; })}</tr></thead><tbody>

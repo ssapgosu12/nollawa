@@ -31,7 +31,7 @@ export interface YachtSessionState {
 
 export interface YachtParticipantProjection extends YachtParticipant {
   dice: readonly YachtDie[] | null;
-  held: readonly boolean[];
+  rerollSelected: readonly boolean[];
   rolls: number;
   phase: YachtTurnState['phase'];
   entries: readonly YachtScoreEntry[];
@@ -151,7 +151,7 @@ export function projectYachtSession(
       id,
       name,
       dice: turn.dice === null ? null : [...turn.dice],
-      held: [...turn.held],
+      rerollSelected: [...turn.rerollSelected],
       rolls: turn.rolls,
       phase: turn.phase,
       entries: cloneEntries(turn.entries),

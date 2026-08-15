@@ -96,7 +96,7 @@ interface ActionActor { id: string; seat: Seat | null }
 interface AcceptedActionSource { actor: ActionActor; action: GameWireAction }
 export interface FirstPlayerCoin { outcomes: readonly ['H' | 'T']; replayKey: number; firstPlayer: Seat }
 interface FirstPlayerChoice { game: GameId; size: BoardSize; shared: boolean }
-const isYachtAction = (action: GameWireAction | YachtTurnAction | FleetAction): action is YachtTurnAction => ['roll', 'toggle-hold', 'stop', 'register'].includes(action.type);
+const isYachtAction = (action: GameWireAction | YachtTurnAction | FleetAction): action is YachtTurnAction => ['roll', 'toggle-reroll', 'stop', 'register'].includes(action.type);
 type GameMessage =
   | { type: 'action'; action: GameWireAction | YachtTurnAction | FleetAction; actor?: ActionActor }
   | { type: 'snapshot'; game?: CatalogGameId; state: GameState | YachtPersisted | FleetState; source?: AcceptedActionSource; opening?: FirstPlayerCoin; yachtOpening?: YachtDiceOpening; openingChoice?: { game: GameId; size: BoardSize }; startsGame?: boolean }

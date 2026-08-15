@@ -6,10 +6,10 @@ const participants: YachtParticipant[] = [{ id: 'one', name: '하나' }, { id: '
 const dice = [1, 2, 3, 4, 5] as const;
 
 describe('append-only Yacht event replay and persistence', () => {
-  it('derives dice, holds, score, total, and next participant solely by replay', () => {
+  it('derives dice, reroll selection, score, total, and next participant solely by replay', () => {
     let events = createYachtEventLog(participants);
     events = appendYachtInput(events, 'one', { type: 'roll', dice });
-    events = appendYachtInput(events, 'one', { type: 'toggle-hold', index: 0 });
+    events = appendYachtInput(events, 'one', { type: 'toggle-reroll', index: 0 });
     events = appendYachtInput(events, 'one', { type: 'stop' });
     events = appendYachtInput(events, 'one', { type: 'register', category: 'choice' });
     const state = replayYachtEvents(events);

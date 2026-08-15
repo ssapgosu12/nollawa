@@ -14,12 +14,12 @@ describe('YachtGame screen contract', () => {
     const room = { code: 'ABC-67', hostId: 'one', game: 'yacht', teamNames: ['왼쪽', '오른쪽'], settings: { aiOpponent: false }, phase: 'lobby', participants: [{ id: 'one', slot: 1, name: '하나', ready: true, present: true }, { id: 'two', slot: 2, name: '둘', ready: true, present: true }] } as RoomSnapshot;
     expect(canStartRoom(room)).toBe(true); expect(canStartRoom({ ...room, participants: [...room.participants, { id: 'three', slot: 3, name: '셋', ready: true, present: true }, { id: 'four', slot: 4, name: '넷', ready: true, present: true }, { id: 'five', slot: 5, name: '다섯', ready: true, present: true }] })).toBe(false);
   });
-  it('projects every viewer the same dice, holds, previews, score cards, and current participant', () => {
+  it('projects every viewer the same dice, reroll selections, previews, score cards, and current participant', () => {
     let events = createYachtEventLog([{ id: 'one', name: '하나' }, { id: 'two', name: '둘' }]);
     events = appendYachtInput(events, 'one', { type: 'roll', dice: [1, 1, 2, 3, 4] });
-    events = appendYachtInput(events, 'one', { type: 'toggle-hold', index: 0 });
+    events = appendYachtInput(events, 'one', { type: 'toggle-reroll', index: 0 });
     expect(yachtProjection(events, 'spectator')).toEqual(yachtProjection(events, 'two'));
-    expect(yachtProjection(events).participants[0]).toMatchObject({ dice: [1, 1, 2, 3, 4], held: [true, false, false, false, false], previews: { ones: 2, choice: 11 } });
+    expect(yachtProjection(events).participants[0]).toMatchObject({ dice: [1, 1, 2, 3, 4], rerollSelected: [true, false, false, false, false], previews: { ones: 2, choice: 11 } });
   });
 
   it('keeps selection as preview-only UI and exposes one bottom register action plus forced/pinned sheet hooks', () => {

@@ -12,11 +12,13 @@ import {
   nextYachtSheetOpen,
   showYachtSelfMarker,
   YACHT_SCORE_ROWS,
-  yachtDieSelection,
 } from './components/YachtGame';
+import { DiceResults } from './components/Effects';
 import { createYachtTurn, reduceYachtTurn } from './game/yacht';
 
 const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+const diceButtons = (turn) => DiceResults({ outcomes: turn.dice, selected: turn.rerollSelected, onSelect: vi.fn() })
+  .props.children.flat(Infinity).filter((node) => node?.props?.class?.includes('yacht-die-button'));
 
 class PopHistory {
   constructor(routes) {
@@ -57,11 +59,20 @@ function runBackSequence(mode, routes) {
 }
 
 describe('M2-YACHT-3 eight-item acceptance', () => {
-  it('M2-YACHT-3-1-ROLLED-DICE-DEFAULT-UNTIL-USER-SELECTION: rolled dice stay unraised until the user selects one', () => {
-    const rolled = reduceYachtTurn(createYachtTurn(), { type: 'roll', dice: [1, 2, 3, 4, 5] });
-    expect(yachtDieSelection(rolled.held)).toEqual([false, false, false, false, false]);
-    const selected = reduceYachtTurn(rolled, { type: 'toggle-hold', index: 2 });
-    expect(yachtDieSelection(selected.held)).toEqual([false, false, true, false, false]);
+  it('M2-YACHT-3-1-SELECTED-DIE-REROLLS-THEN-RESETS: first roll is unraised, only index 2 rerolls, and selection resets', () => {
+    const first = reduceYachtTurn(createYachtTurn(), { type: 'roll', dice: [1, 2, 3, 4, 5] });
+    expect(first.rerollSelected).toEqual([false, false, false, false, false]);
+    expect(diceButtons(first).map((button) => [button.props['aria-pressed'], button.props.class.includes('reroll-selected')]))
+      .toEqual(Array.from({ length: 5 }, () => [false, false]));
+    const selected = reduceYachtTurn(first, { type: 'toggle-reroll', index: 2 });
+    expect(selected.rerollSelected).toEqual([false, false, true, false, false]);
+    expect(diceButtons(selected).map((button) => [button.props['aria-pressed'], button.props.class.includes('reroll-selected')]))
+      .toEqual([[false, false], [false, false], [true, true], [false, false], [false, false]]);
+    expect(diceButtons(selected)[2].props['aria-label']).toContain('다시 굴림 선택');
+    const second = reduceYachtTurn(selected, { type: 'roll', dice: [6, 6, 6, 6, 6] });
+    expect(second.dice).toEqual([1, 2, 6, 4, 5]);
+    expect(second.rerollSelected).toEqual([false, false, false, false, false]);
+    expect(diceButtons(second).every((button) => button.props['aria-pressed'] === false && !button.props.class.includes('reroll-selected'))).toBe(true);
   });
 
   it('M2-YACHT-3-2-EXACT-120MS-SELECTION-TRANSFORM: changes only duration and preserves lift rotation and spring', () => {
