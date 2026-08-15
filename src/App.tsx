@@ -6,7 +6,8 @@ import { FleetGame } from './components/FleetGame';
 import { YachtGame } from './components/YachtGame';
 import { Countdown, Vignette } from './components/TableEffects';
 import { reduceRematchConsent, reduceSharedRematch, rematchProgress, type RematchMember, type RematchState } from './game/rematch-consent';
-import { actionForMove, BOARD_SIZES, GAME_CATALOG, catalogGameId, gameId, hasBoardSize, initGame, isBoardGameId, legalGameMoveKeys, moveKey, reduceGame, reduceGameMove, restartAction, terminalGame, voteActionForMove, type BoardSize, type CatalogGameId, type GameAction, type GameId, type GameMove, type GameMoveKey, type GameState, type GameWireAction } from './game/catalog';
+import { actionForMove, boardSizesFor, GAME_CATALOG, catalogGameId, gameId, hasBoardSize, initGame, isAiGameId, isBoardGameId, legalGameMoveKeys, moveKey, reduceGame, reduceGameMove, restartAction, terminalGame, voteActionForMove, type AiGameId, type BoardSize, type CatalogGameId, type GameAction, type GameId, type GameMove, type GameMoveKey, type GameState, type GameWireAction } from './game/catalog';
+import { badukColorForSeat, badukPreviewFor, reduceBaduk, type BadukAction, type BadukState } from './game/baduk';
 import { createFleetState, createVariantFleetState, fleetActorId, isFleetAction, isFleetState, reduceFleet, type FleetAction, type FleetState } from './game/fleet';
 import { appendYachtInput, createYachtDiceOpening, createYachtEventLog, isYachtPersisted, loadYachtEvents, replayYachtEvents, saveYachtEvents, undoYachtInput, yachtPersisted, type YachtDiceOpening, type YachtInputEvent, type YachtPersisted } from './game/yacht-events';
 import type { YachtParticipant } from './game/yacht-session';
@@ -118,9 +119,13 @@ export const roomVoteMembers = (room: RoomSnapshot | null, turn: Seat): VoteMemb
 export const roomRematchMembers = (room: RoomSnapshot | null): RematchMember[] => room ? activeGameParticipants(room).map(({ id, name }) => ({ id, name })) : [];
 export const remoteRematchPresentation = (state: SamokState, room: RoomSnapshot | null, selfId: string | null) => rematchProgress(state, roomRematchMembers(room), selfId);
 export const applyAuthorityRematch = (state: SamokState, actor: ActionActor | undefined, room: RoomSnapshot | null, authority: boolean): SamokState => authority && actor ? reduceRematchConsent(state, actor.id, roomRematchMembers(room)) : state;
-export const shouldRequestAiMove = (mode: PlayMode, room: RoomSnapshot | null, authority: boolean): boolean => mode === 'ai' || (mode === 'remote' && room?.settings.aiOpponent === true && authority);
+export const shouldRequestAiMove = (mode: PlayMode, room: RoomSnapshot | null, authority: boolean, game: GameId = 'samok'): boolean => isAiGameId(game) && (mode === 'ai' || (mode === 'remote' && room?.settings.aiOpponent === true && authority));
 export const applyAuthorityAiMove = (state: SamokState, column: number, authority: boolean): SamokState => authority ? samok.reduce(state, { type: 'drop', column }) : state;
-export const applyAuthorityGameAction = (game: GameId, state: GameState, action: GameAction, actor: ActionActor | undefined, authority: boolean): GameState => authority && actor && (action.type === 'restart' || actor.seat === state.turn) ? reduceGame(game, state, action) : state;
+export const applyAuthorityGameAction = (game: GameId, state: GameState, action: GameAction, actor: ActionActor | undefined, authority: boolean): GameState => {
+  if (!authority || !actor?.seat) return state;
+  if (game === 'baduk') return reduceBaduk(state as BadukState, action as BadukAction, actor.seat);
+  return action.type === 'restart' || actor.seat === state.turn ? reduceGame(game, state, action) : state;
+};
 export const applyAuthorityGameRematch = (game: GameId, state: GameState, actor: ActionActor | undefined, room: RoomSnapshot | null, authority: boolean): GameState => authority && actor ? reduceSharedRematch(state as GameState & RematchState, actor.id, roomRematchMembers(room), terminalGame(game, state).ended, (current) => reduceGame(game, current, restartAction()) as GameState & RematchState) : state;
 export const voteRulesForGame = (game: GameId): TeamVoteRules<GameState> => ({ legalMoves: (current) => legalGameMoveKeys(game, current), applyMove: (current, move) => reduceGameMove(game, current, move) });
 export const AI_MOVE_DELAY_MS = 1_000;
@@ -135,8 +140,8 @@ export function scheduleYachtOpeningTransition(schedule: (task: () => void, dela
 }
 export const aiBudgetMs = (room: RoomSnapshot | null) => room?.settings.aiStrength === 'high' ? 3_000 : AI_MOVE_DELAY_MS;
 export const gameListModeAfterPlay = (mode: PlayMode): PlayMode => mode === 'ai' ? 'local' : mode;
-export const firstPlayerMethodFor = (mode: PlayMode, room: RoomSnapshot | null): 'coin' | 'choice' => mode === 'ai' || (mode === 'remote' && room?.settings.aiOpponent === true) ? 'choice' : 'coin';
-export const firstPlayerChoiceLabels = (game: GameId): readonly [string, string] => game === 'omok' || game === 'yukmok' ? ['흑돌 (선수)', '백돌 (후수)'] : ['1번 (선수)', '2번 (후수)'];
+export const firstPlayerMethodFor = (mode: PlayMode, room: RoomSnapshot | null, game: GameId = 'samok'): 'coin' | 'choice' => game !== 'baduk' && (mode === 'ai' || (mode === 'remote' && room?.settings.aiOpponent === true)) ? 'choice' : 'coin';
+export const firstPlayerChoiceLabels = (game: GameId): readonly [string, string] => game === 'omok' || game === 'yukmok' || game === 'baduk' ? ['흑돌 (선수)', '백돌 (후수)'] : ['1번 (선수)', '2번 (후수)'];
 export const completedGameRestart = (game: GameId, before: GameState, after: GameState): boolean => terminalGame(game, before).ended && !terminalGame(game, after).ended;
 export interface MovePreview { game: GameId; move: GameMove; moves: number; turn: Seat }
 export const createMovePreview = (game: GameId, state: GameState, move: GameMove): MovePreview => ({ game, move, moves: state.moves, turn: state.turn });
@@ -166,7 +171,7 @@ export function forcedAiOpeningMove(game: GameId, state: GameState): GameMove | 
   const center = Math.floor(state.board.length / 2);
   return { row: center, column: center };
 }
-export const requestGameMoveWithRoomBudget = (game: GameId, state: GameState, room: RoomSnapshot | null, requester: typeof requestGameMove = requestGameMove) => {
+export const requestGameMoveWithRoomBudget = (game: AiGameId, state: GameState, room: RoomSnapshot | null, requester: typeof requestGameMove = requestGameMove) => {
   const forced = forcedAiOpeningMove(game, state);
   return forced ? Promise.resolve(forced) : requester(game, state, aiBudgetMs(room));
 };
@@ -229,6 +234,7 @@ export function App() {
   const [fleetState, setFleetState] = useState<FleetState | null>(null), [variantPlayers, setVariantPlayers] = useState(3);
   const [clock, setClock] = useState(() => Date.now());
   const [preview, setPreview] = useState<MovePreview | null>(null);
+  const [localScoringSeat, setLocalScoringSeat] = useState<Seat>(1);
   const [lastTurn, setLastTurn] = useState<LastTurnView>({ game: 'samok', moves: 0, cells: [] });
   const transportRef = useRef<Transport<GameMessage> | null>(null);
   const clientId = useRef<string | null>(null);
@@ -294,11 +300,12 @@ export function App() {
             return current;
           }
         }
+        else if (isAuthority.current && game === 'baduk' && (boardAction.type === 'pass' || boardAction.type === 'toggle-dead' || boardAction.type === 'submit-score') && message.actor) next = applyAuthorityGameAction(game, current, boardAction, message.actor, true);
         else if (isAuthority.current && boardAction.type === 'vote' && message.actor) next = reduceAuthorityVote(current, boardAction.move, message.actor, roomVoteMembers(roomRef.current, current.turn), true, Date.now(), Math.random, voteRulesForGame(game));
         else if (isAuthority.current && boardAction.type === 'restart') {
           next = applyAuthorityGameRematch(game, current, message.actor, roomRef.current, true);
           if (completedGameRestart(game, current, next)) {
-            if (firstPlayerMethodFor(nextMode, roomRef.current) === 'choice') {
+            if (firstPlayerMethodFor(nextMode, roomRef.current, game) === 'choice') {
               queueMicrotask(() => beginOpening(game, roomRef.current?.settings.boardSize ?? 13, nextMode, current));
               return current;
             }
@@ -429,7 +436,7 @@ export function App() {
     publishVariantFleetStart(Array.from({ length: variantPlayers }, (_, index) => ({ id: `local-${index + 1}`, name: index === 0 ? name.trim() : `${index + 1}P` })), false);
   }
   function beginOpening(game: GameId, size: BoardSize, nextMode: PlayMode, current: GameState = initGame(game, size)) {
-    if (firstPlayerMethodFor(nextMode, roomRef.current) === 'choice') {
+    if (firstPlayerMethodFor(nextMode, roomRef.current, game) === 'choice') {
       if (nextMode === 'remote') send({ type: 'snapshot', game, state: current, openingChoice: { game, size } });
       else showOpeningChoice(game, size, false);
       return;
@@ -477,6 +484,10 @@ export function App() {
     try { transportRef.current?.send(message); }
     catch (error) { setConnection(error instanceof Error ? error.message : '전송 실패'); }
   }
+  function actBaduk(action: BadukAction, actor: Seat) {
+    if (mode === 'remote') { send({ type: 'action', action }); return; }
+    setState((current) => selectedGameRef.current === 'baduk' ? reduceBaduk(current as BadukState, action, actor) : current);
+  }
   function actYacht(action: YachtTurnAction) {
     if (mode === 'remote') { send({ type: 'action', action }); return; }
     setYachtEvents((current) => { if (!current) return current; const actor = replayYachtEvents(current).currentParticipantId, next = appendYachtInput(current, actor, action); if (next !== current) saveYachtEvents(typeof sessionStorage === 'undefined' ? undefined : sessionStorage, next); return next; });
@@ -484,7 +495,7 @@ export function App() {
   function undoYacht() { if (mode === 'remote') return; setYachtEvents((current) => { if (!current) return current; const next = undoYachtInput(current); saveYachtEvents(typeof sessionStorage === 'undefined' ? undefined : sessionStorage, next); return next; }); }
   const sendSharedGameSnapshot = (snapshot: ReturnType<typeof createSharedGameSelection> | ReturnType<typeof createSharedGameStart>) => { selectedGameRef.current = snapshot.game; setSelectedGame(snapshot.game); setState(snapshot.state); send(snapshot); };
   const selectSharedGame = (game: GameId, size: BoardSize) => sendSharedGameSnapshot(createSharedGameSelection(game, size));
-  const initializeSharedGame = (game: CatalogGameId, size: BoardSize) => { const participants = [...roomRef.current!.participants].sort((a, b) => a.slot - b.slot).map(({ id, name }) => ({ id, name })); if (game === 'yacht') publishYachtStart(participants.slice(0, 4), true); else if (game === 'fleet') publishFleetStart(participants.slice(0, 2), true); else if (game === 'fleet-variant') publishVariantFleetStart(participants, true); else if (firstPlayerMethodFor('remote', roomRef.current) === 'choice') beginOpening(game, size, 'remote'); else sendSharedGameSnapshot(createSharedGameStart(game, createFirstPlayerCoin, size)); };
+  const initializeSharedGame = (game: CatalogGameId, size: BoardSize) => { const participants = [...roomRef.current!.participants].sort((a, b) => a.slot - b.slot).map(({ id, name }) => ({ id, name })); if (game === 'yacht') publishYachtStart(participants.slice(0, 4), true); else if (game === 'fleet') publishFleetStart(participants.slice(0, 2), true); else if (game === 'fleet-variant') publishVariantFleetStart(participants, true); else if (firstPlayerMethodFor('remote', roomRef.current, game) === 'choice') beginOpening(game, size, 'remote'); else sendSharedGameSnapshot(createSharedGameStart(game, createFirstPlayerCoin, size)); };
   const sendRoom = (command: RoomCommand) => { send({ type: 'room-command', ...command }); if (command.command === 'start' && isAuthority.current) initializeSharedGame(catalogGameId(roomRef.current?.game ?? selectedGameRef.current), roomRef.current?.settings.boardSize ?? 13); };
   function applyBrowserBack(transition: AppBackTransition) {
     setYachtSheetOpen(transition.sheetOpen);
@@ -513,20 +524,21 @@ export function App() {
     if (screen === 'games') setMode((current) => gameListModeAfterPlay(current));
   }, [screen]);
   useEffect(() => {
-    if (screen !== 'play' || !shouldRequestAiMove(mode, room, authority) || state.turn !== 2 || terminalGame(selectedGame, state).ended || aiThinking.current) return;
+    if (screen !== 'play' || !isAiGameId(selectedGame) || !shouldRequestAiMove(mode, room, authority, selectedGame) || state.turn !== 2 || terminalGame(selectedGame, state).ended || aiThinking.current) return;
+    const aiGame = selectedGame;
     const requestId = ++aiRequest.current;
     const controller = new AbortController();
     const startedAt = Date.now();
     aiThinking.current = true;
     const budget = aiBudgetMs(room);
-    void withAiMoveGate(requestGameMoveWithRoomBudget(selectedGame, state, room), startedAt, budget, controller.signal, (active) => { if (requestId === aiRequest.current) setAiThinkingVisible(active); }).then(([move, current]) => {
+    void withAiMoveGate(requestGameMoveWithRoomBudget(aiGame, state, room), startedAt, budget, controller.signal, (active) => { if (requestId === aiRequest.current) setAiThinkingVisible(active); }).then(([move, current]) => {
       if (!current || requestId !== aiRequest.current) return;
       if (move !== null && mode === 'remote') setState((current) => {
-        const next = isAuthority.current ? reduceGame(selectedGame, current, actionForMove(selectedGame, move)) : current;
-        if (next !== current) queueMicrotask(() => send({ type: 'snapshot', game: selectedGame, state: next }));
+        const next = isAuthority.current ? reduceGame(aiGame, current, actionForMove(aiGame, move)) : current;
+        if (next !== current) queueMicrotask(() => send({ type: 'snapshot', game: aiGame, state: next }));
         return next;
       });
-      else if (move !== null) send({ type: 'action', action: actionForMove(selectedGame, move) });
+      else if (move !== null) send({ type: 'action', action: actionForMove(aiGame, move) });
     }).finally(() => { if (requestId === aiRequest.current) aiThinking.current = false; });
     return () => { aiRequest.current += 1; controller.abort(); aiThinking.current = false; setAiThinkingVisible(false); };
   }, [authority, mode, room, screen, selectedGame, state]);
@@ -565,7 +577,9 @@ export function App() {
     return () => timers.forEach((timer) => window.clearTimeout(timer));
   }, [state.resolvedVote]);
   useEffect(() => () => { transportRef.current?.close(); if (openingTimer.current !== null) window.clearTimeout(openingTimer.current); }, []);
-  const outcome = state.winner ? `${state.winner}번 승리` : state.draw ? '무승부' : `${state.turn}번 차례`, boardDisabled = Boolean(state.resolvedVote) || (mode === 'remote' ? terminalGame(selectedGame, state).ended || localSeat !== state.turn : terminalGame(selectedGame, state).ended || (mode === 'ai' && state.turn === 2)), confirmedPreview = canConfirmMovePreview(selectedGame, state, preview, boardDisabled) ? preview : null, playStatus = aiThinkingVisible ? 'AI 생각중...' : playStatusFor(false, restartNotice, mode, localSeat), seatStatus = mode === 'remote' && !aiThinkingVisible && !restartNotice, lastTurnCells = lastTurn.game === selectedGame && lastTurn.moves === state.moves ? lastTurn.cells : [];
+  const badukState = selectedGame === 'baduk' ? state as BadukState : null, badukScoring = badukState?.phase === 'scoring', scoringSeat = mode === 'remote' ? localSeat : localScoringSeat;
+  const outcome = badukState ? badukState.phase === 'finished' ? badukState.result : badukScoring ? '종국 합의' : `${badukColorForSeat(badukState, badukState.turn)} 차례` : state.winner ? `${state.winner}번 승리` : state.draw ? '무승부' : `${state.turn}번 차례`;
+  const boardDisabled = Boolean(state.resolvedVote) || (badukScoring ? scoringSeat === null : mode === 'remote' ? terminalGame(selectedGame, state).ended || localSeat !== state.turn : terminalGame(selectedGame, state).ended || (mode === 'ai' && state.turn === 2)), confirmedPreview = canConfirmMovePreview(selectedGame, state, preview, boardDisabled) ? preview : null, playStatus = aiThinkingVisible ? 'AI 생각중...' : playStatusFor(false, restartNotice, mode, localSeat), seatStatus = mode === 'remote' && !aiThinkingVisible && !restartNotice, lastTurnCells = lastTurn.game === selectedGame && lastTurn.moves === state.moves ? lastTurn.cells : [], badukPreview = badukState && badukScoring && scoringSeat ? badukPreviewFor(badukState, scoringSeat) : null;
   const rematch = rematchProgress(state as GameState & RematchState, roomRematchMembers(room), selfId);
   const voteTimer = voteTimerPresentation(state, clock);
   return <main class="app-shell">
@@ -579,9 +593,9 @@ export function App() {
     {screen === 'lobby' && room && <RoomLobby room={room} selfId={selfId} send={sendRoom} openGames={() => setScreen('games')} />}
     {screen === 'lobby' && !room && <section class="panel"><h1>{roomCode}</h1><p>{connection}</p></section>}
     {screen === 'games' && <section class="panel" aria-labelledby="games-title"><p class="eyebrow">{mode === 'remote' ? `방 ${roomCode}` : '이 기기'}</p><h1 id="games-title">게임을 골라 주세요</h1>{mode === 'remote' && <button onClick={() => { sendRoom({ command: 'set-activity', activity: 'lobby' }); setScreen('lobby'); }}>방 로비</button>}<label>게임 검색<input type="search" value={query} onInput={(event) => setQuery(event.currentTarget.value)} /></label><div class="filters" aria-label="게임 필터"><div>{(['all', '1', '2', '3-4'] as const).map((value) => <button key={value} class={peopleFilter === value ? 'selected' : ''} aria-pressed={peopleFilter === value} onClick={() => setPeopleFilter(value)}>{value === 'all' ? '전체' : `${value}인`}</button>)}</div><div>{['봇 있음', '대전', '5분 이내'].map((tag) => <button key={tag} class={tagFilters.includes(tag) ? 'selected' : ''} aria-pressed={tagFilters.includes(tag)} onClick={() => setTagFilters((current) => current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag])}>{tag}</button>)}</div></div><div class="game-list">
-      {visibleGames.map((game) => <article class="game-card" key={game.name}><div><h2>{game.name}</h2><p class="people">{game.people} · {game.time}</p><div class="tags">{game.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>{mode !== 'remote' && hasBoardSize(game.id) && <label>판 크기<select value={boardSize} onChange={(event) => setBoardSize(Number(event.currentTarget.value) as BoardSize)}>{BOARD_SIZES.map((size) => <option value={size} key={size}>{size}×{size}</option>)}</select></label>}{mode !== 'remote' && game.id === 'yacht' && <label>참가자 수<select value={yachtPlayers} onChange={(event) => setYachtPlayers(Number(event.currentTarget.value))}>{[1, 2, 3, 4].map((count) => <option value={count} key={count}>{count}명</option>)}</select></label>}{mode !== 'remote' && game.id === 'fleet-variant' && <label>참가자 수<select value={variantPlayers} onChange={(event) => setVariantPlayers(Number(event.currentTarget.value))}>{[2, 3, 4, 5, 6].map((count) => <option value={count} key={count}>{count}명</option>)}</select></label>}</div><div class="game-actions">
-        {mode === 'remote' ? <button class="primary" disabled={!isHost} onClick={() => { sendRoom({ command: 'select-game', game: game.id }); if (game.id === 'yacht' || game.id === 'fleet' || game.id === 'fleet-variant') sendRoom({ command: 'set-ai-opponent', enabled: false }); else if (isBoardGameId(game.id)) selectSharedGame(game.id, room?.settings.boardSize ?? 13); setScreen('lobby'); }}>게임 선택</button> : game.id === 'yacht' ? <><button class="primary" onClick={startLocalYacht}>{yachtPlayers}명이 시작</button>{yachtEvents && <button onClick={() => setScreen('yacht')}>저장된 경기 열기</button>}</> : game.id === 'fleet' ? <button class="primary" onClick={startLocalFleet}>두 사람이 시작</button> : game.id === 'fleet-variant' ? <button class="primary" onClick={startLocalVariantFleet}>{variantPlayers}명이 시작</button> : <button class="primary" onClick={() => void startLocal(mode, game.id, boardSize)}>두 사람이 시작</button>}
-        {isBoardGameId(game.id) && <>{mode === 'local' && <button onClick={() => void startLocal('ai', game.id, boardSize)}>AI와 시작</button>}</>}
+      {visibleGames.map((game) => <article class="game-card" key={game.name}><div><h2>{game.name}</h2><p class="people">{game.people} · {game.time}</p><div class="tags">{game.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>{mode !== 'remote' && hasBoardSize(game.id) && <label>판 크기<select value={boardSizesFor(game.id).includes(boardSize) ? boardSize : 13} onChange={(event) => setBoardSize(Number(event.currentTarget.value) as BoardSize)}>{boardSizesFor(game.id).map((size) => <option value={size} key={size}>{size}×{size}</option>)}</select></label>}{mode !== 'remote' && game.id === 'yacht' && <label>참가자 수<select value={yachtPlayers} onChange={(event) => setYachtPlayers(Number(event.currentTarget.value))}>{[1, 2, 3, 4].map((count) => <option value={count} key={count}>{count}명</option>)}</select></label>}{mode !== 'remote' && game.id === 'fleet-variant' && <label>참가자 수<select value={variantPlayers} onChange={(event) => setVariantPlayers(Number(event.currentTarget.value))}>{[2, 3, 4, 5, 6].map((count) => <option value={count} key={count}>{count}명</option>)}</select></label>}</div><div class="game-actions">
+        {mode === 'remote' ? <button class="primary" disabled={!isHost} onClick={() => { sendRoom({ command: 'select-game', game: game.id }); if (!isAiGameId(game.id)) sendRoom({ command: 'set-ai-opponent', enabled: false }); if (isBoardGameId(game.id)) selectSharedGame(game.id, boardSizesFor(game.id).includes(room?.settings.boardSize ?? 13) ? room?.settings.boardSize ?? 13 : 13); setScreen('lobby'); }}>게임 선택</button> : game.id === 'yacht' ? <><button class="primary" onClick={startLocalYacht}>{yachtPlayers}명이 시작</button>{yachtEvents && <button onClick={() => setScreen('yacht')}>저장된 경기 열기</button>}</> : game.id === 'fleet' ? <button class="primary" onClick={startLocalFleet}>두 사람이 시작</button> : game.id === 'fleet-variant' ? <button class="primary" onClick={startLocalVariantFleet}>{variantPlayers}명이 시작</button> : <button class="primary" onClick={() => void startLocal(mode, game.id, boardSizesFor(game.id).includes(boardSize) ? boardSize : 13)}>두 사람이 시작</button>}
+        {isAiGameId(game.id) && <>{mode === 'local' && <button onClick={() => void startLocal('ai', game.id, boardSize)}>AI와 시작</button>}</>}
       </div></article>)}
       <article class="game-card effects-entry"><div><h2>연출 테스트</h2><p class="people">동전 · 주사위 · 덱 섞기</p><div class="tags"><span>E1–E5</span></div></div><div class="game-actions"><button class="primary" onClick={() => setScreen('effects')}>테스트 열기</button></div></article>
     </div></section>}
@@ -591,7 +605,12 @@ export function App() {
     {screen === 'opening' && yachtOpening && <section class={`panel opening-coin opening-result${openingFading ? ' opening-fade' : ''}`} aria-labelledby="yacht-opening-title"><p class="eyebrow">참가자마다 주사위 한 개</p><h1 id="yacht-opening-title">차례 순서 결정</h1>{yachtOpening.rounds.map((round, index) => <div key={index}><p>{index + 1}차 · 동점 참가자만 다시 굴림</p><DiceResults outcomes={Object.values(round)} replayKey={yachtOpening.replayKey + index} /></div>)}<p>{yachtOpening.order.map(({ name }) => name).join(' → ')}</p></section>}
     {screen === 'yacht' && yachtEvents && <YachtGameRoute events={yachtEvents} mode={mode} selfId={selfId} sheetOpen={yachtSheetOpen} onSheetOpenChange={setYachtSheetOpen} onAction={actYacht} onUndo={undoYacht} onExit={() => { setYachtSheetOpen(false); mode === 'remote' ? returnToLobby(sendRoom) : setScreen('games'); }} />}
     {screen === 'fleet' && fleetState && <FleetGame state={fleetState} viewerId={mode === 'remote' ? selfId : fleetActorId(fleetState) ?? fleetState.winnerId} onAction={(action) => mode === 'remote' ? send({ type: 'action', action }) : setFleetState((current) => current ? reduceFleet(current, fleetActorId(current) ?? '', action) : current)} onExit={() => mode === 'remote' ? returnToLobby(sendRoom) : setScreen('games')} />}
-    {screen === 'play' && <section class="play-layout" aria-labelledby="play-title"><div class="game-status"><div><p class="eyebrow">{connection}</p><h1 id="play-title">{outcome}</h1><div class="play-status-slot" role="status" aria-live="polite"><p class={`${seatStatus ? `seat-badge ${localSeat ? `player-${localSeat}` : ''}` : restartNotice ? 'restart-notice' : ''}`} aria-hidden={!playStatus}>{playStatus || '\u00a0'}</p></div></div>{mode === 'remote' ? <div><button onClick={() => returnToLobby(sendRoom)}>로비로 돌아가기</button><button onClick={showTitle}>타이틀로 나가기</button></div> : <button onClick={() => setScreen('games')}>게임 목록</button>}</div><BoardGame game={selectedGame} state={state} selfId={mode === 'remote' ? selfId : null} seat={localSeat} rouletteMove={rouletteMove} preview={confirmedPreview?.move ?? null} lastTurn={lastTurnCells} disabled={boardDisabled} onSelect={(move) => setPreview(createMovePreview(selectedGame, state, move))} /><button class="primary confirm-move" disabled={!confirmedPreview} onClick={() => { if (!confirmedPreview) return; send({ type: 'action', action: confirmedActionFor(mode, selectedGame, confirmedPreview.move) }); setPreview(null); }}>확인</button><p class="hint">자리를 선택한 뒤 확인하세요. 키보드는 Enter 또는 Space를 씁니다. ● 흑돌 · ■ 백돌</p>{terminalGame(selectedGame, state).ended && <div class="rematch"><div>{mode === 'remote' && room && <><p>{rematch.ready}/{rematch.total} 다음 판 준비</p><p>아직: {rematch.pendingNames.join(', ')}</p></>}</div><button class="primary restart" disabled={mode === 'remote' && (localSeat === null || rematch.selfReady)} onClick={() => send({ type: 'action', action: restartAction() })}>다음 판</button></div>}</section>}
+    {screen === 'play' && <section class="play-layout" aria-labelledby="play-title"><div class="game-status"><div><p class="eyebrow">{connection}</p><h1 id="play-title">{outcome}</h1><div class="play-status-slot" role="status" aria-live="polite"><p class={`${seatStatus ? `seat-badge ${localSeat ? `player-${localSeat}` : ''}` : restartNotice ? 'restart-notice' : ''}`} aria-hidden={!playStatus}>{playStatus || '\u00a0'}</p></div></div>{mode === 'remote' ? <div><button onClick={() => returnToLobby(sendRoom)}>로비로 돌아가기</button><button onClick={showTitle}>타이틀로 나가기</button></div> : <button onClick={() => setScreen('games')}>게임 목록</button>}</div>
+      <BoardGame game={selectedGame} state={state} selfId={mode === 'remote' ? selfId : null} seat={localSeat} scoringSeat={badukScoring ? scoringSeat : null} rouletteMove={rouletteMove} preview={confirmedPreview?.move ?? null} lastTurn={lastTurnCells} disabled={boardDisabled} onSelect={(move) => setPreview(createMovePreview(selectedGame, state, move))} onDeadToggle={(move) => { if (scoringSeat) actBaduk({ type: 'toggle-dead', ...move }, scoringSeat); }} />
+      {!badukScoring && <button class="primary confirm-move" disabled={!confirmedPreview} onClick={() => { if (!confirmedPreview) return; send({ type: 'action', action: confirmedActionFor(mode, selectedGame, confirmedPreview.move) }); setPreview(null); }}>확인</button>}
+      {badukState?.phase === 'play' && <button class="baduk-pass" disabled={mode === 'remote' && localSeat !== badukState.turn} onClick={() => actBaduk({ type: 'pass' }, badukState.turn)}>쉼</button>}
+      {badukScoring && scoringSeat && badukPreview && <section class="baduk-scoring" aria-label="바둑 종국 합의"><div class="baduk-score-seats">{mode === 'local' ? ([1, 2] as const).map((seat) => <button class={localScoringSeat === seat ? 'selected' : ''} aria-pressed={localScoringSeat === seat} onClick={() => setLocalScoringSeat(seat)}>{badukColorForSeat(badukState, seat)} 계가</button>) : <strong>내 계가 · {badukColorForSeat(badukState, scoringSeat)}</strong>}</div><p>미리보기 · 흑 {badukPreview.black}집 / 백 {badukPreview.white}집 (덤 6.5) · 공배 {badukPreview.neutral}</p><p>잡은 돌 · 흑 {badukPreview.prisoners[badukState.starter]} / 백 {badukPreview.prisoners[badukState.starter === 1 ? 2 : 1]}</p><button class="primary" disabled={Boolean(badukState.submissions[scoringSeat])} onClick={() => actBaduk({ type: 'submit-score' }, scoringSeat)}>{badukState.submissions[scoringSeat] ? '제출됨' : '죽은 돌 제출'}</button></section>}
+      {badukScoring && <p class="baduk-scoring-hint">죽은 돌 덩어리를 탭해 표시한 뒤 양쪽이 제출하세요.</p>}{!badukScoring && <p class="hint">자리를 선택한 뒤 확인하세요. 키보드는 Enter 또는 Space를 씁니다. ● 흑돌 · ■ 백돌</p>}{terminalGame(selectedGame, state).ended && <div class="rematch"><div>{mode === 'remote' && room && <><p>{rematch.ready}/{rematch.total} 다음 판 준비</p><p>아직: {rematch.pendingNames.join(', ')}</p></>}</div><button class="primary restart" disabled={mode === 'remote' && (localSeat === null || rematch.selfReady)} onClick={() => send({ type: 'action', action: restartAction() })}>다음 판</button></div>}</section>}
     {screen === 'play' && voteTimer.visible && <Vignette intensity={voteTimer.intensity} periodMs={voteTimer.periodMs} />}
     {screen === 'play' && <Countdown remaining={voteTimer.remaining} visible={voteTimer.visible} />}
     <UpdateBanner />

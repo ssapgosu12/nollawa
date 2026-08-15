@@ -1,7 +1,7 @@
 import type { ComponentChildren } from 'preact';
 export type GridLayout = 'slots' | 'cells' | 'intersections';
 export interface GridGeometry { rows: number; columns: number; layout: GridLayout; footer?: number }
-export const BOARD_GEOMETRIES = { samok: { rows: 6, columns: 7, layout: 'slots', footer: 50 }, omok: { rows: 13, columns: 13, layout: 'intersections' }, yukmok: { rows: 13, columns: 13, layout: 'intersections' }, reversi: { rows: 8, columns: 8, layout: 'cells' } } as const satisfies Record<string, GridGeometry>;
+export const BOARD_GEOMETRIES = { samok: { rows: 6, columns: 7, layout: 'slots', footer: 50 }, omok: { rows: 13, columns: 13, layout: 'intersections' }, yukmok: { rows: 13, columns: 13, layout: 'intersections' }, baduk: { rows: 13, columns: 13, layout: 'intersections' }, reversi: { rows: 8, columns: 8, layout: 'cells' } } as const satisfies Record<string, GridGeometry>;
 export const snapCellPixels = (available: number, cells: number): number => Math.max(1, Math.floor(available / cells));
 export const stoneDitherEnabled = (diameterPixels: number): boolean => diameterPixels >= 26;
 export interface BoardGridProps {

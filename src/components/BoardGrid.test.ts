@@ -5,11 +5,12 @@ import { Board } from './Board';
 import { BOARD_GEOMETRIES, GridBoard, Stone, gridMetrics, snapCellPixels, stoneDitherEnabled } from './BoardGrid';
 
 describe('공용 SVG 격자·교점 렌더러', () => {
-  it('모집단 4/4의 서로 다른 판 기하를 한 매개변수 집합으로 표현한다', () => {
+  it('모집단 5/5의 서로 다른 판 기하를 한 매개변수 집합으로 표현한다', () => {
     expect(BOARD_GEOMETRIES).toEqual({
       samok: { rows: 6, columns: 7, layout: 'slots', footer: 50 },
       omok: { rows: 13, columns: 13, layout: 'intersections' },
       yukmok: { rows: 13, columns: 13, layout: 'intersections' },
+      baduk: { rows: 13, columns: 13, layout: 'intersections' },
       reversi: { rows: 8, columns: 8, layout: 'cells' },
     });
     expect(gridMetrics(BOARD_GEOMETRIES.samok)).toEqual({ width: 700, boardHeight: 600, height: 650 });
@@ -23,7 +24,7 @@ describe('공용 SVG 격자·교점 렌더러', () => {
     expect(node.props.flipRows).toBe(true);
   });
 
-  it.each(['omok', 'yukmok', 'reversi'] as const)('%s 판을 복제 렌더러 없이 생성한다', (name) => {
+  it.each(['omok', 'yukmok', 'baduk', 'reversi'] as const)('%s 판을 복제 렌더러 없이 생성한다', (name) => {
     const geometry = BOARD_GEOMETRIES[name];
     const board = Array.from({ length: geometry.rows }, () => Array(geometry.columns).fill(0));
     const node = GridBoard({ geometry, board, label: name, cellPixels: snapCellPixels(389, geometry.columns), isLegal: () => true, onSelect: vi.fn(), selectionLabel: () => name, renderCell: () => null });
