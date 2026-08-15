@@ -12,7 +12,14 @@ export const demoDiceOutcomes = (count: number, random: () => number = Math.rand
 
 interface ReplayProps { replayKey?: number }
 interface CoinResultsProps extends ReplayProps { outcomes: readonly CoinFace[] }
-interface DiceResultsProps extends ReplayProps { outcomes: readonly DieFace[]; settings?: Partial<DiceSettings> }
+interface DiceResultsProps extends ReplayProps {
+  outcomes: readonly DieFace[];
+  settings?: Partial<DiceSettings>;
+  replayKeys?: readonly number[];
+  selected?: readonly boolean[];
+  disabled?: boolean;
+  onSelect?: (index: number) => void;
+}
 interface DeckShuffleProps extends ReplayProps { deckName: string; settings?: Partial<DeckSettings> }
 
 const PIPS: Record<DieFace, readonly number[]> = {
@@ -23,7 +30,7 @@ export interface DiceSettings {
   fallMs: number; firstBounceMs: number; secondBounceMs: number; pipChangeDelayMs: number;
 }
 export const DICE_DEFAULTS: DiceSettings = {
-  fallMs: 250, firstBounceMs: 170, secondBounceMs: 100, pipChangeDelayMs: 20,
+  fallMs: 300, firstBounceMs: 200, secondBounceMs: 120, pipChangeDelayMs: 50,
 };
 export const DICE_CONTROLS: readonly [keyof DiceSettings, string, number, number][] = [
   ['fallMs', '주사위 낙하 ms', 50, 800],
@@ -124,20 +131,26 @@ export function CoinResults({ outcomes, replayKey = 0 }: CoinResultsProps) {
   </output>;
 }
 
-export function DiceResults({ outcomes, replayKey = 0, settings }: DiceResultsProps) {
+export function DiceResults({ outcomes, replayKey = 0, settings, replayKeys, selected, disabled = false, onSelect }: DiceResultsProps) {
   const resolved = { ...DICE_DEFAULTS, ...settings };
   const timeline = deriveDiceTimeline(resolved);
-  const name = `dice-${Math.abs(Math.trunc(replayKey))}`;
+  const faces = outcomes.slice(0, 6);
+  const identities = faces.map((_, index) => Math.abs(Math.trunc(replayKeys?.[index] ?? replayKey)));
+  const names = identities.map((identity, index) => `dice-${identity}-${index}`);
   return <output class="effect-grid dice-results" aria-label="주사위 결과" data-replay={replayKey} style={`--dice-total-ms:${timeline.total}ms`}>
-    <style>{buildDiceTimeline(name, timeline)}</style>
-    {outcomes.slice(0, 6).map((face, index) => {
+    <style>{names.map((name) => buildDiceTimeline(name, timeline)).join(' ')}</style>
+    {faces.map((face, index) => {
       const patterns = deriveDicePatterns(face);
-      return <span class="effect-die" data-value={face} data-patterns={patterns.join(',')} style={`--effect-index:${index};animation-name:${name}-body`} aria-label={`주사위 ${face}`} key={`${replayKey}-${index}`}>
+      const name = names[index]!, identity = identities[index]!;
+      const die = <span class="effect-die" data-value={face} data-patterns={patterns.join(',')} style={`--effect-index:${index};animation-name:${name}-body`} aria-label={onSelect ? undefined : `주사위 ${face}`} aria-hidden={onSelect ? 'true' : undefined} key={`die-${index}-${identity}`}>
         {Array.from({ length: 9 }, (_, pip) => {
           const signature = `${PIPS[patterns[0]].includes(pip) ? 1 : 0}${PIPS[patterns[1]].includes(pip) ? 1 : 0}`;
           return <i class={`die-pip phase-${signature}${PIPS[face].includes(pip) ? ' is-on' : ''}`} style={`--pip-animation:${name}-pip-${signature};--final-animation:${name}-final`} aria-hidden="true" key={pip} />;
         })}
       </span>;
+      return onSelect
+        ? <button type="button" class={`yacht-die-button${selected?.[index] ? ' reroll-selected' : ''}`} aria-label={`${index + 1}번 주사위 ${face} · ${selected?.[index] ? '다시 굴림 선택' : '고정'}`} aria-pressed={Boolean(selected?.[index])} data-replay={identity} disabled={disabled} onClick={() => onSelect(index)} key={`die-${index}-${identity}`}>{die}</button>
+        : die;
     })}
   </output>;
 }

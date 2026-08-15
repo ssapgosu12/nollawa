@@ -8,8 +8,8 @@ import { canStartRoom, type RoomSnapshot } from '../lobby/room-state';
 describe('YachtGame screen contract', () => {
   it('exposes a real 1-4-player Yacht catalog/App path and no Yacht AI entry', () => {
     const yacht = GAME_CATALOG.find(({ id }) => id === 'yacht');
-    expect(yacht).toMatchObject({ name: 'Yacht Dice', minPlayers: 1, maxPlayers: 4 }); expect(yacht?.tags).not.toContain('봇 있음');
-    expect(filterGames('yacht', '3-4', []).map(({ id }) => id)).toEqual(['yacht']);
+    expect(yacht).toMatchObject({ name: '요트 다이스', minPlayers: 1, maxPlayers: 4 }); expect(yacht?.tags).not.toContain('봇 있음');
+    expect(filterGames('요트', '3-4', []).map(({ id }) => id)).toEqual(['yacht']);
     expect(App.toString()).toContain('startLocalYacht'); expect(App.toString()).toMatch(/game:\s*["']yacht["']/);
     const room = { code: 'ABC-67', hostId: 'one', game: 'yacht', teamNames: ['왼쪽', '오른쪽'], settings: { aiOpponent: false }, phase: 'lobby', participants: [{ id: 'one', slot: 1, name: '하나', ready: true, present: true }, { id: 'two', slot: 2, name: '둘', ready: true, present: true }] } as RoomSnapshot;
     expect(canStartRoom(room)).toBe(true); expect(canStartRoom({ ...room, participants: [...room.participants, { id: 'three', slot: 3, name: '셋', ready: true, present: true }, { id: 'four', slot: 4, name: '넷', ready: true, present: true }, { id: 'five', slot: 5, name: '다섯', ready: true, present: true }] })).toBe(false);

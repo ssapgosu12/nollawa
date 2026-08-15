@@ -1,9 +1,27 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AI_MOVE_DELAY_MS, aiBudgetMs, applyAuthorityAiMove, applyAuthorityRematch, completedGameRestart, firstPlayerChoiceLabels, firstPlayerMethodFor, identitySeat, initialGameForOpening, leaveForTitle, remoteBoardDisabled, remoteRematchPresentation, remoteSeatLabel, restartNoticeFor, returnToLobby, roomRematchMembers, roomVoteMembers, shouldRequestAiMove, waitForAiMoveGate, withAiMoveGate } from './App';
+import { AI_MOVE_DELAY_MS, YachtGameRoute, aiBudgetMs, applyAuthorityAiMove, applyAuthorityRematch, completedGameRestart, firstPlayerChoiceLabels, firstPlayerMethodFor, identitySeat, initialGameForOpening, leaveForTitle, remoteBoardDisabled, remoteRematchPresentation, remoteSeatLabel, restartNoticeFor, returnToLobby, roomRematchMembers, roomVoteMembers, shouldRequestAiMove, waitForAiMoveGate, withAiMoveGate } from './App';
 import { BoardGame } from './components/BoardGame';
 import type { BoardGridProps } from './components/BoardGrid';
+import { YachtGame } from './components/YachtGame';
 import { initGame, reduceGame, restartAction, type GameId } from './game/catalog';
 import { samok, type SamokState } from './game/samok';
+import { createYachtEventLog } from './game/yacht-events';
+
+describe('M2-YACHT-2 acceptance 7 correction: actual App-to-YachtGame identity wiring', () => {
+  const participants = [{ id: 'seat-1', name: '1P' }, { id: 'seat-2', name: '2P' }, { id: 'seat-3', name: '3P' }];
+  const events = createYachtEventLog(participants, ['seat-3', 'seat-1', 'seat-2']);
+  const handlers = { onAction: () => undefined, onUndo: () => undefined, onExit: () => undefined };
+
+  it('keeps local seat 1 self while current/action authority is seat 3, and uses remote connected identity only', () => {
+    const local = YachtGameRoute({ events, mode: 'local', selfId: null, ...handlers });
+    expect(local.type).toBe(YachtGame);
+    expect(local.props).toMatchObject({ actorId: 'seat-3', viewerId: 'seat-1', local: true });
+    const remote = YachtGameRoute({ events, mode: 'remote', selfId: 'seat-2', ...handlers });
+    expect(remote.props).toMatchObject({ actorId: 'seat-2', viewerId: 'seat-2', local: false });
+    const spectator = YachtGameRoute({ events, mode: 'remote', selfId: null, ...handlers });
+    expect(spectator.props).toMatchObject({ actorId: null, viewerId: null, local: false });
+  });
+});
 
 function terminalState(): SamokState {
   return [0, 0, 1, 1, 2, 2, 3]
