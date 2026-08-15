@@ -1,0 +1,70 @@
+M5-SHEET-1 director acceptance evidence
+BOOT: boardgames-fleet-20260815T1735Z-m5-sheet-1
+ticket: M5-SHEET-1
+root: C:/Localai/boardgames-fleet
+branch: track/fleet
+
+BOOT AND INPUT INTEGRITY
+ACK exists and is empty: collab13/sessions/boardgames-fleet-20260815T1735Z-m5-sheet-1.ack, 0 bytes.
+Director card: 5156 bytes, sha256 6cf66c145be3af941567453b31299900c85b0c27ae6156a7436f47a7f4148cb1.
+docs/plan/yacht-dice.md: 11599 bytes, sha256 a5dd559b585b9e0122317b77f980cc4f776abc8f4f70f19cc33d94a07cb1faf9.
+docs/plan/fleet-strike.md: 31803 bytes, sha256 a9e72fbbda824795efc2b4309555a7e754cd4bbf15fef882a9819aafa55e5e14.
+collab13/PREFLIGHT.md: 5465 bytes, sha256 e9dcdf5499bad0d14ceb8dc43d7c2dfcfffb4be5003dd5473751e47933c5a4a9.
+
+DELEGATION SET AUDIT
+Original population: total 4, derived from the four numbered DONE-WHEN items in the director card.
+Worker card count: 1.
+Worker subset: all four items: common component separation, Yacht behavior preservation, Fleet reuse, persistence-policy separation.
+Union: 4/4 original items.
+Overlap: none between worker cards because only one worker card was issued.
+Uninspected remainder before execution: 0.
+Dependency and shared writes: all four items touch or depend on YachtGame, the shared sheet, FleetGame, and shared CSS, so one worker avoided concurrent shared-file writes.
+Worker spawned with control.py up: boardgames-fleet-20260815T1800Z-m5-sheet-1-impl, PID 34528.
+Worker ACK: collab13/sessions/boardgames-fleet-20260815T1800Z-m5-sheet-1-impl.ack, 0 bytes.
+
+CAUSAL HYPOTHESIS AND FALSIFIABLE OBSERVATION
+Hypothesis: YachtGame-owned score-sheet markup and opening control caused the reuse failure; extracting a controlled persistence-free shell while moving Yacht-only table markup would preserve Yacht behavior and let Fleet reuse the same display/opening contract.
+Expected observation: YachtGame and FleetGame each import and render one ScoreSheet, Yacht-specific table markup is outside YachtGame, Fleet has no separate shell, and ScoreSheet contains no storage API or state/effect hook.
+Observed: the expected observation is present in commit 2d423bfa20b54dc6b269c33e1b3b1d51fb1c12e4. The hypothesis was not refuted.
+Worker recorded two obsolete static-test expectation corrections for two different superseded contracts. They were not repeated fixes for one symptom and one causal hypothesis; no third variation or correction worker was needed.
+
+WORKER RESULT VALIDATION
+Archived result read from collab13/cards/director/archive/20260815T1800Z-m5-sheet-1-impl-result.md.
+Worker raw read from m5-sheet-1-impl.raw.txt, 5409 bytes.
+Worker result declared outcome done and COVERED 4/4; this declaration was not accepted until source, diff, tests, budgets, and git state below were independently checked.
+Implementation commit: 2d423bfa20b54dc6b269c33e1b3b1d51fb1c12e4.
+Parent commit: 30d96e404d19c6d61766c211f24ab253fe2194c6.
+Commit paths: m5-sheet-1-impl.raw.txt; src/components/FleetGame.tsx; src/components/ScoreSheet.test.js; src/components/ScoreSheet.tsx; src/components/YachtGame.sheet.test.js; src/components/YachtGame.test.tsx; src/components/YachtGame.tsx; src/components/YachtScoreTable.tsx; src/m3-fleet-3-integration.test.js; src/styles.css.
+Prohibited touched-path count: 0 for Baduk, docs, collab13 implementation, relay/worker.js, src/App.tsx, and src/game/catalog.ts.
+git diff --check 2d423bf^ 2d423bf: exit 0.
+Shared ScoreSheet storage/hook pattern count for sessionStorage, localStorage, indexedDB, caches, useState, and useEffect: 0.
+Changed component color-hex literal count: 0.
+
+SOURCE ACCEPTANCE
+1. GREEN: src/components/ScoreSheet.tsx is an independent controlled open/locked shell. YachtGame and FleetGame each import and render exactly one instance; Yacht table markup moved to src/components/YachtScoreTable.tsx.
+2. GREEN: Yacht forced-open transition remains game-owned; locked is passed from the same forced phase; the extracted table preserves previews, selected highlight classes, explicit register action, fixed seat classes, remote self marker, and local self-marker suppression. The functional source move matches the parent implementation and named tests cover the contract.
+3. GREEN: Fleet uses the shared ScoreSheet with locked false and local manual open state. Its rows derive every participant's remaining ships and shooting-card label, and the active enemy board remains in the fixed 15svh upper area while the sheet is open.
+4. GREEN: ScoreSheet has no persistence API or internal state/effect hook. Yacht and Fleet parents own their respective open and persistence policies.
+POPULATION: total 4; GREEN 4; RED 0; NOT-SUPPORTED 0; NOT-YET 0; BLOCKED 0; UNKNOWN 0; uninspected remainder 0.
+COVERED: 4/4
+
+INDEPENDENT AUTOMATED VERIFICATION
+npm ci --ignore-scripts: exit 0; 47 packages added; 48 audited; 0 vulnerabilities.
+npm run check:terms: exit 0; 67 files and 30 forbidden terms checked.
+npm run build: exit 0; TypeScript no-emit and Vite build; 39 modules transformed.
+./node_modules/.bin/vitest.cmd run: exit 0; 41 test files and 379/379 tests GREEN.
+
+STRUCTURAL BUDGETS
+src non-test denominator: 38 paths from rg --files src excluding names matching .(test|spec).. The worker's specified Measure-Object -Line method gives 3616/4000. A stricter Get-Content physical-line count including blank lines gives 3817/4000. Both are below the cap.
+CSS physical lines: 269/700 from Get-Content src/styles.css .Count.
+relay/worker.js physical lines: 273/314 from Get-Content relay/worker.js .Count; file unchanged by the commit.
+Direct dependencies: 4/4 from package.json dependency plus devDependency property counts.
+STRUCTURAL POPULATION: total 4; GREEN 4; RED 0; NOT-SUPPORTED 0; NOT-YET 0; BLOCKED 0; UNKNOWN 0; uninspected remainder 0.
+
+DEVICE EVIDENCE
+Physical-device population: total 1; NOT-YET 1; GREEN 0; RED 0; NOT-SUPPORTED 0; BLOCKED 0; UNKNOWN 0; uninspected remainder 0.
+Physical-device inspection was not performed and is not claimed as GREEN.
+
+FINAL GIT STATE BEFORE DIRECTOR EVIDENCE COMMIT
+git status --short --branch: branch track/fleet, no dirty files.
+No push was performed.
