@@ -84,12 +84,12 @@ describe('요트 점수 규칙', () => {
 });
 
 describe('요트 차례 리듀서', () => {
-  it('첫 굴림은 다섯 개를 모두 받고 보유 주사위만 재굴림에서 보존한다', () => {
+  it('첫 굴림 뒤 선택한 주사위만 재굴리고 선택 상태를 초기화한다', () => {
     const first = roll(createYachtTurn(), dice(1, 2, 3, 4, 5));
-    expect(first).toMatchObject({ dice: [1, 2, 3, 4, 5], held: [false, false, false, false, false], rolls: 1 });
-    const held = reduceYachtTurn(first, { type: 'toggle-hold', index: 1 });
-    const second = roll(held, dice(6, 6, 6, 6, 6));
-    expect(second.dice).toEqual([6, 2, 6, 6, 6]);
+    expect(first).toMatchObject({ dice: [1, 2, 3, 4, 5], rerollSelected: [false, false, false, false, false], rolls: 1 });
+    const selected = reduceYachtTurn(first, { type: 'toggle-reroll', index: 1 });
+    const second = roll(selected, dice(6, 6, 6, 6, 6));
+    expect(second).toMatchObject({ dice: [1, 6, 3, 4, 5], rerollSelected: [false, false, false, false, false] });
   });
 
   it('세 번째 굴림 뒤 점수 단계로 잠기고 네 번째 굴림과 보유 변경을 거부한다', () => {
@@ -98,7 +98,7 @@ describe('요트 차례 리듀서', () => {
     const third = roll(second, dice(6, 6, 6, 6, 6));
     expect(third).toMatchObject({ rolls: 3, phase: 'scoring' });
     expect(roll(third, dice(1, 1, 1, 1, 1))).toBe(third);
-    expect(reduceYachtTurn(third, { type: 'toggle-hold', index: 0 })).toBe(third);
+    expect(reduceYachtTurn(third, { type: 'toggle-reroll', index: 0 })).toBe(third);
   });
 
   it('한 번 굴린 뒤 일찍 멈추면 등록 전까지 굴림이 잠긴다', () => {
@@ -126,7 +126,7 @@ describe('요트 차례 리듀서', () => {
 
   it('첫 굴림 전 보유·중단·등록 및 malformed 굴림은 같은 상태 객체로 거부한다', () => {
     const initial = createYachtTurn();
-    expect(reduceYachtTurn(initial, { type: 'toggle-hold', index: 0 })).toBe(initial);
+    expect(reduceYachtTurn(initial, { type: 'toggle-reroll', index: 0 })).toBe(initial);
     expect(reduceYachtTurn(initial, { type: 'stop' })).toBe(initial);
     expect(reduceYachtTurn(initial, { type: 'register', category: 'choice' })).toBe(initial);
     expect(reduceYachtTurn(initial, { type: 'roll', dice: [1, 2, 3, 4] })).toBe(initial);

@@ -69,22 +69,22 @@ describe('authority and public projection', () => {
     expect(accepted.participants[0]!.turn.dice).toEqual(DICE);
   });
 
-  it('projects every participant dice, holds, rolls, scores, previews, and current turn to every viewer', () => {
+  it('projects every participant dice, reroll selections, rolls, scores, previews, and current turn to every viewer', () => {
     let state = createYachtSession(players(2));
     state = reduceAuthorityYachtSession(state, 'player-1', { type: 'roll', dice: DICE });
-    state = reduceAuthorityYachtSession(state, 'player-1', { type: 'toggle-hold', index: 2 });
+    state = reduceAuthorityYachtSession(state, 'player-1', { type: 'toggle-reroll', index: 2 });
     state = reduceAuthorityYachtSession(state, 'player-1', { type: 'stop' });
     const spectatorView = projectYachtSession(state, 'spectator');
     const opponentView = projectYachtSession(state, 'player-2');
     expect(spectatorView).toEqual(opponentView);
     expect(spectatorView.currentParticipantId).toBe('player-1');
     expect(spectatorView.participants[0]).toMatchObject({
-      id: 'player-1', dice: DICE, held: [false, false, true, false, false], rolls: 1,
+      id: 'player-1', dice: DICE, rerollSelected: [false, false, true, false, false], rolls: 1,
       scoreCard: { scores: {}, total: 0 },
       previews: { choice: 15, 'small-straight': 15, 'large-straight': 30 },
     });
     expect(spectatorView.participants[1]).toMatchObject({
-      id: 'player-2', dice: null, held: [false, false, false, false, false], rolls: 0,
+      id: 'player-2', dice: null, rerollSelected: [false, false, false, false, false], rolls: 0,
       scoreCard: { scores: {}, total: 0 }, previews: {},
     });
   });

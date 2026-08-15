@@ -27,7 +27,7 @@ export interface YachtHandoff {
 
 export interface YachtTurnState {
   dice: readonly YachtDie[] | null;
-  held: readonly boolean[];
+  rerollSelected: readonly boolean[];
   rolls: number;
   phase: YachtPhase;
   entries: readonly YachtScoreEntry[];
@@ -36,7 +36,7 @@ export interface YachtTurnState {
 
 export type YachtTurnAction =
   | { type: 'roll'; dice: unknown }
-  | { type: 'toggle-hold'; index: number }
+  | { type: 'toggle-reroll'; index: number }
   | { type: 'stop' }
   | { type: 'register'; category: YachtCategory };
 
@@ -111,7 +111,7 @@ export function createYachtTurn(entries: readonly YachtScoreEntry[] = []): Yacht
   validateEntries(entries);
   return {
     dice: null,
-    held: [false, false, false, false, false],
+    rerollSelected: [false, false, false, false, false],
     rolls: 0,
     phase: 'rolling',
     entries: entries.map((entry) => ({ ...entry, dice: [...entry.dice] })),
@@ -125,16 +125,16 @@ export function reduceYachtTurn(state: YachtTurnState, action: YachtTurnAction):
     if (state.phase !== 'rolling' || state.rolls >= 3 || !isYachtDice(action.dice)) return state;
     const dice = state.dice === null
       ? [...action.dice]
-      : action.dice.map((die, index) => state.held[index] ? state.dice?.[index] ?? die : die);
+      : action.dice.map((die, index) => state.rerollSelected[index] ? die : state.dice?.[index] ?? die);
     const rolls = state.rolls + 1;
-    return { ...state, dice, rolls, phase: rolls === 3 ? 'scoring' : 'rolling' };
+    return { ...state, dice, rerollSelected: [false, false, false, false, false], rolls, phase: rolls === 3 ? 'scoring' : 'rolling' };
   }
-  if (action.type === 'toggle-hold') {
+  if (action.type === 'toggle-reroll') {
     if (state.phase !== 'rolling' || state.dice === null || !Number.isInteger(action.index)
       || action.index < 0 || action.index >= 5) return state;
-    const held = [...state.held];
-    held[action.index] = !held[action.index];
-    return { ...state, held };
+    const rerollSelected = [...state.rerollSelected];
+    rerollSelected[action.index] = !rerollSelected[action.index];
+    return { ...state, rerollSelected };
   }
   if (action.type === 'stop') {
     return state.phase === 'rolling' && state.dice !== null ? { ...state, phase: 'scoring' } : state;
