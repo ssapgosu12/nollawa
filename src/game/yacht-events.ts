@@ -70,11 +70,15 @@ function migrateLegacyYachtEvents(events: readonly unknown[]): YachtInputEvent[]
       return;
     }
     if (!['roll', 'stop', 'register'].includes(String(legacyAction.type))) throw new RangeError('Invalid legacy Yacht action');
-    append(actorId, legacyAction as unknown as YachtTurnAction, group);
     if (legacyAction.type === 'roll') {
       const current = state.participants.find((participant) => participant.id === state.currentParticipantId)?.turn;
-      if (current?.phase === 'rolling') held.forEach((isHeld, index) => { if (!isHeld) append(actorId, { type: 'toggle-reroll', index }, group); });
-    } else if (legacyAction.type === 'register') held = [false, false, false, false, false];
+      if (current && current.dice !== null) held.forEach((isHeld, index) => {
+        const shouldReroll = !isHeld;
+        if (current.rerollSelected[index] !== shouldReroll) append(actorId, { type: 'toggle-reroll', index }, group);
+      });
+    }
+    append(actorId, legacyAction as unknown as YachtTurnAction, group);
+    if (legacyAction.type === 'register') held = [false, false, false, false, false];
   });
   replayYachtEvents(migrated);
   return migrated;

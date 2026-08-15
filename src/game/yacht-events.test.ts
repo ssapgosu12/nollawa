@@ -45,10 +45,27 @@ describe('append-only Yacht event replay and persistence', () => {
     const memory = new Map([['nollawa-yacht-events-v1', legacy]]), storage = { getItem: (key: string) => memory.get(key) ?? null };
     const restored = loadYachtEvents(storage);
     expect(restored).not.toBeNull();
-    expect(replayYachtEvents(restored!).participants[0]?.turn.dice).toEqual([6, 2, 6, 6, 6]);
+    const state = replayYachtEvents(restored!);
+    expect(state.participants[0]?.turn.dice).toEqual([6, 2, 6, 6, 6]);
+    expect(state.participants[0]?.turn.rerollSelected).toEqual([false, false, false, false, false]);
+    const finalRollIndex = restored!.map((event) => event.type === 'input' ? event.action.type : event.type).lastIndexOf('roll');
+    expect(replayYachtEvents(restored!.slice(0, finalRollIndex)).participants[0]?.turn.rerollSelected).toEqual([true, false, true, true, true]);
     expect(JSON.stringify(restored)).not.toContain('toggle-hold');
     expect(memory.get('nollawa-yacht-events-v1')).toBe(legacy);
-    expect(undoYachtInput(restored!)).toHaveLength(8);
+    const undone = undoYachtInput(restored!);
+    expect(undone).toHaveLength(3);
+    expect(new Set(undone.slice(1).map((event) => event.type === 'input' ? event.legacyGroup : undefined))).toEqual(new Set([1, 2]));
+  });
+
+  it('restores a legacy log ending after its first roll with no reroll selection', () => {
+    const legacy = JSON.stringify({ kind: 'yacht', events: [
+      { type: 'start', participants: [{ id: 'one', name: '??롪돌' }] },
+      { type: 'input', actorId: 'one', action: { type: 'roll', dice: [1, 2, 3, 4, 5] } },
+    ] });
+    const restored = loadYachtEvents({ getItem: () => legacy });
+    expect(restored).not.toBeNull();
+    expect(replayYachtEvents(restored!).participants[0]?.turn.rerollSelected).toEqual([false, false, false, false, false]);
+    expect(undoYachtInput(restored!)).toHaveLength(1);
   });
 
   it('fails malformed legacy logs safely instead of accepting or overwriting them', () => {
