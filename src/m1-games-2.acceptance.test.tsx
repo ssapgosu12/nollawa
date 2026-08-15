@@ -17,7 +17,7 @@ const room = (game: GameId, aiStrength: 'normal' | 'high' = 'normal'): RoomSnaps
 describe('ORDER 1 GREEN: merged effects, activities, catalog, renderer, filtering, and search request coexist', () => {
   it('retains both branch feature sets in one callable surface', () => {
     expect(ids).toEqual(['samok', 'omok', 'yukmok', 'reversi']);
-    expect(filterGames('', '2', [])).toHaveLength(5);
+    expect(filterGames('', '2', [])).toHaveLength(6);
     for (const id of ids) expect(BoardGame({ game: id, state: initGame(id), onMove: vi.fn() })).toBeTruthy();
     expect(EffectsTestPage).toBeTypeOf('function');
     expect(participantStatusLabel(room('samok'), { id: 'one', slot: 1, name: '하나', ready: true, present: true, activity: 'play' })).toBe('게임 중');
