@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { ScoreSheet } from './ScoreSheet';
 import {
   CLASSIC_FLEET_LENGTHS,
   fleetVariantAbilitiesForOwner,
@@ -37,6 +38,22 @@ interface FleetVariantSelection { targetParticipantId: string; cell: FleetCell }
 
 const key = ({ row, column }: FleetCell) => `${row}:${column}`;
 const sameCell = (left: FleetCell, right: FleetCell) => left.row === right.row && left.column === right.column;
+
+const FLEET_SHOT_LABELS: Record<FleetShootingCard, string> = {
+  salvo: '일제사격탄', flare: '조명탄', tracer: '예광탄', 'high-explosive': '고폭탄',
+  scatter: '확산탄', piercing: '관통탄', 'random-shot': '무작위탄', buckshot: '산탄',
+};
+
+export interface FleetScoreSheetRow { id: string; name: string; remainingShips: number; shotType: string }
+
+export function fleetScoreSheetRows(state: FleetState): readonly FleetScoreSheetRow[] {
+  return state.participants.map((participant) => {
+    const hits = new Set(state.shots.filter(({ target, result }) => target === participant.id && result !== 'miss').map(({ cell }) => key(cell)));
+    const remainingShips = participant.ships.filter((ship) => !ship.sunk && !ship.cells.every((cell) => hits.has(key(cell)))).length;
+    const shootingCard = participant.variantSetup?.shootingCard;
+    return { id: participant.id, name: participant.name, remainingShips, shotType: shootingCard ? FLEET_SHOT_LABELS[shootingCard] : '일반탄' };
+  });
+}
 
 export function canConfirmFleetTarget(state: FleetState, viewerId: string | null, preview: FleetTargetPreview | null): preview is FleetTargetPreview {
   if (!preview || !viewerId || state.phase !== 'targeting' || state.turnParticipantId !== viewerId) return false;
@@ -126,6 +143,7 @@ function FleetBoard({ state, participant, interactive, selectedCell, selectedCel
 export function FleetGame({ state, viewerId, onAction, onExit }: Props) {
   const view = projectFleetState(state, viewerId ?? undefined);
   const own = view.participants.find(({ id }) => id === viewerId);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [shipIndex, setShipIndex] = useState(0), [orientation, setOrientation] = useState<FleetOrientation>('horizontal');
   const [targetPreview, setTargetPreview] = useState<FleetTargetPreview | null>(null);
   const [presentationIndex, setPresentationIndex] = useState(0);
@@ -146,6 +164,7 @@ export function FleetGame({ state, viewerId, onAction, onExit }: Props) {
   const selectedCells = variantSelections.filter(({ targetParticipantId }) => targetParticipantId === target?.id).map(({ cell }) => cell);
   const carousel = variant && state.participants.length >= 3;
   const abilities = viewerId ? fleetVariantAbilitiesForOwner(state, viewerId) : null;
+  const sheetRows = fleetScoreSheetRows(state);
   useEffect(() => setPresentationIndex(0), [state.presentationQueue]);
   useEffect(() => {
     if (presentationIndex >= (state.presentationQueue?.length ?? 0)) return;
@@ -180,11 +199,11 @@ export function FleetGame({ state, viewerId, onAction, onExit }: Props) {
     return <section class="fleet-screen fleet-variant-setup" aria-label="함대 격침 변형 설정"><div class="fleet-zone fleet-upper"><div class="fleet-side setup-side" /><div class="fleet-board fleet-summary"><strong>{own?.name ?? '참가자'} 프리셋</strong>{setup?.presetOffers.map((offer) => <button disabled={!active || Boolean(preset)} onClick={() => onAction({ type: 'choose-variant-preset', presetId: offer.id })} key={offer.id}>{offer.shootingCard} · 특수 배 {offer.specialShipOffers.length}종</button>)}</div><div class="fleet-side setup-side" /></div><div class="fleet-middle">{preset?.specialShipOffers.map((kind) => <button class={specialSelection.includes(kind) ? 'selected' : ''} disabled={!active} onClick={() => setSpecialSelection((current) => current.includes(kind) ? current.filter((item) => item !== kind) : current.length < choiceCount ? [...current, kind] : current)} key={kind}>{kind}</button>)}{preset && <button class="primary" disabled={!active || specialSelection.length !== choiceCount} onClick={() => onAction({ type: 'choose-special-ships', specialShips: specialSelection })}>프리셋 확정</button>}<button class="fleet-exit" onClick={onExit}>나가기</button></div><div class="fleet-zone fleet-lower"><div /><div class="fleet-summary"><span>사격 카드 3장 중 1장</span><span>특수 배 {choiceCount}척 선택</span></div><div /></div></section>;
   }
 
-  return <section class="fleet-screen" aria-label="함대 격침">
+  return <section class={`fleet-screen${sheetOpen ? ' sheet-active' : ''}`} aria-label="함대 격침">
     <div class="fleet-zone fleet-upper">
       {carousel ? <div class="fleet-side fleet-carousel"><button aria-label="이전 플레이어 보드" onClick={() => moveTarget(-1)}>‹</button></div> : <div class="fleet-side" aria-hidden="true" />}
       <div class="fleet-board-shell">
-        {state.phase === 'placement'
+        {state.phase === 'placement' && !sheetOpen
           ? <div class="fleet-board fleet-summary"><strong>{outcome}</strong><span>{own?.ships?.length ?? 0}/{fleetLengths.length}척 배치</span><span>{variant ? `${setup?.shootingCard ?? ''} · 동시 입력` : '일반탄 · 턴당 한 발'}</span></div>
           : <><span class="fleet-board-name">{target?.name ?? '관전'}{target?.alive === false ? ' · 탈락' : ''}</span><FleetBoard state={state} participant={target} interactive={canShoot} selectedCell={confirmableTarget?.cell} selectedCells={[...selectedImpacts, ...selectedCells]}
             onCell={(cell) => target && setTargetPreview((selectTarget(cell), { targetParticipantId: target.id, cell, turnParticipantId: state.turnParticipantId ?? viewerId ?? '', shotCount: state.shots.length }))} /></>}
@@ -210,6 +229,12 @@ export function FleetGame({ state, viewerId, onAction, onExit }: Props) {
       <div class="fleet-lower-center"><p class="fleet-shot-description">{variant ? `${setup?.shootingCard ?? ''} — 여러 적 보드에 사격을 배치하고 함께 확정합니다.` : '일반탄 — 선택한 한 칸을 공격합니다.'}</p><div class="fleet-board-shell"><span class="fleet-board-name">{own ? `${own.name}의 보드` : '관전자'}</span><FleetBoard state={state} participant={own} interactive={canPlace} invalidTag={canPlace ? variantFleet[shipIndex]?.placementTag : null} onCell={(origin) => onAction({ type: 'place-ship', shipIndex, origin, orientation })} /></div></div>
       <div aria-hidden="true" />
     </div>
+    <ScoreSheet open={sheetOpen} locked={false} onOpenChange={setSheetOpen} panelClass="fleet-sheet" handleClass="fleet-sheet-handle">
+      <table><thead><tr><th>항목</th>{sheetRows.map((participant, index) => <th class={`player-${index + 1}`} key={participant.id}>{participant.name}</th>)}</tr></thead><tbody>
+        <tr><th>남은 배</th>{sheetRows.map((participant) => <td key={participant.id}>{participant.remainingShips}척</td>)}</tr>
+        <tr><th>탄 종류</th>{sheetRows.map((participant) => <td key={participant.id}>{participant.shotType}</td>)}</tr>
+      </tbody></table>
+    </ScoreSheet>
     {variant && state.presentationQueue?.[presentationIndex] && <div class="fleet-presentation" aria-live="polite"><p class="shuffle-caption" key={`${state.round}:${presentationIndex}`}>{state.presentationQueue[presentationIndex]!.text}</p></div>}
   </section>;
 }

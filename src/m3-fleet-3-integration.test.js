@@ -73,7 +73,7 @@ describe('M3-FLEET-3-INTEGRATION population 3', () => {
     expect(component).toContain('모든 발 회수'); expect(component).toContain('participants.length >= 3');
     expect(component).toContain('fleet-carousel'); expect(component).toContain('class="fleet-board-name"');
     expect(component).toContain('invalid-zone-flash'); expect(component).toContain("placementTag === 'coastal' ? '연안'");
-    expect(component).toContain('FLEET_SHIP_TEXTURE_ROLES'); expect(component).not.toMatch(/score|점수판/i);
+    expect(component).toContain('FLEET_SHIP_TEXTURE_ROLES'); expect(component).toContain("import { ScoreSheet } from './ScoreSheet'"); expect(component.match(/<ScoreSheet/g)).toHaveLength(1);
     expect(component).toContain('presentationQueue?.[presentationIndex]'); expect(component).not.toContain('presentationQueue?.map');
     expect(css).toMatch(/--fleet-ship-fill:\s*#f7f7f3/i); expect(css).toContain('.fleet-cell.invalid-placement-zone');
     expect(css).toMatch(/\.fleet-shot-mark\.hit[^}]*var\(--fleet-hit\)/); expect(css).toMatch(/\.fleet-shot-mark\.miss[^}]*var\(--fleet-miss\)/); expect(css).toMatch(/\.fleet-shot-mark\.partial[^}]*var\(--fleet-hit\)/);
