@@ -22,6 +22,8 @@ export interface FleetPlannedImpact {
   kind: FleetImpactKind
 }
 
+export interface NormalShotPlan { type: 'normal'; cell: FleetCell }
+
 export interface SalvoShotPlan {
   type: 'salvo'
   turnInCycle: 0 | 1 | 2
@@ -76,6 +78,7 @@ export interface BuckshotSpreadPlan {
 }
 
 export type FleetShotPlan =
+  | NormalShotPlan
   | SalvoShotPlan
   | FlareShotPlan
   | TracerShotPlan
@@ -201,6 +204,9 @@ const planBuckshot = (plan: BuckshotNormalPlan | BuckshotSpreadPlan) => {
 
 export const planFleetShots = (plan: FleetShotPlan): FleetPlannedImpact[] => {
   switch (plan.type) {
+    case 'normal':
+      assertIntegerCell(plan.cell)
+      return [impact(plan.cell, 'normal')]
     case 'salvo':
       return planSalvo(plan)
     case 'flare':

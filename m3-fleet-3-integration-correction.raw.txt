@@ -1,0 +1,29 @@
+M3-FLEET-3-INTEGRATION-CORRECTION evidence
+
+CAUSAL HYPOTHESIS: dd9af95 stopped at helper exposure/static queue assertions; wiring authority-owned quotas, live special-ship abilities, and one-at-a-time presentation into the existing reducer/UI closes the four audited RED groups without a second reducer or texture set.
+EXPECTED OBSERVATION: repeated or malformed actions are rejected; all eight cards obey authority cadence; carrier, glass-cannon, and spy abilities appear and expire from live ship state; only one presentation item renders at a time.
+OBSERVED: the expected observation occurred in direct reducer correction tests and the full automated suite.
+
+VERDICT: GREEN
+POPULATION: total 4 audited correction groups; GREEN 4; RED 0; NOT-SUPPORTED 0; NOT-YET 0; BLOCKED 0; UNKNOWN 0; uninspected remainder 0.
+COVERED: 4/4
+
+GROUP 1 GREEN: all eight firing-card paths are reducer-exercised. Authority derives salvo cycle history and exact 5-over-3-round feasibility, enforces one base-card use and exact alternating cadence, rejects caller-forged history/turn/board metadata and repeated/malformed actions, accepts independent flare cells, both piercing axes, caller-supplied random outcomes excluding only public normal hits, outside-board range centers through two cells, and both buckshot choices including six unique 3-center/3-outer impacts.
+GROUP 2 GREEN: live reducer/UI paths consume current special-ship state. Carrier grants one bonus normal shot and persists full-placement reveal on first damaging hit; glass-cannon grants one extra tracer and a per-owner non-stacking every-second-round explosive opportunity; spy grants one private non-damaging scout with no shot or presentation event. Existing reducer paths still apply two armored 5-ships, hidden submarine hits, supply shape, and flare-vulnerable paper ships.
+GROUP 3 GREEN: special abilities are recalculated from current ship populations. Carrier bonus stops when the carrier sinks or any three own ships sink; glass-cannon tracer/pressure and spy scout stop with their owning populations; reset cannot replay a private scout in the same round.
+GROUP 4 GREEN: simultaneous all-living submission remains intact. FleetGame advances one caption/result item every 900 ms through the existing shuffle-caption presentation path and renders only presentationQueue[presentationIndex], never the complete queue mapping.
+
+AUTOMATED TEST POPULATION: total 371; GREEN 371; RED 0; skipped 0; uninspected remainder 0. Existing population 368 plus correction tests 3.
+FOCUSED TEST POPULATION: total 6; GREEN 6; RED 0; skipped 0; uninspected remainder 0. Command: .\node_modules\.bin\vitest.cmd run src/m3-fleet-3-correction.test.js src/m3-fleet-3-integration.test.js
+GATE POPULATION: total 4; GREEN 4; RED 0; uninspected remainder 0.
+GATE: npm ci --ignore-scripts exit 0; 47 packages added; 0 vulnerabilities.
+GATE: npm run check:terms exit 0; 64 files checked against 30 terms.
+GATE: npm run build exit 0; TypeScript noEmit and Vite production build passed.
+GATE: .\node_modules\.bin\vitest.cmd run exit 0; 38/38 files and 371/371 tests passed.
+
+STRUCTURE POPULATION: total 4 ceilings; GREEN 4; RED 0; uninspected remainder 0.
+STRUCTURE: non-test src 3,712/3,800 across the exact 36-file rg --files src filtered population; CSS 264/700; relay/worker.js 273/314 and unchanged; direct dependencies 4/4 (1 runtime plus 3 dev).
+TASK FILE POPULATION: total 6; GREEN 6 task-owned; RED 0; uninspected remainder 0. Files: m3-fleet-3-integration-correction.raw.txt, src/components/FleetGame.tsx, src/game/fleet.ts, src/game/fleet-shots.ts, src/m3-fleet-3-correction.test.js, src/m3-fleet-3-integration.test.js.
+PROTECTED PATH POPULATION: total 2 groups (docs, collab13); GREEN 2 unchanged; RED 0; uninspected remainder 0.
+PUSH: NOT-SUPPORTED and not performed.
+PHYSICAL-DEVICE/BROWSER POPULATION: total 2; NOT-YET 2; GREEN 0; RED 0; uninspected remainder 0. No physical-device or browser visual validation was performed.

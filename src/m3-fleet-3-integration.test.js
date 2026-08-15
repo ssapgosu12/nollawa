@@ -60,8 +60,9 @@ describe('M3-FLEET-3-INTEGRATION population 3', () => {
 
   it('9/9 spans enemies in one plan, resets centrally, and exposes one distinct classic/variant catalog-App-local/remote lobby path with required UI invariants', async () => {
     let state = readyVariant(3);
-    state = queue(state, 'p1', 'p2', { row: 1, column: 1 });
-    state = queue(state, 'p1', 'p3', { row: 2, column: 2 });
+    state = { ...state, participants: state.participants.map((participant) => participant.id === 'p1' ? { ...participant, variantSetup: { ...participant.variantSetup, shootingCard: 'salvo' } } : participant) };
+    state = reduceFleet(state, 'p1', { type: 'queue-variant-shot', targetParticipantId: 'p2', plan: { type: 'salvo', turnInCycle: 0, previousTurnShotCounts: [], cells: [{ row: 1, column: 1 }] } });
+    state = reduceFleet(state, 'p1', { type: 'queue-variant-shot', targetParticipantId: 'p3', plan: { type: 'salvo', turnInCycle: 0, previousTurnShotCounts: [], cells: [{ row: 2, column: 2 }] } });
     expect(new Set(state.roundPlans[0].impacts.map(({ targetParticipantId }) => targetParticipantId))).toEqual(new Set(['p2', 'p3']));
     state = reduceFleet(state, 'p1', { type: 'reset-variant-plan' });
     expect(state.roundPlans).toEqual([]);
@@ -73,6 +74,7 @@ describe('M3-FLEET-3-INTEGRATION population 3', () => {
     expect(component).toContain('fleet-carousel'); expect(component).toContain('class="fleet-board-name"');
     expect(component).toContain('invalid-zone-flash'); expect(component).toContain("placementTag === 'coastal' ? '연안'");
     expect(component).toContain('FLEET_SHIP_TEXTURE_ROLES'); expect(component).not.toMatch(/score|점수판/i);
+    expect(component).toContain('presentationQueue?.[presentationIndex]'); expect(component).not.toContain('presentationQueue?.map');
     expect(css).toMatch(/--fleet-ship-fill:\s*#f7f7f3/i); expect(css).toContain('.fleet-cell.invalid-placement-zone');
     expect(css).toMatch(/\.fleet-shot-mark\.hit[^}]*var\(--fleet-hit\)/); expect(css).toMatch(/\.fleet-shot-mark\.miss[^}]*var\(--fleet-miss\)/); expect(css).toMatch(/\.fleet-shot-mark\.partial[^}]*var\(--fleet-hit\)/);
     expect(GAME_CATALOG.filter(({ id }) => id === 'fleet' || id === 'fleet-variant').map(({ id, minPlayers, maxPlayers }) => ({ id, minPlayers, maxPlayers }))).toEqual([
