@@ -42,17 +42,10 @@ export function FleetGame({ state, viewerId, onAction, onExit }: Props) {
   const view = projectFleetState(state, viewerId ?? undefined);
   const own = view.participants.find(({ id }) => id === viewerId);
   const [shipIndex, setShipIndex] = useState(0), [orientation, setOrientation] = useState<FleetOrientation>('horizontal');
-  const candidates = view.participants.filter(({ id, alive }) => id !== viewerId && alive);
-  const [chosenTarget, setChosenTarget] = useState<string | null>(null);
-  const target = candidates.find(({ id }) => id === chosenTarget) ?? candidates[0];
+  const target = view.participants.find(({ id }) => id !== viewerId);
   const canPlace = state.phase === 'placement' && state.placementParticipantId === viewerId;
   const canShoot = state.phase === 'targeting' && state.turnParticipantId === viewerId && Boolean(target);
   const selectedPlaced = own?.ships?.some(({ index }) => index === shipIndex) ?? false;
-  const cycleTarget = (step: number) => {
-    if (candidates.length < 2 || !target) return;
-    const current = candidates.findIndex(({ id }) => id === target.id);
-    setChosenTarget(candidates[(current + step + candidates.length) % candidates.length]!.id);
-  };
   const outcome = state.phase === 'complete'
     ? `${view.participants.find(({ id }) => id === state.winnerId)?.name ?? ''} 승리`
     : state.phase === 'placement'
@@ -61,13 +54,13 @@ export function FleetGame({ state, viewerId, onAction, onExit }: Props) {
 
   return <section class="fleet-screen" aria-label="함대 격침">
     <div class="fleet-zone fleet-upper">
-      <div class="fleet-side">{state.phase === 'targeting' && candidates.length > 1 && <button onClick={() => cycleTarget(-1)} aria-label="이전 플레이어">‹</button>}</div>
+      <div class="fleet-side" aria-hidden="true" />
       <div class="fleet-board-shell">
         {state.phase === 'placement'
-          ? <div class="fleet-board fleet-summary"><strong>{outcome}</strong><span>{own?.ships?.length ?? 0}/{CLASSIC_FLEET_LENGTHS.length}척 배치</span></div>
+          ? <div class="fleet-board fleet-summary"><strong>{outcome}</strong><span>{own?.ships?.length ?? 0}/{CLASSIC_FLEET_LENGTHS.length}척 배치</span><span>일반탄 · 턴당 한 발</span></div>
           : <><span class="fleet-board-name">{target?.name ?? '관전'}</span><FleetBoard state={state} participant={target} interactive={canShoot} onCell={(cell) => target && onAction({ type: 'shoot', targetParticipantId: target.id, cell, shotType: 'classic' })} /></>}
       </div>
-      <div class="fleet-side">{state.phase === 'targeting' && candidates.length > 1 && <button onClick={() => cycleTarget(1)} aria-label="다음 플레이어">›</button>}</div>
+      <div class="fleet-side" aria-hidden="true" />
     </div>
     <div class="fleet-middle">
       {state.phase === 'placement' ? <>
@@ -79,7 +72,7 @@ export function FleetGame({ state, viewerId, onAction, onExit }: Props) {
     </div>
     <div class="fleet-zone fleet-lower">
       <div aria-hidden="true" />
-      <div class="fleet-board-shell"><span class="fleet-board-name">{own ? `${own.name}의 보드` : '관전자'}</span><FleetBoard state={state} participant={own} interactive={canPlace} onCell={(origin) => onAction({ type: 'place-ship', shipIndex, origin, orientation })} /></div>
+      <div class="fleet-lower-center"><p class="fleet-shot-description">일반탄 — 선택한 한 칸을 공격합니다.</p><div class="fleet-board-shell"><span class="fleet-board-name">{own ? `${own.name}의 보드` : '관전자'}</span><FleetBoard state={state} participant={own} interactive={canPlace} onCell={(origin) => onAction({ type: 'place-ship', shipIndex, origin, orientation })} /></div></div>
       <div aria-hidden="true" />
     </div>
   </section>;

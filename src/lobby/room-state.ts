@@ -28,7 +28,7 @@ export function canStartRoom(room: RoomSnapshot): boolean {
   const yacht = room.game === 'yacht', fleet = room.game === 'fleet';
   return room.phase === 'lobby' && ready >= requiredReady(room.participants.length) && (yacht
     ? room.participants.length <= 4 && [1, 2].every((team) => room.participants.some((person) => teamForSlot(person.slot) === team))
-    : fleet ? !room.settings.aiOpponent && room.participants.length >= 2 && room.participants.length <= 6
+    : fleet ? !room.settings.aiOpponent && room.participants.length === 2
       : room.settings.aiOpponent || [1, 2].every((team) => room.participants.some((person) => teamForSlot(person.slot) === team)));
 }
 export function lobbyAction(room: RoomSnapshot, id: string | null) {
