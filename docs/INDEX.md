@@ -36,6 +36,7 @@ Nollawa의 문서 지도다. **먼저 여기서 갈 곳을 고르고, 그 문서
 | `inspection/rca-fleet-33-process-20260816.md` | 27KB | **왜 33건이 났는가.** 공통 상위 원인=검증 채널이 전부 생산자 프레임 안의 대리 지표. 대조군·수치 |
 | `inspection/rca-fleet-33-ticket-form-20260816.md` | 17KB | **티켓 형식 감사.** FALSIFIER 46항이 잡은 것 0건, POPULATION 분모가 틀린 이유, 새 카드 6칸 |
 | `inspection/fleet-fix-order-20260816.md` | 27KB | **14단계 수정 순서.** 충돌 단위는 파일이 아니라 줄. 병렬 가능/금지 표 |
+| `inspection/fleet-input-audit-20260816.md` | 12KB | **플레이어 입력 전수조사.** 페이즈×액션 매트릭스 40칸 · 검수가 놓친 신규 결함 8건(B-34~B-41) · 정상 확인 목록 |
 | `inspection/fleet-ticket-plan-20260816.md` | 31KB | **뿌리별 티켓 분할.** 33건을 건별이 아니라 뿌리별로 |
 | `plan/fleet-strike.md` | 전체 |
 | **함대 격침 사격 타입 밸런스 수치와 바꾸면 깨지는 것** | `plan/fleet-strike.md` | §3.6 |
