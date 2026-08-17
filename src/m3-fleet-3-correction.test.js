@@ -78,13 +78,13 @@ describe('M3-FLEET-3 correction reducer authority', () => {
     const deadGlass = { ...state, participants: state.participants.map((participant) => participant.id === 'p1' ? { ...participant, ships: participant.ships.map((item) => item.special === 'glass-cannon' ? { ...item, sunk: true, damage: [1] } : item) } : participant) };
     expect(queue(deadGlass, 'p1', 'p2', { type: 'tracer', center: { row: 4, column: 4 } })).toBe(deadGlass);
 
-    state = ready(['flare', 'flare'], [[base], [glass, base]], 2);
+    state = ready(['flare', 'flare'], [[base], [glass, base]], 1);
     state = queue(state, 'p1', 'p2', flare());
-    const pressured = queue(state, 'p1', 'p2', { type: 'explosive', boardSize: 10, turnIndex: 1, center: { row: 4, column: 4 } });
+    const pressured = queue(state, 'p1', 'p2', { type: 'explosive', boardSize: 10, turnIndex: 0, center: { row: 4, column: 4 } });
     expect(pressured.roundPlans[0].uses.at(-1).kind).toBe('pressure');
-    expect(queue(pressured, 'p1', 'p2', { type: 'explosive', boardSize: 10, turnIndex: 1, center: { row: 5, column: 5 } })).toBe(pressured);
+    expect(queue(pressured, 'p1', 'p2', { type: 'explosive', boardSize: 10, turnIndex: 0, center: { row: 5, column: 5 } })).toBe(pressured);
     const pressureGone = { ...state, participants: state.participants.map((participant) => participant.id === 'p2' ? { ...participant, ships: participant.ships.map((item) => item.special === 'glass-cannon' ? { ...item, sunk: true, damage: [1] } : item) } : participant) };
-    expect(queue(pressureGone, 'p1', 'p2', { type: 'explosive', boardSize: 10, turnIndex: 1, center: { row: 4, column: 4 } })).toBe(pressureGone);
+    expect(queue(pressureGone, 'p1', 'p2', { type: 'explosive', boardSize: 10, turnIndex: 0, center: { row: 4, column: 4 } })).toBe(pressureGone);
 
     state = ready(['flare', 'flare'], [[spy, base], [base]]);
     const scouted = reduceFleet(state, 'p1', { type: 'scout-variant-cell', targetParticipantId: 'p2', cell: { row: 3, column: 0 } });
