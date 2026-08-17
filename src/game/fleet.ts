@@ -311,7 +311,7 @@ function queueVariantShot(state: FleetState, actorId: string, action: Extract<Fl
   if (action.plan.type === baseType && (baseType === 'salvo' ? !uses.some(({ kind }) => kind !== 'card') : !baseUsed)) use = 'card';
   else if (baseUsed && action.plan.type === 'normal' && abilities.carrierExtraShots && !uses.some(({ kind }) => kind === 'carrier')) use = 'carrier';
   else if (baseUsed && action.plan.type === 'tracer' && abilities.tracerShots && !uses.some(({ kind }) => kind === 'tracer')) use = 'tracer';
-  else if (baseUsed && action.plan.type === 'explosive' && abilities.glassCannonPressure && roundIndex % 2 === 1 && !uses.some(({ kind }) => kind === 'pressure')) use = 'pressure';
+  else if (baseUsed && action.plan.type === 'explosive' && abilities.glassCannonPressure && roundIndex % 2 === 0 && !uses.some(({ kind }) => kind === 'pressure')) use = 'pressure';
   if (!use) return state;
   if ('boardSize' in action.plan && action.plan.boardSize !== state.boardSize) return state;
   if ('turnIndex' in action.plan && action.plan.turnIndex !== roundIndex) return state;

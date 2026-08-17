@@ -120,7 +120,7 @@ describe('M3-FLEET-2 UI correction population 6', () => {
 
   it('6/6 keeps ships pale gray, yellow limited to selection, and all five classic names and lengths identifiable', () => {
     expect(CLASSIC_FLEET_NAMES).toEqual(['2칸 함선', '3칸 함선 A', '3칸 함선 B', '4칸 함선', '5칸 함선']);
-    expect(component).toContain('aria-label={`${CLASSIC_FLEET_NAMES[index]}, ${length}칸`}');
+    expect(component).toContain('aria-label={`${CLASSIC_FLEET_NAMES[index]}, ${length}칸, ${own?.ships?.some');
     expect(css).toMatch(/--fleet-ship-fill:\s*#f7f7f3/i);
     expect(css).toMatch(/\.fleet-cell\.occupied[^}]*background:\s*var\(--fleet-ship-fill\)/);
     expect(css).not.toMatch(/\.fleet-cell\.occupied[^}]*var\(--accent\)/);
