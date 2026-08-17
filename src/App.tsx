@@ -148,6 +148,7 @@ export const createMovePreview = (game: GameId, state: GameState, move: GameMove
 export const canConfirmMovePreview = (game: GameId, state: GameState, preview: MovePreview | null, disabled: boolean): preview is MovePreview => Boolean(preview && !disabled && preview.game === game && preview.moves === state.moves && preview.turn === state.turn && legalGameMoveKeys(game, state).includes(moveKey(preview.move)));
 export const confirmedActionFor = (mode: PlayMode, game: GameId, move: GameMove): GameWireAction => mode === 'remote' ? voteActionForMove(move) : actionForMove(game, move);
 export const playStatusFor = (aiThinking: boolean, restartNotice: string, mode: PlayMode, seat: Seat | null): string => aiThinking ? 'AI 생각중...' : restartNotice || (mode === 'remote' ? remoteSeatLabel(seat) : '');
+export const fleetGameInstanceKey = (state: FleetState, mode: PlayMode, selfId: string | null): string | null => mode === 'remote' ? selfId : fleetActorId(state) ?? state.winnerId;
 interface YachtGameRouteProps { events: readonly YachtInputEvent[]; mode: PlayMode; selfId: string | null; sheetOpen?: boolean; onSheetOpenChange?: (open: boolean) => void; onAction: (action: YachtTurnAction) => void; onUndo: () => void; onExit: () => void }
 export function YachtGameRoute({ events, mode, selfId, sheetOpen = false, onSheetOpenChange = () => undefined, onAction, onUndo, onExit }: YachtGameRouteProps) {
   const session = replayYachtEvents(events);
@@ -604,7 +605,7 @@ export function App() {
     {screen === 'opening' && opening && <section class={`panel narrow opening-coin${openingDestination.current === 'yacht' ? ` opening-result${openingFading ? ' opening-fade' : ''}` : ''}`} aria-labelledby="opening-title"><p class="eyebrow">{connection}</p><h1 id="opening-title">선공 결정</h1><CoinResults outcomes={opening.outcomes} replayKey={opening.replayKey} /><p>{opening.firstPlayer}번이 먼저 시작합니다</p></section>}
     {screen === 'opening' && yachtOpening && <section class={`panel opening-coin opening-result${openingFading ? ' opening-fade' : ''}`} aria-labelledby="yacht-opening-title"><p class="eyebrow">참가자마다 주사위 한 개</p><h1 id="yacht-opening-title">차례 순서 결정</h1>{yachtOpening.rounds.map((round, index) => <div key={index}><p>{index + 1}차 · 동점 참가자만 다시 굴림</p><DiceResults outcomes={Object.values(round)} replayKey={yachtOpening.replayKey + index} /></div>)}<p>{yachtOpening.order.map(({ name }) => name).join(' → ')}</p></section>}
     {screen === 'yacht' && yachtEvents && <YachtGameRoute events={yachtEvents} mode={mode} selfId={selfId} sheetOpen={yachtSheetOpen} onSheetOpenChange={setYachtSheetOpen} onAction={actYacht} onUndo={undoYacht} onExit={() => { setYachtSheetOpen(false); mode === 'remote' ? returnToLobby(sendRoom) : setScreen('games'); }} />}
-    {screen === 'fleet' && fleetState && <FleetGame state={fleetState} viewerId={mode === 'remote' ? selfId : fleetActorId(fleetState) ?? fleetState.winnerId} onAction={(action) => mode === 'remote' ? send({ type: 'action', action }) : setFleetState((current) => current ? reduceFleet(current, fleetActorId(current) ?? '', action) : current)} onExit={() => mode === 'remote' ? returnToLobby(sendRoom) : setScreen('games')} />}
+    {screen === 'fleet' && fleetState && <FleetGame key={fleetGameInstanceKey(fleetState, mode, selfId)} state={fleetState} viewerId={mode === 'remote' ? selfId : fleetActorId(fleetState) ?? fleetState.winnerId} onAction={(action) => mode === 'remote' ? send({ type: 'action', action }) : setFleetState((current) => current ? reduceFleet(current, fleetActorId(current) ?? '', action) : current)} onExit={() => mode === 'remote' ? returnToLobby(sendRoom) : setScreen('games')} />}
     {screen === 'play' && <section class="play-layout" aria-labelledby="play-title"><div class="game-status"><div><p class="eyebrow">{connection}</p><h1 id="play-title">{outcome}</h1><div class="play-status-slot" role="status" aria-live="polite"><p class={`${seatStatus ? `seat-badge ${localSeat ? `player-${localSeat}` : ''}` : restartNotice ? 'restart-notice' : ''}`} aria-hidden={!playStatus}>{playStatus || '\u00a0'}</p></div></div>{mode === 'remote' ? <div><button onClick={() => returnToLobby(sendRoom)}>로비로 돌아가기</button><button onClick={showTitle}>타이틀로 나가기</button></div> : <button onClick={() => setScreen('games')}>게임 목록</button>}</div>
       <BoardGame game={selectedGame} state={state} selfId={mode === 'remote' ? selfId : null} seat={localSeat} scoringSeat={badukScoring ? scoringSeat : null} rouletteMove={rouletteMove} preview={confirmedPreview?.move ?? null} lastTurn={lastTurnCells} disabled={boardDisabled} onSelect={(move) => setPreview(createMovePreview(selectedGame, state, move))} onDeadToggle={(move) => { if (scoringSeat) actBaduk({ type: 'toggle-dead', ...move }, scoringSeat); }} />
       {!badukScoring && <button class="primary confirm-move" disabled={!confirmedPreview} onClick={() => { if (!confirmedPreview) return; send({ type: 'action', action: confirmedActionFor(mode, selectedGame, confirmedPreview.move) }); setPreview(null); }}>확인</button>}
@@ -616,17 +617,36 @@ export function App() {
     <UpdateBanner />
   </main>;
 }
+export function createUpdateConsentController(reload: () => void) {
+  let consented = false, refreshing = false;
+  return {
+    confirm(waiting: Pick<ServiceWorker, 'postMessage'> | null): boolean {
+      if (!waiting) return false;
+      consented = true;
+      waiting.postMessage({ type: 'ACTIVATE_UPDATE' });
+      return true;
+    },
+    controllerChanged(): boolean {
+      if (!consented || refreshing) return false;
+      refreshing = true;
+      reload();
+      return true;
+    },
+  };
+}
 function UpdateBanner() {
   const [registration, setRegistration] = useState<ServiceWorkerRegistration | null>(null);
+  const update = useMemo(() => createUpdateConsentController(() => location.reload()), []);
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
-    let refreshing = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => { if (!refreshing) { refreshing = true; location.reload(); } });
+    const controllerChanged = () => { update.controllerChanged(); };
+    navigator.serviceWorker.addEventListener('controllerchange', controllerChanged);
     void navigator.serviceWorker.register('./sw.js').then((value) => {
       if (value.waiting) setRegistration(value);
       value.addEventListener('updatefound', () => value.installing?.addEventListener('statechange', () => { if (value.waiting && navigator.serviceWorker.controller) setRegistration(value); }));
     });
+    return () => navigator.serviceWorker.removeEventListener('controllerchange', controllerChanged);
   }, []);
   if (!registration) return null;
-  return <aside class="update-banner" role="status"><span>새 버전을 받을 수 있습니다.</span><button onClick={() => registration.waiting?.postMessage({ type: 'ACTIVATE_UPDATE' })}>확인 후 업데이트</button></aside>;
+  return <aside class="update-banner" role="status"><span>새 버전을 받을 수 있습니다.</span><button onClick={() => update.confirm(registration.waiting)}>확인 후 업데이트</button></aside>;
 }
