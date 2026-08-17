@@ -94,18 +94,19 @@ label { display: block; font-weight: 700; }
 .yacht-register { position: sticky; bottom: 0; width: 100%; margin-top: .5rem; }
 .fleet-screen { position: relative; display: grid; grid-template-rows: 45% 10% 45%; width: min(100%, calc((100svh - 58px) * 9 / 16)); height: min(calc(100vw * 16 / 9), calc(100svh - 58px)); aspect-ratio: 9 / 16; margin: 0 auto; }
 .fleet-zone { display: grid; grid-template-columns: 15% 70% 15%; min-height: 0; }
-.fleet-board-shell { position: relative; isolation: isolate; align-self: center; width: 100%; height: 88%; aspect-ratio: 1; }
+.fleet-board-shell { position: relative; isolation: isolate; align-self: center; justify-self: center; display: grid; grid-template-rows: 12.5% 87.5%; width: auto; max-width: 100%; height: 88%; aspect-ratio: 7 / 8; }
 .fleet-lower-center { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; min-height: 0; }
 .fleet-lower-center .fleet-board-shell { flex: 0 0 88%; }
 .fleet-shot-description { display: grid; place-items: center; width: 100%; height: 12%; margin: 0; font-size: clamp(.55rem, 2.3vw, .78rem); text-align: center; }
-.fleet-board-name { position: absolute; z-index: 4; top: .15rem; left: .25rem; max-width: 80%; overflow: hidden; border: 1px solid var(--line); border-radius: 3px; padding: 0 .18rem; color: var(--ink); background: var(--paper); box-shadow: 0 1px 0 var(--line); font-size: clamp(.55rem, 2.4vw, .8rem); font-weight: 900; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
+.fleet-board-name { position: static; z-index: 4; align-self: center; justify-self: start; max-width: 100%; overflow: hidden; border: 1px solid var(--line); border-radius: 3px; padding: 0 .18rem; color: var(--ink); background: var(--paper); box-shadow: 0 1px 0 var(--line); font-size: clamp(.55rem, 2.4vw, .8rem); font-weight: 900; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
 .fleet-board { display: grid; grid-template-columns: repeat(var(--fleet-board-size, 9), 1fr); grid-template-rows: repeat(var(--fleet-board-size, 9), 1fr); width: 100%; height: 100%; border: 2px solid var(--line); background: var(--paper); }
-.fleet-board.fleet-summary { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .5rem; text-align: center; }
+.fleet-summary { grid-row: 1 / -1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .5rem; text-align: center; }
 .fleet-screen.sheet-active .fleet-upper { position: fixed; z-index: 9; top: 0; right: 0; left: 0; height: 15svh; background: var(--paper); }
-.fleet-screen.sheet-active .fleet-upper .fleet-board-shell { width: min(70vw, 15svh); height: min(70vw, 15svh); justify-self: center; }
+.fleet-screen.sheet-active .fleet-upper .fleet-board-shell { width: auto; max-width: 70vw; height: min(70vw, 15svh); justify-self: center; }
 .fleet-sheet table { width: 100%; border-collapse: collapse; }
 .fleet-sheet th, .fleet-sheet td { min-width: 70px; border: 1px solid var(--line); padding: .5rem .25rem; text-align: center; }
 .fleet-sheet th.player-1 { border-bottom: 5px solid var(--player-1); } .fleet-sheet th.player-2 { border-bottom: 5px solid var(--player-2); } .fleet-sheet th.player-3 { border-bottom: 5px solid var(--player-3); } .fleet-sheet th.player-4 { border-bottom: 5px solid var(--player-4); }
+.fleet-sheet-handle { position: absolute; right: 0; bottom: 0; left: auto; width: 15%; padding: .25rem; font-size: clamp(.55rem, 2.2vw, .75rem); overflow-wrap: anywhere; }
 .fleet-cell { position: relative; min-width: 0; min-height: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 0; padding: 0; background: var(--paper); font-size: clamp(.65rem, 3vw, 1rem); }
 .fleet-cell.occupied { background: var(--fleet-ship-fill); }
 .fleet-cell.target-selected { background: var(--accent); box-shadow: inset 0 0 0 3px var(--line); }
@@ -113,9 +114,10 @@ label { display: block; font-weight: 700; }
 .fleet-ship-texture::before, .fleet-ship-texture::after { position: absolute; content: ""; }
 .fleet-ship-texture.texture-body::before { inset: 10% 0; border-top: 2px solid var(--fleet-ship-line); border-bottom: 2px solid var(--fleet-ship-line); background: var(--fleet-ship-fill); }
 .fleet-ship-texture.texture-wide-body::before { inset: 0 0 10%; border-bottom: 2px solid var(--fleet-ship-line); background: var(--fleet-ship-fill); }
-.fleet-ship-texture.texture-bow::before, .fleet-ship-texture.texture-stern::before { top: 10%; right: 50%; bottom: 10%; left: 0; border-top: 2px solid var(--fleet-ship-line); border-bottom: 2px solid var(--fleet-ship-line); background: var(--fleet-ship-fill); }
+.fleet-ship-texture.texture-bow::before { top: 10%; right: 50%; bottom: 10%; left: 0; border-top: 2px solid var(--fleet-ship-line); border-bottom: 2px solid var(--fleet-ship-line); background: var(--fleet-ship-fill); }
+.fleet-ship-texture.texture-stern::before { top: 10%; right: 0; bottom: 10%; left: 50%; border-top: 2px solid var(--fleet-ship-line); border-bottom: 2px solid var(--fleet-ship-line); background: var(--fleet-ship-fill); }
 .fleet-ship-texture.texture-bow::after { top: 10%; right: 10%; bottom: 10%; left: 50%; border: 2px solid var(--fleet-ship-line); border-left: 0; border-radius: 0 100% 100% 0 / 0 50% 50% 0; background: var(--fleet-ship-fill); }
-.fleet-ship-texture.texture-stern::after { top: 10%; right: 10%; bottom: 10%; left: 50%; border: 2px solid var(--fleet-ship-line); border-left: 0; background: var(--fleet-ship-fill); }
+.fleet-ship-texture.texture-stern::after { top: 10%; right: 50%; bottom: 10%; left: 10%; border: 2px solid var(--fleet-ship-line); border-right: 0; background: var(--fleet-ship-fill); }
 .fleet-ship-texture.texture-corner::before { inset: 10% 0 0 10%; border-top: 2px solid var(--fleet-ship-line); border-left: 2px solid var(--fleet-ship-line); border-radius: 35% 0 0; background: var(--fleet-ship-fill); }
 .fleet-shot-mark { position: absolute; z-index: 3; inset: 0; display: grid; place-items: center; font-size: clamp(1rem, 4vw, 1.45rem); font-weight: 1000; line-height: 1; pointer-events: none; }
 .fleet-shot-mark.hit { color: var(--fleet-hit); }
