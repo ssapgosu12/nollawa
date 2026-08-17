@@ -16,14 +16,21 @@ import { canStartRoom } from './lobby/room-state';
 import { LoopbackTransport } from './transport/transport';
 
 const tree = (node) => node == null || typeof node === 'boolean' ? [] : Array.isArray(node) ? node.flatMap(tree) : typeof node !== 'object' ? [] : [node, ...tree(node.props?.children)];
+const fleetCss = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+const fleetRuleBody = (selector) => fleetCss.match(new RegExp(`(?:^|})\\s*${selector}\\s*\\{([^}]*)\\}`))?.[1] ?? '';
+const cssDeclarations = (body) => Object.fromEntries(body.split(';').map((entry) => entry.trim()).filter(Boolean).map((entry) => {
+  const separator = entry.indexOf(':');
+  return [entry.slice(0, separator).trim(), entry.slice(separator + 1).trim()];
+}));
 
 describe('M3-FLEET-1 screen and integration acceptance', () => {
-  it('5/6 encodes the portrait 45/10/45 and 15/70/15 skeleton, 88%-high square boards, phase-only input, own lower board, and blank side zones', () => {
+  it('5/6 encodes the portrait 45/10/45 and 15/70/15 skeleton, 88%-high named square-board slots, phase-only input, own lower board, and blank side zones', () => {
     const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8'), source = FleetGame.toString();
     expect(css).toMatch(/\.fleet-screen[^}]*grid-template-rows:\s*45%\s+10%\s+45%/);
     expect(css).toMatch(/\.fleet-screen[^}]*aspect-ratio:\s*9\s*\/\s*16/);
     expect(css).toMatch(/\.fleet-zone[^}]*grid-template-columns:\s*15%\s+70%\s+15%/);
-    expect(css).toMatch(/\.fleet-board-shell[^}]*width:\s*100%[^}]*height:\s*88%[^}]*aspect-ratio:\s*1/);
+    const shell = cssDeclarations(fleetRuleBody('\\.fleet-board-shell'));
+    expect([shell.height, shell['grid-template-rows'], shell['aspect-ratio']]).toEqual(['88%', '12.5% 87.5%', '7 / 8']);
     expect(source).toMatch(/participant:\s*own/); expect(source).toMatch(/interactive:\s*canPlace/);
     expect(source).toMatch(/participant:\s*target/); expect(source).toMatch(/interactive:\s*canShoot/);
     expect(source.match(/aria-hidden/g)).toHaveLength(4);
@@ -130,30 +137,76 @@ describe('M3-FLEET-2 UI correction population 6', () => {
 });
 
 describe('M3-FLEET-2 exact texture geometry correction population 3', () => {
-  const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
-  const ruleBody = (selector) => css.match(new RegExp(`${selector}\\s*\\{([^}]*)\\}`))?.[1] ?? '';
-
   it('1/3 places the wide-body single horizontal rule at y=90%', () => {
-    const wideBody = ruleBody('\\.fleet-ship-texture\\.texture-wide-body::before');
+    const wideBody = fleetRuleBody('\\.fleet-ship-texture\\.texture-wide-body::before');
     expect(wideBody).toMatch(/inset:\s*0\s+0\s+10%/);
     expect(wideBody.match(/border-(?:top|bottom)/g)).toEqual(['border-bottom']);
     expect(wideBody).not.toMatch(/inset:\s*0\s*;/);
   });
 
   it('2/3 bounds the centered radius-40% right bow half-circle at x=50%-90% and y=10%-90%', () => {
-    const connector = ruleBody('\\.fleet-ship-texture\\.texture-bow::before,\\s*\\.fleet-ship-texture\\.texture-stern::before');
-    const bow = ruleBody('\\.fleet-ship-texture\\.texture-bow::after');
+    const connector = fleetRuleBody('\\.fleet-ship-texture\\.texture-bow::before');
+    const bow = fleetRuleBody('\\.fleet-ship-texture\\.texture-bow::after');
     expect(connector).toMatch(/top:\s*10%;\s*right:\s*50%;\s*bottom:\s*10%;\s*left:\s*0/);
     expect(bow).toMatch(/top:\s*10%;\s*right:\s*10%;\s*bottom:\s*10%;\s*left:\s*50%/);
     expect(bow).toMatch(/border-radius:\s*0\s+100%\s+100%\s+0\s*\/\s*0\s+50%\s+50%\s+0/);
     expect(bow).not.toMatch(/width:\s*80%/);
   });
 
-  it('3/3 joins the centered height-80% stern half-square to the same x=50% connectors', () => {
-    const connector = ruleBody('\\.fleet-ship-texture\\.texture-bow::before,\\s*\\.fleet-ship-texture\\.texture-stern::before');
-    const stern = ruleBody('\\.fleet-ship-texture\\.texture-stern::after');
-    expect(connector).toMatch(/right:\s*50%/);
-    expect(stern).toMatch(/top:\s*10%;\s*right:\s*10%;\s*bottom:\s*10%;\s*left:\s*50%/);
+  it('3/3 mirrors the height-80% stern half-square and joins it to the right-side connector', () => {
+    const connector = fleetRuleBody('\\.fleet-ship-texture\\.texture-stern::before');
+    const stern = fleetRuleBody('\\.fleet-ship-texture\\.texture-stern::after');
+    expect(connector).toMatch(/right:\s*0;\s*bottom:\s*10%;\s*left:\s*50%/);
+    expect(stern).toMatch(/top:\s*10%;\s*right:\s*50%;\s*bottom:\s*10%;\s*left:\s*10%/);
+    expect(stern).toMatch(/border-right:\s*0/);
     expect(stern).not.toMatch(/right:\s*10%;\s*width:\s*40%/);
+  });
+});
+
+describe('M3-FLEET-FRAME closed correction population 4', () => {
+  it('1/4 mirrors horizontal stern and bow outer closures while vertical ships reuse the same geometry by rotation', () => {
+    const sternConnector = cssDeclarations(fleetRuleBody('\\.fleet-ship-texture\\.texture-stern::before'));
+    const sternCap = cssDeclarations(fleetRuleBody('\\.fleet-ship-texture\\.texture-stern::after'));
+    const bowConnector = cssDeclarations(fleetRuleBody('\\.fleet-ship-texture\\.texture-bow::before'));
+    const bowCap = cssDeclarations(fleetRuleBody('\\.fleet-ship-texture\\.texture-bow::after'));
+    expect([sternConnector.left, sternConnector.right, sternCap.left, sternCap.right, sternCap['border-right']]).toEqual(['50%', '0', '10%', '50%', '0']);
+    expect([bowConnector.left, bowConnector.right, bowCap.left, bowCap.right, bowCap['border-left']]).toEqual(['0', '50%', '50%', '10%', '0']);
+    const horizontal = { index: 0, length: 3, orientation: 'horizontal', cells: [{ row: 0, column: 0 }, { row: 0, column: 1 }, { row: 0, column: 2 }] };
+    const vertical = { ...horizontal, orientation: 'vertical', cells: [{ row: 0, column: 0 }, { row: 1, column: 0 }, { row: 2, column: 0 }] };
+    expect(horizontal.cells.map((_, index) => fleetShipTexture(horizontal, index))).toEqual([{ role: 'stern', rotation: 0 }, { role: 'body', rotation: 0 }, { role: 'bow', rotation: 0 }]);
+    expect(vertical.cells.map((_, index) => fleetShipTexture(vertical, index))).toEqual([{ role: 'stern', rotation: 90 }, { role: 'body', rotation: 90 }, { role: 'bow', rotation: 90 }]);
+  });
+
+  it('2/4 bounds the Fleet-only sheet handle inside the frame side column without intersecting the board column', () => {
+    const handle = cssDeclarations(fleetRuleBody('\\.fleet-sheet-handle'));
+    expect({ position: handle.position, right: handle.right, bottom: handle.bottom, left: handle.left, width: handle.width }).toEqual({ position: 'absolute', right: '0', bottom: '0', left: 'auto', width: '15%' });
+    const frame = { left: 0, right: 900, top: 0, bottom: 1600 };
+    const board = { left: frame.right * .15, right: frame.right * .85 };
+    const handleBox = { left: frame.right * (1 - Number.parseFloat(handle.width) / 100), right: frame.right };
+    expect(handleBox.left).toBeGreaterThanOrEqual(frame.left);
+    expect(handleBox.right).toBeLessThanOrEqual(frame.right);
+    expect(handleBox.left).toBeGreaterThanOrEqual(board.right);
+  });
+
+  it('3/4 lays the two setup notices out as separate unbordered rows', () => {
+    const summary = cssDeclarations(fleetRuleBody('\\.fleet-summary'));
+    const messages = ['사격 카드 3장 중 1장', '특수 배 2척 선택'];
+    const rows = summary['flex-direction'] === 'column' ? messages.map((message) => [message]) : [messages];
+    expect([summary.display, summary['flex-direction'], summary.border]).toEqual(['flex', 'column', undefined]);
+    expect(rows).toEqual([['사격 카드 3장 중 1장'], ['특수 배 2척 선택']]);
+  });
+
+  it('4/4 reserves a name row above a reduced square board instead of overlaying its first row', () => {
+    const shell = cssDeclarations(fleetRuleBody('\\.fleet-board-shell'));
+    const name = cssDeclarations(fleetRuleBody('\\.fleet-board-name'));
+    expect([shell.display, shell['grid-template-rows'], shell['aspect-ratio'], name.position]).toEqual(['grid', '12.5% 87.5%', '7 / 8', 'static']);
+    const zoneHeight = 800;
+    const shellHeight = zoneHeight * Number.parseFloat(shell.height) / 100;
+    const nameHeight = shellHeight * .125;
+    const boardHeight = shellHeight * .875;
+    const boardWidth = shellHeight * 7 / 8;
+    expect(boardHeight).toBe(boardWidth);
+    expect(nameHeight + boardHeight).toBe(shellHeight);
+    expect(boardHeight).toBeLessThan(shellHeight);
   });
 });
