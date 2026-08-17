@@ -32,7 +32,8 @@ export interface FleetVariantSetup {
   selectedSpecialShips: readonly FleetSpecialShipType[];
   complete: boolean;
   fleet?: readonly FleetTaggedShip[];
-  tagOffset: number;
+  tagSamples?: readonly [number, number];
+  tagOffset?: number;
 }
 
 export interface FleetShip {
@@ -179,7 +180,7 @@ export function createVariantFleetState(
       variantSetup: {
         presetOffers: variantPresetOffers(participantIndex, twoPlayer, random),
         selectedPresetId: null, shootingCard: null, selectedSpecialShips: [], complete: false,
-        tagOffset: Math.floor(Math.min(Math.max(random(), 0), 0.9999999999999999) * VARIANT_SPECIAL_SHIPS.length),
+        tagSamples: [random(), random()],
       },
     })),
     setupParticipantId: participants[0]!.id, placementParticipantId: null, turnParticipantId: null,
@@ -335,10 +336,12 @@ function queueVariantShot(state: FleetState, actorId: string, action: Extract<Fl
   const impactTargets = targetIds.map((id) => state.participants.find((participant) => participant.id === id));
   if (targetIds[0] !== target.id || impactTargets.some((participant) => !participant?.alive || participant.id === actorId)) return state;
   const rangePlan = action.plan.type === 'explosive' || action.plan.type === 'scatter' || (action.plan.type === 'buckshot' && action.plan.choice === 'buckshot');
-  if (!rangePlan && planned.some(({ cell }) => !validCell(cell, state.boardSize))) return state;
+  const clippedPlan = rangePlan || action.plan.type === 'tracer';
+  if (action.plan.type === 'tracer' && !validCell(action.plan.center, state.boardSize)) return state;
+  if (!clippedPlan && planned.some(({ cell }) => !validCell(cell, state.boardSize))) return state;
   const recordedType: FleetShotType = use === 'carrier' ? 'bonus-normal' : use === 'tracer' ? 'tracer' : use === 'pressure' ? 'high-explosive' : shotType;
   const impacts = planned.map(({ cell, kind }, index) => ({ targetParticipantId: targetIds[index]!, cell, kind, shotType: recordedType })).filter(({ cell }) => validCell(cell, state.boardSize));
-  if (impacts.length === 0 && !rangePlan) return state;
+  if (impacts.length === 0 && !clippedPlan) return state;
   const next: FleetRoundPlan = { participantId: actorId, impacts: [...(current?.impacts ?? []), ...impacts], submitted: false, uses: [...uses, { kind: use, targetParticipantId: target.id }] };
   return { ...state, roundPlans: [...(state.roundPlans ?? []).filter(({ participantId }) => participantId !== actorId), next] };
 }
@@ -430,15 +433,22 @@ const specialKindFor = (kind: FleetSpecialShipType): FleetSpecialKind => ({
   'spy-ship': 'spy', 'supply-ship': 'supply', 'paper-ship': 'paper',
 })[kind] as FleetSpecialKind;
 
-function taggedFleet(selected: readonly FleetSpecialShipType[], boardSize: 10 | 12, offset: number): readonly FleetTaggedShip[] {
+function sampledCandidate<T>(values: readonly T[], sample: number): T {
+  const bounded = Math.min(Math.max(sample, 0), 0.9999999999999999);
+  return values[Math.floor(bounded * values.length)]!;
+}
+
+function taggedFleet(selected: readonly FleetSpecialShipType[], boardSize: 10 | 12, samples: readonly [number, number]): readonly FleetTaggedShip[] {
   const fleet = buildVariantFleet(selected.map(specialKindFor));
-  const candidates = fleet.map((_, index) => fleet[(index + offset) % fleet.length]!);
-  const coastal = candidates.find((ship) => isFleetTaggedPlacementValid(ship, 'coastal', boardSize, { row: 0, column: 0 }, 'horizontal'))!;
-  const ocean = candidates.find((ship) => ship.id !== coastal.id && isFleetTaggedPlacementValid(ship, 'ocean', boardSize, { row: boardSize === 10 ? 2 : 3, column: boardSize === 10 ? 2 : 3 }, 'horizontal'))!;
+  const coastal = sampledCandidate(fleet.filter((ship) => canShipReceivePlacementTag(ship, 'coastal', boardSize)), samples[0]);
+  const ocean = sampledCandidate(fleet.filter((ship) => ship.id !== coastal.id && canShipReceivePlacementTag(ship, 'ocean', boardSize)), samples[1]);
   const assigned = assignFleetPlacementTags(fleet, { coastalShipId: coastal.id, oceanShipId: ocean.id }, boardSize);
   if (!assigned.ok) throw new Error(`variant fleet tags failed: ${assigned.reason}`);
   return assigned.ships;
 }
+
+const tagSamplesFor = (setup: FleetVariantSetup): readonly [number, number] => setup.tagSamples
+  ?? [((setup.tagOffset ?? 0) + 0.5) / VARIANT_SPECIAL_SHIPS.length, ((setup.tagOffset ?? 0) + 1.5) / VARIANT_SPECIAL_SHIPS.length];
 
 function chooseSpecialShips(state: FleetState, actorId: string, selected: readonly FleetSpecialShipType[]): FleetState {
   if (state.mode !== 'variant' || state.phase !== 'setup' || state.setupParticipantId !== actorId) return state;
@@ -452,7 +462,7 @@ function chooseSpecialShips(state: FleetState, actorId: string, selected: readon
   const participants = [...state.participants];
   participants[participantIndex] = {
     ...participant,
-    variantSetup: { ...setup, selectedSpecialShips: [...selected], complete: true, fleet: taggedFleet(selected, state.boardSize as 10 | 12, setup.tagOffset) },
+    variantSetup: { ...setup, selectedSpecialShips: [...selected], complete: true, fleet: taggedFleet(selected, state.boardSize as 10 | 12, tagSamplesFor(setup)) },
   };
   const next = participants.find(({ variantSetup }) => !variantSetup?.complete);
   return next
@@ -495,6 +505,7 @@ export function projectFleetState(state: FleetState, viewerParticipantId?: strin
           ...participant.variantSetup,
           presetOffers: participant.variantSetup.presetOffers.map((preset) => ({ ...preset, specialShipOffers: [...preset.specialShipOffers] })),
           selectedSpecialShips: [...participant.variantSetup.selectedSpecialShips],
+          ...(participant.variantSetup.tagSamples ? { tagSamples: [...participant.variantSetup.tagSamples] as [number, number] } : {}),
         } } : {}),
       } : common;
     }),
@@ -504,6 +515,6 @@ export function projectFleetState(state: FleetState, viewerParticipantId?: strin
 }
 import { planFleetShots, type FleetImpactKind, type FleetShotPlan } from './fleet-shots';
 import {
-  applyFleetImpact, assignFleetPlacementTags, buildVariantFleet, createFleetShipState, isFleetTaggedPlacementValid, specialAbilitiesForOwner,
+  applyFleetImpact, assignFleetPlacementTags, buildVariantFleet, canShipReceivePlacementTag, createFleetShipState, isFleetTaggedPlacementValid, specialAbilitiesForOwner,
   type FleetPlacementTag, type FleetShipBlueprint, type FleetShipState, type FleetSpecialKind, type FleetTaggedShip,
 } from './fleet-special';
