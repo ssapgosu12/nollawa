@@ -1,8 +1,8 @@
 import { h, render } from 'preact';
 import { describe, expect, it } from 'vitest';
-import { FleetGame } from '../../src/components/FleetGame';
-import { RoomLobby } from '../../src/lobby/RoomLobby';
-import { GAME_CATALOG } from '../../src/game/catalog';
+import { FleetGame } from './components/FleetGame';
+import { RoomLobby } from './lobby/RoomLobby';
+import { GAME_CATALOG } from './game/catalog';
 import {
   CLASSIC_FLEET_LENGTHS,
   createFleetState,
@@ -10,9 +10,9 @@ import {
   isFleetState,
   reduceFleet,
   type FleetState,
-} from '../../src/game/fleet';
-import { canStartRoom, lobbyAction, type RoomSnapshot } from '../../src/lobby/room-state';
-import { Room } from '../../relay/worker.js';
+} from './game/fleet';
+import { canStartRoom, lobbyAction, type RoomSnapshot } from './lobby/room-state';
+import { Room } from '../relay/worker.js';
 
 type Listener = (event: { type: string; currentTarget: FakeElement }) => void;
 

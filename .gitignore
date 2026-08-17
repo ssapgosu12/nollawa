@@ -4,3 +4,4 @@ node_modules/
 collab13/
 relay/.wrangler/
 dist/
+artifacts/
