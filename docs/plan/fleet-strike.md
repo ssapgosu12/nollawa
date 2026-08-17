@@ -459,7 +459,7 @@ POPULATION 분모는 이 표의 **구현 열**에서 도출한다 — `grep -c "
 |---|---|---|---|---|---|---|
 | B-1 | 배 후미 텍스처가 좌우 반전돼 형상이 끊긴다 | 마감선 위치 | styles.css .fleet-ship-texture | - | impl:FS-FRAME | 구현됨 · 미검수 |
 | B-2 | 예광탄이 판 가장자리를 쏘지 못한다 | rangePlan 목록 누락 | fleet.ts:337 | - | impl:FS-EDGE | 구현됨 · 미검수 |
-| B-3 | 유리대포의 압박 고폭탄이 언제나 조명탄 1발이 된다 | 패리티 두 곳 | fleet.ts:314 · R6:221 | - | impl:FS-MIDBAR | 미착수 |
+| B-3 | 유리대포의 압박 고폭탄이 언제나 조명탄 1발이 된다 | 패리티 두 곳 | fleet.ts:314 · R6:221 | - | impl:FS-MIDBAR | 구현됨 · 미검수 |
 | B-4 | 조명탄으로 드러난 칸이 명중과 같은 빨강 x | 결과 접기 | fleet.ts:383 · R1:71 | - | impl:FS-MARKS | 미착수 |
 | B-5 | 격침이 명중과 구분되지 않는다 | 결과 접기 | R1:72 | - | impl:FS-MARKS | 미착수 |
 | B-6 | 관통탄이 임의의 두 칸을 고르게 한다 | 입력 경로가 사양과 다름 | R3:159·175 · R6:221 | - | impl:FS-AIM | 미착수 |
@@ -474,13 +474,13 @@ POPULATION 분모는 이 표의 **구현 열**에서 도출한다 — `grep -c "
 | B-15 | 고른 사격 카드가 화면에 표시되지 않는다 | selected 규칙 범위 | R4:199 · styles.css:133 | - | impl:FS-SETUP | 미착수 |
 | B-16 | 탄종 설명이 없다 | 표시 어휘 계층 부재 | R6:219 · R7:229 | - | impl:FS-VOCAB | 미착수 |
 | B-17 | 안내 문구가 붙어서 한 문장으로 읽힌다 | 선택자 과잉 한정 | styles.css:103 | - | impl:FS-FRAME | 구현됨 · 미검수 |
-| B-18 | 중단 버튼 글자가 단어 중간에서 끊긴다 | 넘침 정책 부재 | styles.css .fleet-middle button | - | impl:FS-MIDBAR | 미착수 |
+| B-18 | 중단 버튼 글자가 단어 중간에서 끊긴다 | 넘침 정책 부재 | styles.css .fleet-middle button | - | impl:FS-MIDBAR | 구현됨 · 미검수 |
 | B-19 | 배 우하단 꼬리표에 길이 숫자가 겹친다 | 한 자리에 두 정보 | R2:137 | - | impl:FS-PLACEMENT | 미착수 |
 | B-20 | 로컬 모드에서 2번째 플레이어가 진행 불가 (블로커) | 배우 단위 key 부재 | App.tsx:607 | - | impl:FS-SHELL | 구현됨 · 미검수 |
 | B-21 | 새 배포가 나가면 진행 중 화면이 강제 리로드된다 | 동의 없는 reload | App.tsx:624 · sw.js:14 | - | impl:FS-SHELL | 구현됨 · 미검수 |
 | B-22 | 배치할 때 미리보기가 없다 | 즉시 확정 | R2 · R7:229 | - | impl:FS-PLACEMENT | 미착수 |
 | B-23 | 회전 기준점이 선미라 결과를 예측하기 어렵다 | 기준점이 cells[0] | fleet.ts:234-242 · R6:217 | spec:FS-SPEC | impl:FS-PLACEMENT | 미착수 |
-| B-24 | 배 목록에서 배치된 배와 안 된 배를 구분할 수 없다 | 파생값 미사용 | R6:215 · styles.css:129 | - | impl:FS-MIDBAR | 미착수 |
+| B-24 | 배 목록에서 배치된 배와 안 된 배를 구분할 수 없다 | 파생값 미사용 | R6:215 · styles.css:129 | - | impl:FS-MIDBAR | 구현됨 · 미검수 |
 | B-25 | 격침된 배가 전혀 구분되지 않는다 | 배 단위 상태 미렌더 | R2:128·134 | - | impl:FS-MARKS | 미착수 |
 | B-26 | 패배자에게 패배 표시가 없다 | 관전자 시점 승패 미산출 | R3:191-195 · R7:229 | - | impl:FS-GUIDE | 미착수 |
 | B-27 | 보드 이름표가 판 칸을 가린다 | 행 미확보 | styles.css:97·101 | - | impl:FS-FRAME | 구현됨 · 미검수 |
@@ -489,7 +489,7 @@ POPULATION 분모는 이 표의 **구현 열**에서 도출한다 — `grep -c "
 | B-30 | 배 배치·프리셋이 순차다 — 동시여야 한다 | 단일 행위자 토큰 | fleet.ts:212·244·412·443 | - | impl:FS-SYNC | 미착수 |
 | B-31 | 클래식의 사격이 순차다 — 동시여야 한다 | 클래식이 라운드 경로 밖 | fleet.ts:137·260-278 | - | impl:FS-SYNC | 미착수 |
 | B-32 | 정원을 넘겨 선택되는 유령 칸이 있다 | 조용한 무시 + preview 갱신 | R3:160·175 · R5:209 | - | impl:FS-AIM | 미착수 |
-| B-33 | 「일반탄 대체」 라벨을 오독해 한 칸만 쏘게 된다 | 상태와 동작이 한 라벨 | R6:221 | - | impl:FS-MIDBAR | 미착수 |
+| B-33 | 「일반탄 대체」 라벨을 오독해 한 칸만 쏘게 된다 | 상태와 동작이 한 라벨 | R6:221 | - | impl:FS-MIDBAR | 구현됨 · 미검수 |
 | B-34 | 이미 침몰한 배를 다시 쏘면 「명중」으로 표시된다 | null 결과를 hit으로 승격 | fleet.ts:384 | spec:FS-SPEC | impl:FS-MARKS | 미착수 |
 | B-35 | 변형에 같은 칸 중복 사격 금지가 없다 | 클래식 규칙 미이식 | fleet.ts:303-344 · R3 | spec:FS-SPEC | impl:FS-MARKS | 미착수 |
 | B-36 | 정찰 선행 시 연속사격 봉쇄 + 회수하면 정찰 영구 소실 | uses 하나로 두 판정 | fleet.ts:311·350·356 | spec:FS-SPEC | impl:FS-GUIDE | 미착수 |

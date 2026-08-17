@@ -12,6 +12,7 @@ import {
   type FleetState,
 } from './game/fleet';
 import { canStartRoom, lobbyAction, type RoomSnapshot } from './lobby/room-state';
+// @ts-expect-error 릴레이는 순수 JS라 선언 파일이 없다 — 다른 릴레이 테스트도 .js에서 같은 방식으로 부른다
 import { Room } from '../relay/worker.js';
 
 type Listener = (event: { type: string; currentTarget: FakeElement }) => void;
@@ -29,8 +30,8 @@ class FakeNode {
     this.nodeName = nodeName;
     this.data = data;
   }
-  get firstChild() { return this.childNodes[0] ?? null; }
-  get nextSibling() {
+  get firstChild(): FakeNode | null { return this.childNodes[0] ?? null; }
+  get nextSibling(): FakeNode | null {
     if (!this.parentNode) return null;
     const index = this.parentNode.childNodes.indexOf(this);
     return this.parentNode.childNodes[index + 1] ?? null;
@@ -127,7 +128,7 @@ function placeVariant(state: FleetState): FleetState {
     next = reduceFleet(next, participant.id, { type: 'choose-special-ships', specialShips: preset.specialShipOffers.slice(0, choiceCount) });
   }
   for (const participant of next.participants) {
-    const fleet = next.participants.find(({ id }) => id === participant.id)!.variantSetup!.fleet;
+    const fleet = next.participants.find(({ id }) => id === participant.id)!.variantSetup!.fleet!;
     for (let shipIndex = 0; shipIndex < fleet.length; shipIndex += 1) {
       let placed = false;
       for (const orientation of ['horizontal', 'vertical'] as const) {
